@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<title>IMRCP Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="css/w3.css"/>
+<link rel="stylesheet" href="css/font-awesome.min.css"/>
+<link rel="stylesheet" href="css/pure-min.css"/>
+<link rel="stylesheet" href="css/imrcp.css"/>
+<script type="text/javascript" src="script/jquery/jquery.js"></script>
+<script type="text/javascript" src="script/jquery/jquery-ui.js"></script>
+<script type="text/javascript" src="script/dashboard.js"></script>
+<script src="script/Chart.min.js"></script>
+<body>
+
+<div">
+	<ul class="w3-navbar w3-teal">
+		<li><a class="w3-light-gray" href="#"><i class="fa fa-dashboard"></i>&nbsp;&nbsp;Dashboard</a></li>
+		<li><a href="map.jsp"><i class="fa fa-globe"></i>&nbsp;&nbsp;Map</a></li>
+		<li><a href="reports.jsp"><i class="fa fa-newspaper-o"></i>&nbsp;&nbsp;Reports</a></li>
+		<li><a href="/"><i class="fa fa-sign-out"></i>&nbsp;&nbsp;Logoff</a></li>
+		<li class="w3-right"><a href="https://www.fhwa.dot.gov"><img alt="FHWA" src="images/fhwa-small.png"/>&nbsp;Federal Highway Administration</a></li>
+	</ul>
+</div>
+
+<div id="main-content" class="w3-row w3-light-gray">
+	<div class="w3-third w3-container">
+        <div class="w3-panel">
+          <table class="pure-table pure-table-striped pure-table-bordered" style="width: 100%;">
+            <thead><tr><th>Alert</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>Heavy Traffic</td><td>I-435 @ Nall<br />I-435 @ Roe</td></tr>
+            <tr><td>Moderate Traffic</td><td></td></tr>
+            <tr><td>Icy Conditions</td><td></td></tr>
+          </tbody>
+          </table>
+        </div>
+        <div class="w3-panel">
+          <table class="pure-table pure-table-striped pure-table-bordered" style="width: 100%;">
+            <thead><tr><th>Warning</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>Heavy Traffic</td><td>I-435 @ Nall<br />I-435 @ Roe</td></tr>
+            <tr><td>Partially Covered</td><td></td></tr>
+            <tr><td>Completely Covered</td><td></td></tr>
+          </tbody>
+          </table>
+          </div>
+	</div>
+	<div class="w3-third w3-container">
+		<div class="w3-panel"><h4>Travel Time</h4><canvas class="chart-anchor" id="chart1"></canvas></div>
+		<div class="w3-panel"><h4>Congestion</h4><canvas class="chart-anchor" id="chart2"></canvas></div>
+		<div class="w3-panel"><h4>Speed Performance</h4><canvas class="chart-anchor" id="chart3"></canvas></div>
+	</div>
+	<div class="w3-third w3-container">
+		<div class="w3-panel">
+			<div class="w3-half w3-container"><h4>Current Forecast <i class="fa fa-stop" style="color: #99F"></i></h4></div>
+			<div class="w3-half w3-container"><h4>Next Forecast <i class="fa fa-stop" style="color: #9FF"></i></h4></div>
+		</div>
+		<div class="w3-container w3-center">
+			<canvas class="forecastClock" id="currentForecast" width="200" height="200"></canvas>
+		</div>
+		<div class="w3-card w3-white">
+			<header class="w3-container w3-sand"><h4>TrEPS Model</h4></header>
+			<div class="w3-container">
+			<p class="w3-left">Forecast: 2 hours<br/>Interval: 30 minutes</p>
+			<p class="w3-right">Runtime: 1648 s<br/>Compression: 1.09</p>
+			</div>
+		</div>
+		<br/>
+		<div class="w3-card w3-white">
+			<header class="w3-container w3-sand"><h4>Bayesian Model</h4></header>
+			<div class="w3-container">
+			<p class="w3-left">Forecast: 2 hours<br/>Interval: 30 minutes</p>
+			<p class="w3-right">Runtime: 397 s<br/>Compression: 4.53</p>
+			</div>
+		</div>
+</div>
+
+<div class="w3-bottom">
+	<div class="w3-container w3-teal" style="height: 39px;"></div>
+</div>
+
+</body>
+</html>

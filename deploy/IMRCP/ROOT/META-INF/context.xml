@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Context useHttpOnly="false">
+
+  <Resources allowLinking="true" />
+
+  <Resource name="jdbc/imrcp" auth="Container" type="javax.sql.DataSource"
+    driverClassName="org.mariadb.jdbc.Driver" factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" 
+    maxAge="660000" url="jdbc:mariadb://localhost/imrcp" username="" password="" />
+
+  <Valve className="org.apache.catalina.authenticator.FormAuthenticator" changeSessionIdOnAuthentication="false" />
+
+</Context>

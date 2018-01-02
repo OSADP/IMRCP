@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TODO supply a title</title>
+   
+    <link href="style/jquery/themes/overcast/jquery-ui.css" rel="stylesheet" type="text/css"/>   
+
+    <link href="style/pure-min.css" rel="stylesheet" />
+    <link href="style/imrcp.css" rel="stylesheet" />
+    
+    <script type="text/javascript" src="script/jquery/jquery.js"></script>
+    <script type="text/javascript" src="script/jquery/jquery-ui.js"></script>
+    <script type="text/javascript" src="script/dashboard.js"></script>
+   
+    <script src="script/Chart.min.js"></script>
+    
+  </head>
+  <body>
+      <div id="header"> 
+        <a href="/"><img  alt="Home Icons" src="style/images/home.png">Home</a><a href="map.html"><img alt="Map" src="style/images/map.png"/>Map</a><a href="/"><img alt="Subscriptions" src="style/images/cloud-download.png"/>Subscriptions</a>
+      </div>
+    <div id="bodyContent">
+      <div class="column column-left">
+        <div class="column-header">Alerts & Warnings</div>
+        <div class="column-content">
+        <div class="alert-container">
+          <table class="pure-table pure-table-striped pure-table-bordered">
+            <thead><tr><th>Alert</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>Heavy Traffic</td><td>I-435 @ Nall<br />I-435 @ Roe</td></tr>
+            <tr><td>Moderate Traffic</td><td></td></tr>
+            <tr><td>Icy Conditions</td><td></td></tr>
+          </tbody>
+          </table>
+        </div>
+        <div class="alert-container ">
+          <table class="pure-table pure-table-striped pure-table-bordered">
+            <thead><tr><th>Warning</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>Heavy Traffic</td><td>I-435 @ Nall<br />I-435 @ Roe</td></tr>
+            <tr><td>Partially Covered</td><td></td></tr>
+            <tr><td>Completely Covered</td><td></td></tr>
+          </tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="column column-center">
+        <div class="column-header">Network Performance</div>
+        <div class="column-content">
+        
+        <div class="chart-container"><div class="chart-label">Travel Time</div><canvas class="chart-anchor" id="chart1"  ></canvas></div>
+        <div class="chart-container"><div class="chart-label">Congestion</div><canvas class="chart-anchor" id="chart2"  ></canvas></div>
+        <div class="chart-container"><div class="chart-label">Speed Performance</div><canvas class="chart-anchor" id="chart3"  ></canvas></div>
+        </div>
+        </div>
+      <div class="column column-right">
+        <div class="column-header">System Performance</div>
+        <div class="column-content">
+          <div class="clock-container"><div class="clock-label">Current<br/>Forecast<br/>Interval</div><canvas class="forecastClock" id="currentForecast" width="200" height="200"></canvas></div>
+          <div class="clock-container"><div class="clock-label">Next<br/>Forecast<br/>Interval</div><canvas class="forecastClock" id="nextForecast" width="200" height="200"></canvas></div>
+          <div class="chart-container"><div class="chart-label">Availability</div><canvas class="chart-anchor" id="chart4" ></canvas></div>
+          <div class="chart-container"><div class="chart-label">Forecast<br/>Computational<br/>Compression</div><canvas class="chart-anchor" id="chart5" ></canvas></div>
+        </div>
+        </div>
+    </div>
+    
+    <div id="footer" >
+   
+      </div>
+  </body>
+</html>

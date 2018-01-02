@@ -1,0 +1,1182 @@
+[
+    {
+        "imrcp.system.Directory" : 
+        {   
+            "classes" : ["#imrcp.geosrv.KCScoutDetectorMappings", "KCScoutDetectorMappings",
+                         "#imrcp.store.KCScoutDetectorsStore", "KCScoutDetectorsStore",
+                         "#imrcp.collect.KCScoutDetectors", "KCScoutDetectors",
+                         "#imrcp.collect.KCScoutIncidents", "KCScoutIncidents",
+                         "#imrcp.store.KCScoutIncidentsStore", "KCScoutIncidentsStore",
+                         "imrcp.geosrv.NED", "NED",
+                         "#imrcp.geosrv.SegmentShps", "SegmentShps",
+                         "imrcp.collect.NDFD", "NDFD",
+                         "imrcp.store.NDFDStore", "NDFDStore",
+                         "imrcp.collect.RAP", "RAP",
+                         "imrcp.store.RAPStore", "RAPStore",
+                         "imrcp.collect.RTMA", "RTMA",
+                         "imrcp.store.RTMAStore", "RTMAStore",
+                         "imrcp.collect.Radar", "Radar",
+                         "imrcp.store.RadarStore", "RadarStore",
+                         "imrcp.collect.Radar", "RadarPrecip",
+                         "imrcp.store.RadarStore", "RadarPrecipStore",
+                         "#imrcp.forecast.bayes.RealTimeBayes", "RealTimeBayes",
+                         "#imrcp.store.BayesStore", "BayesStore",
+                         "#imrcp.forecast.treps.RealTimeDetector", "RealTimeDetector",
+                         "#imrcp.forecast.treps.RealTimeWeather", "RealTimeWeather",
+                         "#imrcp.forecast.treps.RealTimeIncident", "RealTimeIncident",
+                         "#imrcp.forecast.treps.RealTimeWorkzone", "RealTimeWorkzone",
+                         "imrcp.store.ObsView", "ObsView",
+                         "#imrcp.store.MetroStore", "MetroStore",
+                         "#imrcp.forecast.mdss.Metro", "Metro",
+                         "imrcp.store.AlertsStore", "WeatherAlertsStore",
+                         "imrcp.alert.Alerts", "WeatherAlerts",
+                         "#imrcp.store.AlertsStore", "TrafficAlertsStore",
+                         "#imrcp.alert.Alerts", "TrafficAlerts",
+                         "#imrcp.store.AlertsStore", "MetroAlertsStore",
+                         "#imrcp.alert.Alerts", "MetroAlerts",
+                         "#imrcp.alert.Alerts", "AHPSAlerts",
+                         "#imrcp.store.AlertsStore", "AHPSAlertsStore",
+                         "#imrcp.alert.SpeedStatsAlerts", "SpeedStatsAlerts",
+                         "#imrcp.store.AlertsStore", "SpeedStatsAlertsStore",
+                         "imrcp.subs.Subscriptions", "Subscriptions",
+                         "#imrcp.forecast.treps.OutputManager", "OutputManager",
+                         "#imrcp.store.TrepsStore", "TrepsStore",
+                         "imrcp.collect.AHPS", "AHPS",
+                         "imrcp.collect.AHPS", "AHPSObservation",
+                         "#imrcp.store.AHPSStore", "AHPSStore",
+                         "#imrcp.collect.SubSurfaceTemp", "SubSurfaceTemp",
+                         "#imrcp.forecast.treps.TrepsCollect", "DefaultTrepsCollect",
+                         "#imrcp.forecast.treps.TrepsCollect", "VehTrepsCollect",
+                         "imrcp.store.CAPStore", "CAPStore",
+                         "imrcp.collect.CAP", "CAP",
+                         "imrcp.geosrv.Polygons", "Polygons",
+                         "#imrcp.store.TrvlTimeStore", "TrvlTimeStore",
+                         "#imrcp.route.Routes", "Routes",
+                         "#imrcp.comp.SpeedStats", "SpeedStats",
+                         "#imrcp.alert.Notifications", "TrafficNotifications",
+                         "imrcp.alert.Notifications", "WeatherNotifications",
+                         "#imrcp.alert.Notifications", "SpeedStatsNotifications",
+                         "#imrcp.alert.Notifications", "IncidentNotifications",
+                         "#imrcp.alert.Notifications", "MetroNotifications",
+                         "#imrcp.alert.Notifications", "AHPSNotifications",
+                         "imrcp.store.AlertsStore", "WeatherNotificationsStore",
+                         "#imrcp.store.AlertsStore", "TrafficNotificationsStore",
+                         "#imrcp.store.AlertsStore", "SpeedStatsNotificationsStore",
+                         "#imrcp.store.AlertsStore", "IncidentNotificationsStore",
+                         "#imrcp.store.AlertsStore", "MetroNotificationsStore",
+                         "#imrcp.store.AlertsStore", "AHPSNotificationsStore"]
+        }
+    },
+    {
+        "imrcp.ImrcpBlock" :
+        {
+            "box" : ["-947307060", "388820000", "-945190000", "389570000", "-946090000", "388560000", "-945190000", "388820000"],
+            "retryint" : 300000,
+            "retrymax" : 9,
+            "timeout" : "1200000"
+        }
+    },
+    {
+        "imrcp.store.NDFDStore" :
+        {
+            "attach" : ["NDFD"],
+            "subscribe" : ["NDFD"],
+            "dir" : "'<desired file path>/ndfd/'yyyyMM/yyyyMMdd/",
+            "subobs" : ["TDEW", "TAIR", "COVCLD", "SPDWND"]
+        }
+    },
+    {
+        "imrcp.store.NDFDTdStore" :
+        {
+            "filepattern" : ".*ndfdtd_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["TDEW"],
+            "obs" : ["Dewpoint_temperature_surface"],
+            "dest" : "'<desired file path>/ndfd/'yyyyMM/yyyyMMdd/'ndfdtd_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "limit" : 2,
+            "delay" : 3600000,
+            "range" : 32400000,
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "7200000",
+            "lrulim" : 53,
+            "freq" : 3600000
+        }
+    },
+    {
+        "imrcp.store.NDFDTempStore" :
+        {
+            "filepattern" : ".*ndfdtemp_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["TAIR"],
+            "obs" : ["Temperature_surface"],
+            "dest" : "'<desired file path>/ndfd/'yyyyMM/yyyyMMdd/'ndfdtemp_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "limit" : 2,
+            "delay" : 3600000,
+            "range" : 32400000,
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "7200000",
+            "lrulim" : 53,
+            "freq" : 3600000
+        }
+    },  
+    {
+        "imrcp.store.NDFDWspdStore" :
+        {
+            "filepattern" : ".*ndfdwspd_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["SPDWND"],
+            "obs" : ["Wind_speed_surface"],
+            "dest" : "'<desired file path>/ndfd/'yyyyMM/yyyyMMdd/'ndfdwspd_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "limit" : 2,
+            "delay" : 3600000,
+            "range" : 32400000,
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "7200000",
+            "lrulim" : 53,
+            "freq" : 3600000
+        }
+    },
+    {
+        "imrcp.store.NDFDSkyStore" :
+        {
+            "filepattern" : ".*ndfdsky_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["COVCLD"],
+            "obs" : ["Total_cloud_cover_surface"],
+            "dest" : "'<desired file path>/ndfd/'yyyyMM/yyyyMMdd/'ndfdsky_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "limit" : 2,
+            "delay" : 3600000,
+            "range" : 32400000,
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "7200000",
+            "lrulim" : 53,
+            "freq" : 3600000
+        }
+    },
+    {
+        "imrcp.store.RTMAStore" :
+        {
+            "attach" : ["RTMA"],
+            "subscribe" : ["RTMA"],
+            "limit" : 9,
+            "filepattern" : "rtma_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "delay" : 3600000,
+            "range" : 3600000,
+            "obsid" : ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
+            "obs" : ["Dewpoint_temperature_height_above_ground", "Pressure_surface", 
+			"Temperature_height_above_ground", "Visibility_surface", 
+			"Wind_direction_from_which_blowing_height_above_ground", 
+			"Wind_speed_gust_height_above_ground", "Wind_speed_height_above_ground",
+			"Total_cloud_cover_entire_atmosphere_single_layer"],
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "36000000",
+            "dest" : "'<desired file path>/rtma/'yyyyMM/yyyyMMdd/'rtma_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "lrulim" : 53,
+            "subobs" : ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
+            "freq" : 3600000
+        }
+    },
+    {
+        "imrcp.store.RAPStore" :
+        {
+            "attach" : ["RAP"],
+            "subscribe" : ["RAP"],
+            "limit" : 22,
+            "dir" : "'<desired file path>/rap/'yyyyMM/yyyyMMdd/",
+            "filepattern" : "rap_130_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "delay" : 0,
+            "range" : 3600000,
+            "hrz" : "x",
+            "vrt" : "y",
+            "time" : "time",
+            "keeptime" : "3600000",
+            "dest" : "'<desired file path>/rap/'yyyyMM/yyyyMMdd/'rap_130_'yyyyMMdd_HHmm'_000.grb2'",
+            "lrulim" : 53,
+            "obs" : ["Pressure_surface", "Precipitation_rate_surface", "precipType", "Visibility_surface", "Temperature_height_above_ground", "Categorical_Rain_surface", 
+                     "Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface"],
+            "obsid" : ["PRSUR", "RTEPC", "TYPPC", "VIS", "TAIR", "1", "2", "3", "4"],
+            "subobs" : ["PRSUR", "TYPPC", "VIS", "PCCAT"],
+            "freq" : 3600000,
+            "files" : 11
+        }
+    },
+    {
+        "RapNcf" :
+        {
+            "lrain" : "0.0007055556",
+            "mrain" : "0.0021166667",
+            "lsnow" : "0.0000705556",
+            "msnow" : "0.0007055556"
+        }
+    },
+    {
+        "imrcp.store.NcfWrapper" :
+        {
+            "fcst" : 3600000
+        }
+    },
+    {
+        "imrcp.store.RadarNcfWrapper.mrms" :
+        {
+            "fcst" : 240000
+        }
+    },
+    {
+        "imrcp.store.MetroStore" :
+        {
+            "attach" : ["Metro"],
+            "subscribe" : ["Metro"],
+            "limit" : 2,
+            "filepattern" : "metro_seg_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "delay" : 0,
+            "range" : 28800000,
+            "hrz" : "Segment_Ids",
+            "vrt" : "Forecast_Minutes",
+            "time" : "Metro_Start_Time",
+            "keeptime" : "7200000",
+            "dest" : "'<desired file path>/metro/'yyyyMM/yyyyMMdd/'metro_seg_'yyyyMMdd_HHmm'_000.grb2'",
+            "lrulim" : 53,
+            "obs" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
+            "obsid" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
+            "subobs" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
+            "freq" : 1200000
+        }
+    },
+    {
+        "imrcp.store.RadarStore" :
+        {
+            "limit" : 30,
+            "delay" : 0,
+            "range" : 240000,
+            "hrz" : "lon",
+            "vrt" : "lat",
+            "time" : "time",
+            "keeptime" : "600000",
+            "lrulim" : 53,
+            "freq" : 120000
+        }
+    },
+    {
+        "RadarStore" :
+        {
+            "attach" : ["Radar"],
+            "subscribe" : ["Radar"],
+            "dir" : "'<desired file path>/mrms/radar/'yyyyMM/yyyyMMdd/",
+            "filepattern" : "radar_010_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["RDR0"],
+            "obs" : ["MergedBaseReflectivityQC_altitude_above_msl"],
+            "subobs" : ["RDR0"],
+            "dest" : "'<desired file path>/mrms/radar/'yyyyMM/yyyyMMdd/'radar_010_'yyyyMMdd_HHmm'_000.grb2'"
+        }
+    },
+    {
+        "RadarPrecipStore" :
+        {
+            "attach" : ["RadarPrecip"],
+            "subscribe" : ["RadarPrecip"],
+            "dir" : "'<desired file path>/mrms/precip/'yyyyMM/yyyyMMdd/",
+            "filepattern" : "precip_010_[0-9]{8}_[0-9]{4}_[0-9]{3}.grb2",
+            "obsid" : ["RTEPC"],
+            "obs" : ["PrecipRate_altitude_above_msl"],
+            "subobs" : ["RTEPC", "PCCAT"],
+            "dest" : "'<desired file path>/mrms/precip/'yyyyMM/yyyyMMdd/'precip_010_'yyyyMMdd_HHmm'_000.grb2'",
+            "limit" : 60,
+            "keeptime" : 3600000
+        }
+    },
+    {
+        "imrcp.collect.NDFD" : 
+        {   
+            "attach" : ["NDFDStore"],
+            "offset" : 3300,
+            "period" : 3600
+        }
+    },
+    {
+        "imrcp.collect.RTMA" : 
+        {   
+            "attach" : ["RTMAStore"],
+            "url" : "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/",
+            "dir" : "<desired file path>/rtma/",
+            "time" : 36000,
+            "offset" : 3300,
+            "period" : 3600,
+            "dest" : "yyyyMM'/'yyyyMMdd'/rtma_130_'yyyyMMdd_HH'00_000.grb2'",
+            "src" : "'rtma2p5.'yyyyMMdd'/rtma2p5.t'HH'z.2dvarges_ndfd.grb2'"
+        }
+    },
+    {
+        "imrcp.collect.RAP" : 
+        {   
+            "attach" : ["RAPStore"],
+            "url" : "ftp://ftpprd.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.",
+            "dir" : "<desired file path>/rap/",    
+            "time" : 39600,
+            "offset" : 3300,
+            "period" : 3600,
+            "dest" : "yyyyMM'/'yyyyMMdd'/rap_130_'yyyyMMdd_HH'00_000.grb2'",
+            "test" : "False"
+        }
+    },
+    {
+        "imrcp.collect.Radar" : 
+        {   
+            "time" : 0,
+            "offset" : 0,
+            "period" : 60,
+            "memtime" : 1800000
+        }
+    },
+    {
+        "Radar" :
+        {
+            "attach" : ["RadarStore"],
+            "url" : "http://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/",
+            "dir" : "<desired file path>/mrms/radar/",
+            "dest" : "yyyyMM'/'yyyyMMdd'/radar_010_'yyyyMMdd_HHmm'_000.grb2.gz'",
+            "src" : "'MRMS_MergedBaseReflectivityQC_00.00_'yyyyMMdd'-'HHmmss'.grib2.gz'"
+        }
+    },
+    {
+        "RadarPrecip" :
+        {
+            "attach" : ["RadarPrecipStore"],
+            "url" : "http://mrms.ncep.noaa.gov/data/2D/PrecipRate/",
+            "dir" : "<desired file path>/mrms/precip/",
+            "dest" : "yyyyMM'/'yyyyMMdd'/precip_010_'yyyyMMdd_HHmm'_000.grb2.gz'",
+            "src" : "'MRMS_PrecipRate_00.00_'yyyyMMdd'-'HHmmss'.grib2.gz'"
+        }
+    },
+    {
+        "imrcp.collect.NDFDSky" :
+        {
+            "file" : "ds.sky.bin",
+            "dest" : "yyyyMM'/'yyyyMMdd'/ndfdsky_130_'yyyyMMdd_HH'00_000.grb2'",
+            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+            "dir" : "<desired file path>/ndfd/",
+            "offset" : 3300,
+            "period" : 3600,
+            "time" : 3600
+        }
+    },
+    {
+        "imrcp.collect.NDFDTd" :
+        {
+            "file" : "ds.td.bin",
+            "dest" : "yyyyMM'/'yyyyMMdd'/ndfdtd_130_'yyyyMMdd_HH'00_000.grb2'",
+            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+            "dir" : "<desired file path>/ndfd/",
+            "offset" : 3300,
+            "period" : 3600,
+            "time" : 3600
+
+        }
+    },
+    {
+        "imrcp.collect.NDFDTemp" :
+        {
+            "file" : "ds.temp.bin",
+            "dest" : "yyyyMM'/'yyyyMMdd'/ndfdtemp_130_'yyyyMMdd_HH'00_000.grb2'",
+            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+            "dir" : "<desired file path>/ndfd/",
+            "offset" : 3300,
+            "period" : 3600,
+            "time" : 3600
+
+        }
+    },
+    {
+        "imrcp.collect.NDFDWspd" :
+        {
+            "file" : "ds.wspd.bin",
+            "dest" : "yyyyMM'/'yyyyMMdd'/ndfdwspd_130_'yyyyMMdd_HH'00_000.grb2'",
+            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+            "dir" : "<desired file path>/ndfd/",
+            "offset" : 3300,
+            "period" : 3600,
+            "time" : 3600
+        }
+    },
+    {
+        "imrcp.collect.KCScoutDetectors" :
+        {
+            "attach" : ["KCScoutDetectorMappings"],
+            "subscribe" :["KCScoutDetectorMappings"],
+            "offset" : 0,
+            "period" : 60,
+            "dest" : "'<desired file path>/detector/'yyyyMM/yyyyMMdd'_Detector_Station_Report.csv'",
+            "freq" : 86400000,
+            "test" : "False",
+            "testfile" : "<desired temp file path>/detector.xml",
+            "pw" : [""],
+            "user" : [""]
+        }
+    },
+       {
+        "imrcp.collect.KCScoutIncidents" :
+        {
+	    "dir" : "<desired temp file path>/",
+            "offset" : 0,
+            "period" : 60,
+            "pw" : [""],
+            "user" : [""]
+        }
+    },
+    {
+        "imrcp.store.KCScoutDetectorsStore" :
+        {
+            "attach" : ["KCScoutDetectors"],
+            "subscribe" : ["KCScoutDetectors"],
+            "dir" : "'<desired file path>/detector/'yyyyMM/",
+            "dest" : "'<desired file path>/detector/'yyyyMM/yyyyMMdd'_Detector_Station_Report.csv'",
+            "subobs" : ["SPDLNK", "DNTLNK", "VOLLNK"],
+            "freq" : 86400000,
+            "delay" : 0,
+            "range" : 86400000,
+            "limit" : 2,
+            "keeptime" : 86400000,
+            "obslength" : 60000
+        }
+    },
+        {
+        "imrcp.store.KCScoutIncidentsStore" :
+        {
+            "attach" : ["KCScoutIncidents"],
+            "subscribe" : ["KCScoutIncidents"],
+	    "dest" : "'<desired file path>/incident/'yyyyMM/yyyyMMdd'_eventsList.csv'",
+            "subobs" : ["EVT"],
+            "limit" : 1,
+            "delay" : 0,
+            "range" : 86400000,
+            "freq" : 86400000,
+            "lrulim" : 5,
+            "offset" : 0, 
+            "period" : 86400
+        }
+    },
+    {
+        "IncidentDbWrapper" :
+        {
+            "tol" : 5000,
+            "extend" : 450000
+        }
+    },
+    {
+        "imrcp.store.BayesStore" :
+        {
+            "attach" : ["RealTimeBayes"],
+            "subscribe" : ["RealTimeBayes"],
+            "subobs" : ["FLWCAT", "SPDCAT", "OCCCAT", "TRFLNK", "TDNLNK"],
+            "freq" : 300000,
+            "delay" : 0,
+            "range" : 14400000,
+            "limit" : 1,
+            "keeptime" : 86400000,
+            "dest" : "'<desired temp file path>/'yyyyMMdd'_'HHmm'_Bayes_Obs.csv'",
+            "lrulim" : 5
+        }
+    },
+
+    {
+        "imrcp.geosrv.SegmentShps" :
+        {
+            "dir" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/",
+            "segment" : "NewSegmentsWithNames.csv"
+        }
+    },
+    {
+        "imrcp.geosrv.NED" :
+        {
+            "dir" : "<desired file path>/elevations/"
+        }
+    },
+    {
+        "imrcp.imports.DataImports" :
+        {
+            "nodedbf" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Updated_Shp_Files_170302/RedNet_nodes_v5.2.dbf",
+            "nodeshp" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Updated_Shp_Files_170302/RedNet_nodes_v5.2.shp",
+            "linkdbf" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Updated_Shp_Files_170302/RedNet_links_v5.2.dbf",
+            "linkshp" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Updated_Shp_Files_170302/RedNet_links_v5.2.shp",
+            "idfile" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Detector_Link_Relationships_wNodes_v8.csv",
+            "micro" : "true",
+            "length" : "0.3048",
+            "segment" : "<desired file path>/imrcp/NewSegments.csv",
+            "bridge" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Bridges_Coord_v4.csv",
+            "tol" : 1000
+        }
+    },
+    {
+        "imrcp.forecast.bayes.ArchiveFile" :
+        {
+            "mapping" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Detector_Link_Relationships_wNodes_v8.csv",
+            "event" : "/opt/archive_events/",
+            "detector" : "/opt/archive_detector_data/",
+            "output" : "Bayes_Links_Stats.csv",
+            "upbox" : "-947242640,388820000,-945190000,389570000",
+            "lowbox" : "-946090000,388560000,-945190000,388820000",
+            "tol" : 1000,
+            "minmax" : "<desired file path>/imrcp/ArchiveMinMax",
+	    "outdir" : "<desired file path>/imrcp/Bayes/"
+        }
+    },
+    {
+        "imrcp.forecast.bayes.RealTimeBayes" :
+        {
+            "subscribe" : ["SegmentShps", "KCScoutDetectorMappings"],
+            "attach" : ["SegmentShps", "KCScoutDetectorMappings"],
+            "highway" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Highways.csv",
+            "period" : 300,
+            "offset" : 0,
+            "forecast" : 4,
+            "#output" : "'<desired file path>/bayes/'yyyyMM'/bayes'yyyyMMdd'.csv'",
+            "output" : "'<desired temp file path>/'yyyyMMdd'_'HHmm'_Bayes_Obs.csv'",
+            "freq" : 300000,
+            "java" : "/opt/jdk/bin/java",
+            "jar" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/imrcp2.unbbayes-v1.0-jar-with-dependencies.jar",
+            "net" : "<desired temp file path>/BayesPredictModel.net",
+            "inpath" : "<desired temp file path>/",
+            "outpath" : "<desired temp file path>/",
+            "finalout" : "<desired temp file path>/BayesLookup.csv",
+            "inname" : "input.csv",
+            "outname" : "output_of_input.csv",
+            "fcststart" : 0
+        }
+    },
+    {
+        "imrcp.forecast.treps.DetectorMappingToLink" :
+        {
+            "idfile" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Detector_Link_Relationships_wNodes_v8.csv", 
+            "output" : "<desired file path>/imrcp/detector_mapping_to_link.txt"
+        }
+    },
+    {
+        "imrcp.forecast.treps.RealTimeDetector" :
+        {
+            "attach" : ["KCScoutDetectorsStore", "KCScoutDetectorMappings"],
+            "subscribe" : ["KCScoutDetectorsStore", "KCScoutDetectorMappings"],
+            "output" : "'<desired temp file path>/detector.dat'",
+            "period" : 60,
+            "offset" : 10,
+            "rtoffset" : 60000,
+            "minfile" : 15
+        }
+    },
+    {
+        "imrcp.forecast.treps.RealTimeIncident" :
+        {
+            "attach" : ["KCScoutIncidentsStore", "AHPSAlertsStore"],
+            "subscribe" : ["KCScoutIncidentsStore", "AHPSAlertsStore"],
+            "output" : "'<desired temp file path>/incident.dat'",
+            "period" : 60,
+            "offset" : 0
+        }
+    },
+    {
+        "imrcp.forecast.treps.RealTimeWorkzone" :
+        {
+            "attach" : ["KCScoutIncidentsStore"],
+            "subscribe" : ["KCScoutIncidentsStore"],
+            "output" : "/'<desired temp file path>/workzone.dat'",
+            "period" : 60,
+            "offset" : 0,
+            "rate" : 1500
+        }
+    },
+    {
+        "imrcp.forecast.treps.RealTimeWeather" :
+        {
+            "attach" : ["RAPStore"],
+            "subscribe" : ["RAPStore"],
+            "output" : "'<desired temp file path>/weather.dat'",
+            "period" : 3600,
+            "interval" : 4 
+        }
+    },
+    {
+        "imrcp.store.ObsView" :
+        {
+            "multi" : ["TAIR", "VIS", "TDEW", "PRSUR", "SPDWND", "PCCAT", "COVCLD"]
+        }
+    },
+    {
+        "SourceUnits" :
+        {
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/SourceUnits.csv"
+        }
+    },
+    {
+        "imrcp.forecast.mdss.Metro" :
+        {
+            "attach" : ["RAPStore", "RTMAStore", "NDFDStore", "SegmentShps"],
+            "subscribe" : ["RAPStore", "RTMAStore", "NDFDStore", "SegmentShps"],
+            "fcsthrs" : 10,
+            "obshrs" : 8,
+            "dest" : "'<desired file path>/metro/'yyyyMM'/'yyyyMMdd'/metro_seg_'yyyyMMdd_HHmm'_000.grb2'",
+            "threads" : 5,
+            "dir" : "<desired temp file path>/",
+            "offset" : 0,
+            "period" : 1200,
+            "test" : "False",
+            "details" : "'<desired file path>/metrodetails/'yyyyMMdd_HHmm'MetroDetails'"
+        }
+    },
+    {
+        "DoMetroWrapper" :
+        {
+            "roadmin" : -50,
+            "roadmax" : 80,
+            "ssmin" : -40,
+            "ssmax" : 80,
+            "airmin" : -60,
+            "airmax" : 50,
+            "windmax" : 90,
+            "prmin" : 60000,
+            "prdef" : 101325,
+            "prmax" : 110000,
+            "initrc" : ["1", "1", "1", "1", "1", "1", "1", "1"],
+            "initrt" : ["26.0", "26.0", "26.0", "26.0", "26.0", "26.0", "26.0", "26.0"],
+            "initsub" : ["19", "19", "19", "19", "19", "19", "19", "19"],
+            "initsn" : "0",
+            "initliq" : "0",
+            "dir" : "<desired temp file path>/",
+            "precip" : 3600000,
+            "raincut" : "0.01",
+            "snowcut" : "0.2"
+        }
+    },
+    {
+        "imrcp.subs.Subscriptions" :
+        {
+            "subsRoot" : "<desired file path>/subs",
+            "offset" : 0,
+            "period" : 300
+        }
+    },
+     {
+        "imrcp.alert.Alerts" :
+        {
+            "freq" : 86400000,
+            "highways" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/HighwaySegments.txt"
+        }
+     },
+     {
+        "WeatherAlerts" :
+        {
+            "subscribe" : ["RAPStore", "SegmentShps"],
+            "attach" : ["RAPStore", "SegmentShps"],
+            "rules" : ["light-winter-precip-snow", "light-winter-precip-ice-pellets", "light-winter-precip-freezing-rain", "medium-winter-precip-snow", "medium-winter-precip-ice-pellets",
+                       "medium-winter-precip-freezing-rain", "heavy-winter-precip-snow", "heavy-winter-precip-ice-pellets", "heavy-winter-precip-freezing-rain", "light-precip",
+                       "medium-precip", "heavy-precip", "low-visibility"],
+            "light-winter-precip-snow" : ["light-winter-precip", "PCCAT", "light-snow", "light-snow", ""],
+            "light-winter-precip-ice-pellets" : ["light-winter-precip", "PCCAT", "light-ice", "light-ice", ""],
+            "light-winter-precip-freezing-rain" : ["light-winter-precip", "PCCAT", "light-freezing-rain", "light-freezing-rain", ""],
+            "medium-winter-precip-snow" : ["medium-winter-precip", "PCCAT", "medium-snow", "medium-snow", ""],
+            "medium-winter-precip-ice-pellets" : ["medium-winter-precip", "PCCAT", "medium-ice", "medium-ice", ""],
+            "medium-winter-precip-freezing-rain" : ["medium-winter-precip", "PCCAT", "medium-freezing-rain", "medium-freezing-rain", ""],
+            "heavy-winter-precip-snow" : ["heavy-winter-precip", "PCCAT", "heavy-snow", "heavy-snow", ""],
+            "heavy-winter-precip-ice-pellets" : ["heavy-winter-precip", "PCCAT", "heavy-ice", "heavy-ice", ""],
+            "heavy-winter-precip-freezing-rain" : ["heavy-winter-precip", "PCCAT", "heavy-freezing-rain", "heavy-freezing-rain", ""],
+            "light-precip" : ["light-precip", "PCCAT", "light-rain", "light-rain", ""],
+            "medium-precip" : ["medium-precip", "PCCAT", "medium-rain", "medium-rain", ""],
+            "heavy-precip" : ["heavy-precip" , "PCCAT", "heavy-rain", "heavy-rain", ""],
+            "low-visibility" : ["low-visibility", "VIS", "0", "322", "m"],
+            "fcst" : 8,
+            "dest" : "<desired temp file path>/weather_alerts.csv",
+            "obs" : ["PCCAT", "VIS"],
+            "fcstinc" : 3600000
+        }
+     },
+     {
+        "TrafficAlerts" :
+        {
+            "subscribe" : ["TrepsStore"],
+            "attach" : ["TrepsStore"],
+            "rules" : ["slow-traffic", "very-slow-traffic", "lengthy-queue"],
+            "slow-traffic" : ["slow-traffic", "TRFLNK", "20", "40", ""],
+            "very-slow-traffic" : ["very-slow-traffic", "TRFLNK", "0", "20", ""],
+            "lengthy-queue" : ["lengthy-queue", "QPRLNK", "0.3", "", ""],
+            "fcst" : 2,
+            "dest" : "<desired temp file path>/traffic_alerts.csv",
+            "obs" : ["TRFLNK", "QPRLNK"],
+            "fcstinc" : 60000
+        }
+     },
+     {
+        "MetroAlerts" :
+        {
+            "subscribe" : ["MetroStore"],
+            "attach" : ["MetroStore"],
+            "rules" : ["dew-on-roadway", "frost-on-roadway"],
+            "dew-on-roadway" : ["dew-on-roadway", "STPVT", "dew", "dew", ""],
+            "frost-on-roadway" : ["frost-on-roadway", "STPVT", "frost", "frost", ""],
+            "fcst" : 8,
+            "dest" : "<desired temp file path>/metro_alerts.csv",
+            "obs" : ["STPVT"],
+            "fcstinc" : 1200000
+        }
+     },
+     {
+        "AHPSAlerts" :
+        {
+            "subscribe" : ["AHPSStore"],
+            "attach" : ["AHPSStore"],
+            "rules" : ["flooded-road"],
+            "flooded-road" : ["flooded-road", "DPHLNK", "0.00000000001", "", "ft"],
+            "fcst" : 8,
+            "dest" : "<desired temp file path>/ahps_alerts.csv",
+            "obs" : ["DPHLNK"],
+            "fcstinc" : 3600000
+        }
+     },
+     {
+        "imrcp.alert.SpeedStatsAlerts" :
+        {
+            "subscribe" : ["SegmentShps", "TrepsStore", "KCScoutDetectorMappings"],
+            "attach" : ["SegmentShps", "TrepsStore", "SpeedStats", "KCScoutDetectorMappings"],
+            "rule" : "0.7",
+            "array" : 7,
+            "file" : "<desired temp file path>/speed_alerts.csv"
+        }
+     },
+     {
+        "imrcp.store.AlertsStore" :
+        {
+            "subobs" : ["EVT"],
+            "freq" : 86400000,
+            "delay" : 0,
+            "range" : 86400000,
+            "limit" : 1,
+            "keeptime" : 86400000,
+            "lrulim" : 5
+        }
+     },
+     {
+        "WeatherAlertsStore" :
+        {
+            "attach" : ["WeatherAlerts"],
+            "subscribe" : ["WeatherAlerts"],
+            "dest" : "'<desired file path>/alert/weather/'yyyyMM'/alert_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/alert/weather/recover.csv"
+        }
+     },
+     {
+        "TrafficAlertsStore" :
+        {
+            "attach" : ["TrafficAlerts"],
+            "subscribe" : ["TrafficAlerts"],
+            "dest" : "'<desired file path>/alert/traffic/'yyyyMM'/alert_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/alert/traffic/recover.csv"
+        }
+     },
+     {
+        "MetroAlertsStore" :
+        {
+            "attach" : ["MetroAlerts"],
+            "subscribe" : ["MetroAlerts"],
+            "dest" : "'<desired file path>/alert/metro/'yyyyMM'/alert_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/alert/metro/recover.csv"
+        }
+     },
+     {
+        "SpeedStatsAlertsStore" :
+        {
+            "attach" : ["SpeedStatsAlerts"],
+            "subscribe" : ["SpeedStatsAlerts"],
+            "dest" : "'<desired file path>/alert/speed/'yyyyMM'/alert_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/alert/speed/recover.csv"
+        }
+     },
+     {
+        "AHPSAlertsStore" :
+        {
+            "attach" : ["AHPSAlerts"],
+            "subscribe" : ["AHPSAlerts"],
+            "dest" : "'<desired file path>/alert/ahps/'yyyyMM'/alert_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/alert/ahps/recover.csv"
+        }
+     },
+     {
+        "imrcp.system.Units" :
+        {
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/UnitConversions.csv"
+        }
+     },
+     {
+        "imrcp.forecast.treps.OutputManager" :
+        {
+            "attach" : ["DefaultTrepsCollect"],
+            "subscribe" : ["DefaultTrepsCollect"],
+            "offset" : 50,
+            "period" : 900,
+            "dir" : "<desired temp file path>/",
+            "network" : "network.dat",
+            "destdir" : "'<desired file path>/treps/'yyyyMM/yyyyMMdd/",
+            "date" : "'Date 'MM/dd/yy'; Time 'HH:mm:ss",
+            "time" : "OutLinkDent.dat",
+            "#mapping" : ["VOLLNK", "LinkVolume.dat", "GENLNK", "OutLinkGen.dat", "VEHLNK", "OutLinkVeh.dat", "QUELNK", "OutLinkQue.dat",
+                         "SPDLNK", "OutLinkSpeedAll.dat", "DNTLNK", "OutLinkDent.dat", "SPFLNK", "OutLinkSpeedFree.dat", "DNFLNK", "OutLinkDentFree.dat",
+                         "CTLEFT", "OutLeftFlow.dat", "DURGRN", "OutGreen.dat", "CTTHRU", "OutFlow.dat", "CTMID", "OutAccuVol.dat"],
+            "mapping" : ["VOLLNK", "LinkVolume.dat", "SPDLNK", "OutLinkSpeedAll.dat", "DNTLNK", "OutLinkDent.dat"]
+        }
+     },
+     {
+        "imrcp.store.TrepsStore" :
+        {
+            "attach" : ["OutputManager", "SegmentShps"],
+            "subscribe" : ["OutputManager", "SegmentShps"],
+            "subobs" : ["VOLLNK", "GENLNK", "VEHLNK", "QUELNK", "SPDLNK", "DNTLNK", "SPFLNK", "DNFLNK", "CTLEFT", "DURGRN", "CTTHRU", "CTMID", "TRFLNK", "TDNLNK", "QPRLNK"],
+            "freq" : 900000,
+            "delay" : 0,
+            "range" : 7260000,
+            "limit" : 1,
+            "keeptime" : 21600000,
+            "dest" : "'<desired file path>/treps/'yyyyMM/yyyyMMdd/'TrepsResults_'yyyyMMdd'_'HHmm",
+            "lrulim" : 50
+        }
+     },
+     {
+        "TrepsFtp" :
+        {
+            "ftp" : "129.105.156.15",
+            "user" : "",
+            "pw" : "",
+            "dir" : "<desired temp file path>/",
+            "offset" : 0,
+            "period" : 7,
+            "deftmout" : 5000,
+            "contmout" : 5000,
+            "dattmout" : 5000,
+            "files" : ["LinkVolume.dat", "OutFlow.dat", "OutLinkDent.dat", "OutLinkSpeedAll.dat", "VehTrajectory.dat"]
+        }
+     },
+     {
+        "imrcp.forecast.treps.TrepsCollect" :
+        {
+            "offset" : 0,
+            "period" : 11,
+            "test" : "False"
+        }
+     },
+     {
+        "DefaultTrepsCollect" :
+        {
+            "files" : ["LinkVolume.dat", "OutFlow.dat", "OutLinkDent.dat", "OutLinkSpeedAll.dat"],
+            "toffset" : 0,
+            "tperiod" : 900
+        }
+     },
+     {
+        "VehTrepsCollect" :
+        {
+            "files" : ["VehTrajectory.dat"],
+            "toffset" : 0,
+            "tperiod" : 900
+        }
+     },
+     {
+        "AHPS" :
+        {
+            "attach" : ["SegmentShps"],
+            "subscribe" : ["SegmentShps"],
+            "offset" : 119,
+            "period" : 300,
+            "download" : "https://water.weather.gov/ahps/download.php?data=tgz_fcst_f024",
+            "url" : "https://water.weather.gov/ahps/download.php",
+            "tgz" : "'<desired file path>/ahps/'yyyyMM/yyyyMMdd/'ahps_'yyyyMMdd'_'HHmm'.tgz'",
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/ahps3.csv",
+            "freq" : 3600000,
+            "dest" : "'<desired file path>/ahps/'yyyyMM/yyyyMMdd/'ahps_'yyyyMMdd'_'HH'00.csv'",
+            "test" : "False",
+            "testmod" : "07/27/2017 10:07 UTC",
+            "field" : "Forecast",
+            "search" : "(Maximum Forecast 1-Day)"
+        }
+     },
+     {
+        "AHPSObservation" :
+        {
+            "attach" : ["SegmentShps"],
+            "subscribe" : ["SegmentShps"],
+            "offset" : 119,
+            "period" : 300,
+            "download" : "http://water.weather.gov/ahps/download.php?data=tgz_obs",
+            "url" : "https://water.weather.gov/ahps/download.php",
+            "tgz" : "'<desired file path>/ahps/observation/'yyyyMM/yyyyMMdd/'ahps_obs_'yyyyMMdd'_'HHmm'.tgz'",
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/ahps3.csv",
+            "freq" : 3600000,
+            "dest" : "'<desired file path>/ahps/observation/'yyyyMM/yyyyMMdd/'ahps_obs_'yyyyMMdd'_'HH'00.csv'",
+            "test" : "False",
+            "testmod" : "08/22/2017 12:09 UTC",
+            "field" : "Observed",
+            "search" : "KMZ (Observed)"
+        }
+     },
+     {
+        "imrcp.store.AHPSStore" :
+        {
+            "attach" : ["AHPS"],
+            "subscribe" : ["AHPS"],
+            "freq" : 3600000,
+            "delay" : 0,
+            "range" : 86400000,
+            "limit" : 1,
+            "keeptime" : 86400000,
+            "#keeptime" : 0,
+            "dest" : "'<desired file path>/ahps/'yyyyMM/yyyyMMdd/'ahps_'yyyyMMdd'_'HHmm'.csv'",
+            "lrulim" : 5,
+            "subobs" : ["DPHLNK"],
+            "test" : "False",
+            "testdest" : "<desired temp file path>/ahps_test.csv"
+        }
+     },
+     {
+        "imrcp.collect.SubSurfaceTemp" :
+        {
+            "file" : "<desired file path>/subsurftemp/SubSurfaceTemp.csv",
+            "id" : 123014,
+            "user" : "",
+            "pw" : "",
+            "offset" : 0,
+            "period" : 300,
+            "ftp" : "wxftp.dtn.com",
+            "init" : "12.7"
+        }
+     },
+     {
+        "imrcp.collect.CAP" :
+        {
+            "offset" : 0,
+            "period" : 300,
+            "states" : ["ks", "mo"],
+            "url" : "https://alerts.weather.gov/cap/",
+            "urlend" : ".php?x=1",
+            "#url" : "https://imrcp.data-env.com:8443/",
+            "#urlend" : "cap.xml",
+            "output" : "<desired temp file path>/cap.xml"
+        }
+     },
+     {
+        "imrcp.store.CAPStore" :
+        {
+            "attach" : ["CAP", "Polygons"],
+            "subscribe" : ["CAP", "Polygons"],
+            "dest" : "'<desired file path>/cap/'yyyyMM/'Cap_'yyyyMMdd'.csv'",
+            "fips" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Polygons.csv",
+            "freq" : 86400000,
+            "delay" : 0,
+            "range" : 86400000,
+            "keeptime" : 86400000,
+            "lrulim" : 5,
+            "subobs" : ["EVT"],
+            "limit" : 1
+        }
+     },
+     {
+        "imrcp.geosrv.Polygons" :
+        {
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Polygons.csv"
+        }
+     },
+     {
+        "imrcp.collect.StormWatch" :
+        {
+            "pattern" : "/export/csv.php?site_id=%d&site=%s&device_id=%d&device=%s&data_start=%s&data_end=%s",
+            "format" : "MM/dd/yyyy hh:mm:ss aa",
+            "offset" : 0,
+            "period" : 600,
+            "output" : "'<desired file path>/stormwatch/'yyyyMM/'StormWatch_'yyyyMMdd'.csv'",
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Study_Area_StormWatch_Sites.csv"
+        }
+     },
+     {
+        "imrcp.store.StormWatchStore" :
+        {
+            "attach" : ["StormWatch"],
+            "subscribe" : ["StormWatch"],
+            "dest" : "'<desired file path>/stormwatch/'yyyyMM/'StormWatch_'yyyyMMdd'.csv'",
+            "freq" : 86400000,
+            "delay" : 0,
+            "range" : 86400000,
+            "keeptime" : 86400000,
+            "lrulim" : 5,
+            "limit" : 1,
+            "subobs" : ["TPVT", "DPHLNK"]
+        }
+     },
+     {
+        "imrcp.store.TrvlTimeStore" :
+        {
+            "attach" : ["Routes"],
+            "subscribe" : ["Routes"],
+            "dest" : "'<desired file path>/treps/'yyyyMM/yyyyMMdd/'TravelTimes_'yyyyMMdd'.csv'",
+            "freq" : 86400000,
+            "delay" : 0,
+            "range" : 86400000,
+            "keeptime" : 86400000,
+            "lrulim" : 5,
+            "limit" : 2,
+            "subobs" : ["TIMERT"]
+        }
+     },
+     {
+        "imrcp.route.Routes" :
+        {
+            "attach" : ["VehTrepsCollect", "SegmentShps", "OutputManager"],
+            "subscribe" : ["VehTrepsCollect", "SegmentShps", "OutputManager"],
+            "dest" : "'<desired file path>/treps/'yyyyMM/yyyyMMdd/'TravelTimes_'yyyyMMdd'.csv'",
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Routing_Nodes.csv",
+            "source" : "<desired temp file path>/VehTrajectory.dat",
+            "fcstmin" : 121,
+            "timeout" : 120000
+        }
+     },
+     {
+        "route" :
+        {
+            "tol" : 2500
+        }
+     },
+     {
+        "imrcp.comp.SpeedStats" :
+        {
+            "subscribe" : ["KCScoutDetectorsStore", "RAPStore", "KCScoutDetectorMappings"],
+            "attach" : ["KCscoutDetectorsStore", "RAPStore", "KCScoutDetectorMappings"],
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/SpeedStats.csv",
+            "months" : 1,
+            "period" : 604800000
+        }
+     },
+     {
+        "imrcp.alert.Notifications" :
+        {
+            "types" : ["medium-winter-precip", "heavy-winter-precip", "low-visibility", "incident", "flooded-road", "unusual-congestion", "heavy-precip"],
+            "tol" : 10000
+        }
+     },
+     {
+        "TrafficNotifications" :
+        {
+            "subscribe" : ["TrafficAlertsStore"],
+            "attach" : ["TrafficAlertsStore"],
+            "file" : "<desired temp file path>/traffic_notifications.csv"
+        }
+     },
+     {
+        "WeatherNotifications" :
+        {
+            "subscribe" : ["WeatherAlertsStore"],
+            "attach" : ["WeatherAlertsStore"],
+            "file" : "<desired temp file path>/weather_notifications.csv"
+        }
+     },
+     {
+        "SpeedStatsNotifications" :
+        {
+            "subscribe" : ["SpeedStatsAlertsStore"],
+            "attach" : ["SpeedStatsAlertsStore"],
+            "file" : "<desired temp file path>/speed_notifications.csv"
+        }
+     },
+     {
+        "IncidentNotifications" :
+        {
+            "subscribe" : ["KCScoutIncidentsStore"],
+            "attach" : ["KCScoutIncidentsStore"],
+            "file" : "<desired temp file path>/incident_notifications.csv"
+        }
+     },
+     {
+        "AHPSNotifications" :
+        {
+            "subscribe" : ["AHPSAlertsStore"],
+            "attach" : ["AHPSAlertsStore"],
+            "file" : "<desired temp file path>/ahps_notifications.csv"
+        }
+     },
+     {
+        "MetroNotifications" :
+        {
+            "subscribe" : ["MetroAlertsStore"],
+            "attach" : ["MetroAlertsStore"],
+            "file" : "<desired temp file path>/metro_notifications.csv"
+        }
+     },
+     {
+        "WeatherNotificationsStore" :
+        {
+            "attach" : ["WeatherNotifications"],
+            "subscribe" : ["WeatherNotifications"],
+            "dest" : "'<desired file path>/notification/weather/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/weather/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "TrafficNotificationsStore" :
+        {
+            "attach" : ["TrafficNotifications"],
+            "subscribe" : ["TrafficNotifications"],
+            "dest" : "'<desired file path>/notification/traffic/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/traffic/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "SpeedStatsNotificationsStore" :
+        {
+            "attach" : ["SpeedStatsNotifications"],
+            "subscribe" : ["SpeedStatsNotifications"],
+            "dest" : "'<desired file path>/notification/speed/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/speed/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "IncidentNotificationsStore" :
+        {
+            "attach" : ["IncidentNotifications"],
+            "subscribe" : ["IncidentNotifications"],
+            "dest" : "'<desired file path>/notification/incident/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/incident/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "AHPSNotificationsStore" :
+        {
+            "attach" : ["AHPSNotifications"],
+            "subscribe" : ["AHPSNotifications"],
+            "dest" : "'<desired file path>/notification/ahps/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/ahps/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "MetroNotificationsStore" :
+        {
+            "attach" : ["MetroNotifications"],
+            "subscribe" : ["MetroNotifications"],
+            "dest" : "'<desired file path>/notification/metro/'yyyyMM'/notification_'yyyyMMdd'.csv'",
+            "recover" : "<desired file path>/notification/metro/recover.csv",
+            "subobs" : ["NOTIFY"]
+        }
+     },
+     {
+        "NotificationServlet" :
+        {
+            "test" : "False"
+        }
+     },
+     {
+        "imrcp.geosrv.KCScoutDetectorMappings" :
+        {
+            "file" : "<desired file path>/webapps/IMRCP/ROOT/WEB-INF/classes/Detector_Link_Relationships_wNodes_wImrcpId_v8.csv"
+        }
+     }
+]
