@@ -26,7 +26,3 @@ Documentation
 Example:
 The IMRCP software is packaged with a Word based Admin/Install Guide, "IMRCP_Admin_Install_Guide.docx", that 
 contains all information about requirements for the software and how to install it.
-
-Web sites
----------
-The IMRCP software is distributed through the USDOT's JPO Open Source Application Development Portal (OSADP) http://itsforge.net/
