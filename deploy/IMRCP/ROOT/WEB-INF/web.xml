@@ -1,96 +1,384 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app version="2.5" xmlns="http://java.sun.com/xml/ns/javaee"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd">
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd">
 
-    <display-name>IMRCP</display-name>
-
-
-    <welcome-file-list>
-        <welcome-file>index.jsp</welcome-file>
-    </welcome-file-list>
+	<display-name>IMRCP</display-name>
 
 
-    <filter>
-        <filter-name>HSTS</filter-name>
-        <filter-class>org.apache.catalina.filters.HttpHeaderSecurityFilter</filter-class>
-        <init-param>
-            <param-name>hstsMaxAgeSeconds</param-name>
-            <param-value>16000000</param-value>
-        </init-param>
-        <init-param>
-            <param-name>hstsIncludeSubDomains</param-name>
-            <param-value>true</param-value>
-        </init-param>
-    </filter>
-
-    <filter-mapping>
-        <filter-name>HSTS</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
+	<welcome-file-list>
+		<welcome-file>index.jsp</welcome-file>
+	</welcome-file-list>
 
 
-    <resource-ref>
-        <description>imrcp</description>
-        <res-ref-name>jdbc/imrcp</res-ref-name>
-        <res-type>javax.sql.DataSource</res-type>
-        <res-auth>Container</res-auth>
-    </resource-ref>
+	<filter>
+		<filter-name>HSTS</filter-name>
+		<filter-class>org.apache.catalina.filters.HttpHeaderSecurityFilter</filter-class>
+		<init-param>
+			<param-name>hstsMaxAgeSeconds</param-name>
+			<param-value>16000000</param-value>
+		</init-param>
+		<init-param>
+			<param-name>hstsIncludeSubDomains</param-name>
+			<param-value>true</param-value>
+		</init-param>
+	</filter>
+
+	<filter-mapping>
+		<filter-name>HSTS</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
 
-    <security-constraint>
-        <web-resource-collection>
-            <web-resource-name>HTTPSOnly</web-resource-name>
-            <url-pattern>/*</url-pattern>
-        </web-resource-collection>
-        <user-data-constraint>
-            <transport-guarantee>CONFIDENTIAL</transport-guarantee>
-        </user-data-constraint>
-    </security-constraint>
+	<resource-ref>
+		<description>imrcp</description>
+		<res-ref-name>jdbc/imrcp</res-ref-name>
+		<res-type>javax.sql.DataSource</res-type>
+		<res-auth>Container</res-auth>
+	</resource-ref>
 
 
-    <login-config>
-        <auth-method>FORM</auth-method>
-        <realm-name>imrcp.data-env.com</realm-name>
-        <form-login-config>
-            <form-login-page>/</form-login-page>
-            <form-error-page>/</form-error-page>
-        </form-login-config>
-    </login-config>
+	<login-config>
+		<auth-method>FORM</auth-method>
+		<realm-name>imrcp.data-env.com</realm-name>
+		<form-login-config>
+			<form-login-page>/</form-login-page>
+			<form-error-page>/</form-error-page>
+		</form-login-config>
+	</login-config>
 
 
-    <security-role>
-      <role-name>imrcp-user</role-name>
-    </security-role>
+	<security-role>
+	  <role-name>imrcp-user</role-name>
+	</security-role>
 
 
-    <servlet>
-        <servlet-name>ImrcpDirectory</servlet-name>
-        <servlet-class>imrcp.system.Directory</servlet-class>
+	<servlet>
+		<servlet-name>ImrcpDirectory</servlet-name>
+		<servlet-class>imrcp.system.Directory</servlet-class>
 
-        <init-param>
-            <description>REQUIRED: path for the configuration file</description>
-            <param-name>config-file</param-name>
-            <param-value><desired file path>/config.json</param-value>
-        </init-param>
+		<init-param>
+			<description>REQUIRED: path for the configuration file</description>
+			<param-name>config-file</param-name>
+			<param-value>{path to config file}/config.json</param-value>
+		</init-param>
 
-        <load-on-startup>0</load-on-startup>
-    </servlet>
+		<load-on-startup>0</load-on-startup>
+	</servlet>
 
-    <servlet-mapping>
-        <servlet-name>ImrcpDirectory</servlet-name>
-        <url-pattern>/Directory</url-pattern>
-    </servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>ImrcpDirectory</servlet-name>
+		<url-pattern>/Directory</url-pattern>
+	</servlet-mapping>
 
 
-    <servlet>
-        <servlet-name>Notification</servlet-name>
-        <servlet-class>imrcp.web.NotificationServlet</servlet-class>
-    </servlet>
+	<servlet>
+		<servlet-name>Notification</servlet-name>
+		<servlet-class>imrcp.web.NotificationServlet</servlet-class>
+	</servlet>
 
-    <servlet-mapping>
-        <servlet-name>Notification</servlet-name>
-        <url-pattern>/notify/*</url-pattern>
-    </servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Notification</servlet-name>
+		<url-pattern>/notify/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>RadarTileCache</servlet-name>
+		<servlet-class>imrcp.web.tiles.GribTileCache</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>RadarTileCache</servlet-name>
+		<url-pattern>/mvt/rdr0/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>rnmvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>rnmvt</servlet-name>
+		<url-pattern>/mvt/rnm/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>stpvtvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>stpvtvt</servlet-name>
+		<url-pattern>/mvt/stpvt/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>tpvtvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>tpvtvt</servlet-name>
+		<url-pattern>/mvt/tpvt/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>dphsnvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>dphsnvt</servlet-name>
+		<url-pattern>/mvt/dphsn/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>dphlnkvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>dphlnkvt</servlet-name>
+		<url-pattern>/mvt/dphlnk/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>trflnkvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>trflnkvt</servlet-name>
+		<url-pattern>/mvt/trflnk/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>spdlnkvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>spdlnkvt</servlet-name>
+		<url-pattern>/mvt/spdlnk/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>tdnlnkvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>tdnlnkvt</servlet-name>
+		<url-pattern>/mvt/tdnlnk/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>vollnkvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>vollnkvt</servlet-name>
+		<url-pattern>/mvt/vollnk/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>timertvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>timertvt</servlet-name>
+		<url-pattern>/mvt/timert/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>TairTileCache</servlet-name>
+		<servlet-class>imrcp.web.tiles.NcfTileCache</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>TairTileCache</servlet-name>
+		<url-pattern>/mvt/tair/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>visvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.NcfTileCache</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>visvt</servlet-name>
+		<url-pattern>/mvt/vis/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>gstwndvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.NcfTileCache</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>gstwndvt</servlet-name>
+		<url-pattern>/mvt/gstwnd/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>spdwndvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.NcfTileCache</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>spdwndvt</servlet-name>
+		<url-pattern>/mvt/spdwnd/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>PcCatTileCache</servlet-name>
+		<servlet-class>imrcp.web.tiles.DataObsTileCache</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>PcCatTileCache</servlet-name>
+		<url-pattern>/mvt/pccat/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>capvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>capvt</servlet-name>
+		<url-pattern>/mvt/cap/1000:1112/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>scoutvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>scoutvt</servlet-name>
+		<url-pattern>/mvt/scout/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>stormwvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>stormwvt</servlet-name>
+		<url-pattern>/mvt/stormw/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>ahpsvt</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>ahpsvt</servlet-name>
+		<url-pattern>/mvt/ahps/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>WeatherAlerts</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>WeatherAlerts</servlet-name>
+		<url-pattern>/mvt/evt/101:106,108:109/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>RoadConditionAlerts</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>RoadConditionAlerts</servlet-name>
+		<url-pattern>/mvt/evt/107,201:204,305/*</url-pattern>
+	</servlet-mapping>
+
+
+	<servlet>
+		<servlet-name>TrafficAlerts</servlet-name>
+		<servlet-class>imrcp.web.tiles.TileServlet</servlet-class>
+
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>TrafficAlerts</servlet-name>
+		<url-pattern>/mvt/evt/301:304,306,307/*</url-pattern>
+	</servlet-mapping>
+
 
 </web-app>

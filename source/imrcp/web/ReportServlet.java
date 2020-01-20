@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,19 +28,13 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.security.Principal;
 import java.util.List;
-import java.util.regex.Pattern;
-import javax.naming.Context;
-import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.sql.DataSource;
+import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 
 /**
@@ -51,112 +45,66 @@ import org.codehaus.jackson.JsonGenerator;
 {
 	"/reports/*"
 })
-public class ReportServlet extends HttpServlet
+public class ReportServlet extends BaseRestResourceServlet
 {
 
-	/**
-	 *
-	 */
-	protected DataSource m_oDatasource;
+  public ReportServlet() throws NamingException
+  {
+  }
 
-	private final JsonFactory m_oJsonFactory = new JsonFactory();
 
 	private static final Logger m_oLogger = LogManager.getLogger(ReportServlet.class);
 
 	private final Subscriptions m_oSubscriptions = (Subscriptions) Directory.getInstance().lookup("Subscriptions");
 
-	private static final Pattern URL_PATTERN = Pattern.compile("^(?:|(?:[-0-9a-f]{36})(?:/files(?:/(latest|20[0-9]{2}(?:0[1-9]|1[0-2])[0-3][0-9]_(?:[0-1][0-9]|2[0-3])[0-5][0-9]\\.(?:xml|kml|cmml|csv)))?)?)$");
-
-	private static final String[] EMPTY_REQUEST_PARTS = new String[0];
 
 
-	/**
-	 *
-	 * @throws NamingException
-	 */
-	public ReportServlet() throws NamingException
+  @Override
+	protected int processRequest(String sMethod, String[] sRequestUriParts,
+          HttpServletRequest oReq, HttpServletResponse oResp)
+	    throws IOException
 	{
-		InitialContext oInitCtx = new InitialContext();
-		Context oCtx = (Context) oInitCtx.lookup("java:comp/env");
-		m_oDatasource = (DataSource) oCtx.lookup("jdbc/imrcp");
-		oInitCtx.close();
-	}
-
-
-	/**
-	 * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
-	 * methods.
-	 *
-	 * @param request servlet request
-	 * @param response servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
-	 */
-	protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-	   throws ServletException, IOException
-	{
-		response.setHeader("Content-Type", "application/json");
-		String servletPath = request.getServletPath().split("/")[1];
-		String requestUri = request.getRequestURI();
-		String requestPath = requestUri.substring(requestUri.indexOf(servletPath) + servletPath.length());
-
-		if (requestPath.startsWith("/"))
-			requestPath = requestPath.substring(1);
-		if (requestPath.endsWith("/"))
-			requestPath = requestPath.substring(0, requestPath.length() - 1);
-
-		if (!URL_PATTERN.matcher(requestPath).matches())
-		{
-			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
-			return;
-		}
-
-		String[] sRequestUriParts = requestPath.isEmpty() ? EMPTY_REQUEST_PARTS : requestPath.split("/");
-
 		/**
 		 * reports GET/ -- response list all reports with summary-level details
-		 * reports POST -- Add new report/subscription reports/{id} GET --
-		 * summary-level details of report/sub reports/{id} DELETE -- delete
-		 * subscription/report reports/{id}/files GET -- list of available
-		 * reports/{id}/files/{filename} GET -- download file
+		 * reports POST -- Add new report/subscription
+     * reports/{id} GET -- summary-level details of report/sub
+     * reports/{id} DELETE -- delete subscription/report
+     * reports/{id}/files GET -- list of available
+     * reports/{id}/files/{filename} GET -- download file
 		 * reports/{id}/files/latest GET -- download file
 		 */
 		try
 		{
-
-			switch (request.getMethod())
+			switch (sMethod)
 			{
 				case "GET":
 					switch (sRequestUriParts.length)
 					{
 						case 0:
-							listSubscriptions(request, response);
-							return;
+							listSubscriptions(oReq, oResp);
+							return HttpServletResponse.SC_OK;
 						case 1:
 						{
 							String sReportId = sRequestUriParts[0];
 							ReportSubscription oSub = m_oSubscriptions.getSubscriptionByUuid(sReportId);
 							if (oSub == null)
-							{
-								response.sendError(HttpServletResponse.SC_NOT_FOUND);
-								return;
-							}
+								 return HttpServletResponse.SC_NOT_FOUND;
 
-							try (JsonGenerator oGenerator = m_oJsonFactory.createJsonGenerator(response.getWriter()))
+							try (JsonGenerator oGenerator = createJsonGenerator(oResp))
 							{
 								oGenerator.writeStartObject();
 								serializeSubSummaryDetails(oGenerator, oSub, false);
 
 								oGenerator.writeEndObject();
 							}
-							return;
+							return HttpServletResponse.SC_OK;
 						}
 						case 2:
 						{
 							String sReportId = sRequestUriParts[0];
 
 							ReportSubscription oSub = m_oSubscriptions.getSubscriptionByUuid(sReportId);
-							try (JsonGenerator oGenerator = m_oJsonFactory.createJsonGenerator(response.getWriter()))
+							try (JsonGenerator oGenerator = createJsonGenerator(oResp))
 							{
 								oGenerator.writeStartArray();
 								for (String sFileName : m_oSubscriptions.getAvailableFiles(oSub.getId()))
@@ -164,69 +112,71 @@ public class ReportServlet extends HttpServlet
 
 								oGenerator.writeEndArray();
 							}
-							return;
+							return HttpServletResponse.SC_OK;
 						}
 						case 3:
 						{
 							String sReportId = sRequestUriParts[0];
 							String sFileName = sRequestUriParts[2];
-							retrieveSubscriptionResult(sReportId, sFileName, response);
-							return;
+							return retrieveSubscriptionResult(sReportId, sFileName, oResp);
 						}
+            default:
+              return HttpServletResponse.SC_BAD_REQUEST;
 					}
-					break;
 				case "POST":
 					if (sRequestUriParts.length == 0)
 					{
-						Principal oUser = request.getUserPrincipal();
+						Principal oUser = oReq.getUserPrincipal();
 
 						if (oUser == null)
-						{
-							response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-							return;
-						}
+							return HttpServletResponse.SC_UNAUTHORIZED;
 
 						ReportSubscription oNewSub;
 						try
 						{
-							oNewSub = new ReportSubscription(request);
+							oNewSub = new ReportSubscription(oReq);
 						}
 						catch (Exception oEx)
 						{
 							m_oLogger.error(oEx, oEx);
-							response.sendError(HttpServletResponse.SC_BAD_REQUEST);
-							return;
+							return HttpServletResponse.SC_BAD_REQUEST;
 						}
+
+            if(oNewSub.getObsTypes() == null)
+            {
+							m_oLogger.error("No obstypes submitted");
+							return HttpServletResponse.SC_BAD_REQUEST;
+            }
+
 						oNewSub.setUsername(oUser.getName());
 						m_oSubscriptions.insertSubscription(oNewSub);
 
-						try (JsonGenerator oGenerator = m_oJsonFactory.createJsonGenerator(response.getWriter()))
+						try (JsonGenerator oGenerator = createJsonGenerator(oResp))
 						{
 							oGenerator.writeStartObject();
 							serializeSubSummaryDetails(oGenerator, oNewSub, false);
 							oGenerator.writeEndObject();
 						}
+            return HttpServletResponse.SC_OK;
 					}
 					else
-					{
-						response.sendError(HttpServletResponse.SC_BAD_REQUEST);
-					}
-					return;
+						return HttpServletResponse.SC_BAD_REQUEST;
+
 				case "DELETE":
 					if (sRequestUriParts.length == 1)
-            ;// delete sub/report. Must be logged in as creating user
+						return HttpServletResponse.SC_NOT_IMPLEMENTED;// delete sub/report. Must be logged in as creating user
 					else
-					{
-						response.sendError(HttpServletResponse.SC_BAD_REQUEST);
-					}
-					return;
+						return HttpServletResponse.SC_BAD_REQUEST;
+
+        default:
+          return HttpServletResponse.SC_BAD_REQUEST;
 			}
-			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 
 		}
 		catch (Exception ex)
 		{
 			m_oLogger.error(ex, ex);
+      return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 	}
 
@@ -240,7 +190,7 @@ public class ReportServlet extends HttpServlet
 	 */
 	public void listSubscriptions(HttpServletRequest oReq, HttpServletResponse oResp) throws IOException, Exception
 	{
-		try (JsonGenerator oGenerator = m_oJsonFactory.createJsonGenerator(oResp.getWriter()))
+		try (JsonGenerator oGenerator = createJsonGenerator(oResp))
 		{
 			oGenerator.writeStartArray();
 
@@ -268,17 +218,14 @@ public class ReportServlet extends HttpServlet
 	 * @param response
 	 * @throws IOException
 	 */
-	public void retrieveSubscriptionResult(String uuid, String sFileName, HttpServletResponse response) throws IOException
+	public int retrieveSubscriptionResult(String uuid, String sFileName, HttpServletResponse response) throws IOException
 	{
 		try
 		{
 			ReportSubscription oSub = m_oSubscriptions.getSubscriptionByUuid(uuid);
 
 			if (oSub == null)
-			{
-				response.sendError(HttpServletResponse.SC_NOT_FOUND);
-				return;
-			}
+				return HttpServletResponse.SC_NOT_FOUND;
 
 			if (sFileName.equals("latest"))
 			{
@@ -286,18 +233,12 @@ public class ReportServlet extends HttpServlet
 				if (sFiles.length > 0)
 					sFileName = sFiles[0];
 				else
-				{
-					response.sendError(HttpServletResponse.SC_NOT_FOUND);
-					return;
-				}
+					return HttpServletResponse.SC_NOT_FOUND;
 			}
 
 			File oReportFile = m_oSubscriptions.getSubscriptionFile(oSub.getId(), sFileName);
 			if (oReportFile == null || !oReportFile.exists())
-			{
-				response.sendError(HttpServletResponse.SC_NOT_FOUND);
-				return;
-			}
+				return HttpServletResponse.SC_NOT_FOUND;
 
 			response.setHeader("Content-Type", "application/octet-stream");
 			// response.setHeader("Content-Length", Long.toString(oReportFile.length()));
@@ -313,10 +254,12 @@ public class ReportServlet extends HttpServlet
 					printWriter.write(sLine + "\r\n");
 			}
 			m_oSubscriptions.updateLastAccessed(oSub.getId());
+      return HttpStatus.SC_OK;
 		}
 		catch (Exception oEx)
 		{
 			m_oLogger.error(oEx, oEx);
+      return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 	}
 
@@ -392,49 +335,10 @@ public class ReportServlet extends HttpServlet
 
 	}
 
-	// <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
-
-	/**
-	 * Handles the HTTP <code>GET</code> method.
-	 *
-	 * @param request servlet request
-	 * @param response servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
-	 */
-	@Override
-	protected void doGet(HttpServletRequest request, HttpServletResponse response)
-	   throws ServletException, IOException
-	{
-		processRequest(request, response);
-	}
-
-
-	/**
-	 * Handles the HTTP <code>POST</code> method.
-	 *
-	 * @param request servlet request
-	 * @param response servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
-	 */
-	@Override
-	protected void doPost(HttpServletRequest request, HttpServletResponse response)
-	   throws ServletException, IOException
-	{
-		processRequest(request, response);
-	}
-
-
-	/**
-	 * Returns a short description of the servlet.
-	 *
-	 * @return a String containing servlet description
-	 */
-	@Override
-	public String getServletInfo()
-	{
-		return "Short description";
-	}// </editor-fold>
+  @Override
+  protected String getRequestPattern()
+  {
+    return "^(?:|(?:[-0-9a-f]{36})(?:/files(?:/(latest|20[0-9]{2}(?:0[1-9]|1[0-2])[0-3][0-9]_(?:[0-1][0-9]|2[0-3])[0-5][0-9]\\.(?:xml|kml|cmml|csv)))?)?)$";
+  }
 
 }

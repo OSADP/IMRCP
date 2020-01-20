@@ -1,22 +1,7 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.system;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+import imrcp.store.SourceUnit;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 
@@ -47,6 +32,7 @@ public class Units extends ArrayList<Units.UnitConv>
 	 * The singleton instance of Units.
 	 */
 	private static Units g_oInstance = new Units();
+	protected ArrayList<SourceUnit> m_oSourceUnits = new ArrayList();
 
 
 	/**
@@ -58,19 +44,19 @@ public class Units extends ArrayList<Units.UnitConv>
 	 */
 	private Units()
 	{
+		
 		Config oConfig = Config.getInstance();
 		String sFilename = oConfig.getString(getClass().getName(), "Units", "file", "");
-		try (BufferedReader oIn = new BufferedReader(new FileReader(sFilename)))
+		try (CsvReader oIn = new CsvReader(new FileInputStream(sFilename)))
 		{
-			String sLine = null;
-			while ((sLine = oIn.readLine()) != null)
+			while (oIn.readLine() > 0)
 			{
-				UnitConv oUnitConv = new UnitConv(sLine);
+				UnitConv oUnitConv = new UnitConv(oIn);
 				int nIndex = Collections.binarySearch(this, oUnitConv);
 				if (nIndex < 0)
 					add(~nIndex, oUnitConv);
 
-				oUnitConv = new UnitConvR(sLine);
+				oUnitConv = new UnitConvR(oIn);
 				nIndex = Collections.binarySearch(this, oUnitConv);
 				if (nIndex < 0)
 					add(~nIndex, oUnitConv);
@@ -78,6 +64,17 @@ public class Units extends ArrayList<Units.UnitConv>
 		}
 		catch (Exception oException)
 		{
+		}
+		
+		sFilename = Config.getInstance().getString(getClass().getName(), "SourceUnits", "file", "");
+		try (CsvReader oIn = new CsvReader(new FileInputStream(sFilename)))
+		{
+			while (oIn.readLine() > 0)
+				m_oSourceUnits.add(new SourceUnit(oIn));
+		}
+		catch (Exception oException)
+		{
+			oException.printStackTrace();
 		}
 	}
 
@@ -112,6 +109,32 @@ public class Units extends ArrayList<Units.UnitConv>
 			return dVal;
 
 		return oUnitConv.convert(dVal);
+	}
+	
+	/**
+	 *
+	 * @param nObsType
+	 * @param nContribId
+	 * @return
+	 */
+	public String getSourceUnits(int nObsType, int nContribId)
+	{
+		String sFromUnits = null;
+		for (SourceUnit oSearch : m_oSourceUnits)
+		{
+			if (oSearch.m_nObsTypeId == nObsType)
+			{
+				if (oSearch.m_nContribId == nContribId)
+				{
+					return oSearch.m_sUnit;
+				}
+				if (oSearch.m_nContribId == 0)
+				{
+					sFromUnits = oSearch.m_sUnit;
+				}
+			}
+		}
+		return sFromUnits;
 	}
 
 
@@ -200,14 +223,13 @@ public class Units extends ArrayList<Units.UnitConv>
 		 * @param sFromUnit The new convert-from label.
 		 * @param sToUnit The new convert-to label.
 		 */
-		UnitConv(String sLine)
+		UnitConv(CsvReader oIn)
 		{
-			String[] sSplit = sLine.split(",");
-			m_sFromUnit = sSplit[0];
-			m_sToUnit = sSplit[1];
-			m_dMultiply = Double.parseDouble(sSplit[2]);
-			m_dDivide = Double.parseDouble(sSplit[3]);
-			m_dAdd = Double.parseDouble(sSplit[4]);
+			m_sFromUnit = oIn.parseString(0);
+			m_sToUnit = oIn.parseString(1);
+			m_dMultiply = oIn.parseDouble(2);
+			m_dDivide = oIn.parseDouble(3);
+			m_dAdd = oIn.parseDouble(4);
 		}
 
 
@@ -283,9 +305,9 @@ public class Units extends ArrayList<Units.UnitConv>
 		 * @param dDivide Division factor.
 		 * @param dAdd Addition factor.
 		 */
-		protected UnitConvR(String sLine)
+		protected UnitConvR(CsvReader oIn)
 		{
-			super(sLine);
+			super(oIn);
 			String sTemp = m_sFromUnit;
 			m_sFromUnit = m_sToUnit;
 			m_sToUnit = sTemp;

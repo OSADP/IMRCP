@@ -1,33 +1,23 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.mdss;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FilenameFormatter;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
-import imrcp.system.Util;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.Scheduling;
-import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStreamReader;
+import java.io.FileWriter;
 import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,7 +33,7 @@ import ucar.nc2.Variable;
 /**
  * This class handles the execution of the METRo model and saving its outputs.
  */
-public class Metro extends ImrcpBlock
+public class Metro extends BaseBlock
 {
 
 	/**
@@ -81,17 +71,7 @@ public class Metro extends ImrcpBlock
 	/**
 	 * Formatting object used to generate time dynamic file names
 	 */
-	private SimpleDateFormat m_oFileFormat;
-
-	/**
-	 * String used to create the file format SimpleDateFormat
-	 */
-	private String m_sDestFile;
-
-	/**
-	 * Base directory where temporary intermediate data files are written
-	 */
-	private String m_sBaseDir;
+	private FilenameFormatter m_oFileFormat;
 
 	/**
 	 * Schedule offset from midnight in seconds
@@ -108,18 +88,34 @@ public class Metro extends ImrcpBlock
 	 * executed
 	 */
 	ArrayList<Callable<Object>> m_oToDo;
+	
+	private int m_nRunsPerPeriod;
+	
+	private int m_nMaxQueue;
+	
+	private final ArrayDeque<Long> m_oRunTimes = new ArrayDeque();
+	
+	private String m_sQueueFile;
 
-	/**
-	 * List to store DoMetroWrappers for a set of METRo processes
-	 */
-	ArrayList<DoMetroWrapper> m_oDMWs = new ArrayList();
-
-	/**
-	 * String used to generate time dynamic file names for metro details files
-	 * which are only created if ran in test mode
-	 */
-	private String m_sDetails;
-
+	private boolean m_bRealTime;
+	
+	private static final Comparator<double[]> DOUBLECOMP = (double[] o1, double[] o2) -> 
+	{
+		int nReturn = o1.length - o2.length;
+		if (nReturn != 0)
+			return nReturn;
+		
+		for (int i = 0; i < o1.length; i++)
+		{
+			nReturn = Double.compare(o1[i], o2[i]);
+			if (nReturn != 0)
+				return nReturn;
+		}
+		return nReturn;
+	};
+	
+//	private final TreeMap<double[], RoadcastData> m_oProfiles = new TreeMap(DOUBLECOMP);
+	private final ArrayList<RoadcastData> m_oRoadcasts = new ArrayList();
 
 	/**
 	 * Resets all configurable variables
@@ -131,14 +127,14 @@ public class Metro extends ImrcpBlock
 		m_nStudyArea = m_oConfig.getIntArray("box", 0);
 		m_nForecastHours = m_oConfig.getInt("fcsthrs", 6);
 		m_nObsHours = m_oConfig.getInt("obshrs", 6);
-		m_sDestFile = m_oConfig.getString("dest", "");
-		m_oFileFormat = new SimpleDateFormat(m_sDestFile);
-		m_sBaseDir = m_oConfig.getString("dir", "");
+		m_oFileFormat = new FilenameFormatter(m_oConfig.getString("format", ""));
 		m_nOffset = m_oConfig.getInt("offset", 3300);
 		m_nPeriod = m_oConfig.getInt("period", 3600);
-		m_nOutputs = 12 + ((m_nForecastHours - 3) * 3); // saving every 2 minutes for the first 20 minutes and then 20 minute intervals after that. so the first hour has 12 outputs and then each hour after has 3.
-		m_sDetails = m_oConfig.getString("details", "");
-		m_bTest = Boolean.parseBoolean(m_oConfig.getString("test", "False"));
+		m_nOutputs = 30 + ((m_nForecastHours - 3) * 3); // saving every 2 minutes for the first 60 minutes and then 20 minute intervals after that. so the first hour has 30 outputs and then each hour after has 3.
+		m_nRunsPerPeriod = m_oConfig.getInt("runs", 4);
+		m_nMaxQueue = m_oConfig.getInt("maxqueue", 504); // default is a week worth of metro runs
+		m_sQueueFile = m_oConfig.getString("queuefile", "/dev/shm/imrcp-prod/metroqueue.txt");
+		m_bRealTime = Boolean.parseBoolean(m_oConfig.getString("realtime", "True"));
 	}
 
 
@@ -164,6 +160,14 @@ public class Metro extends ImrcpBlock
 		m_oToDo = new ArrayList(oSegments.size());
 		for (Segment oSegment : oSegments)
 			m_oToDo.add(Executors.callable(new MetroDelegate(oSegment)));
+		File oQueue = new File(m_sQueueFile);
+		if (!oQueue.exists())
+			oQueue.createNewFile();
+		try (CsvReader oIn = new CsvReader(new FileInputStream(m_sQueueFile)))
+		{
+			while (oIn.readLine() > 0)
+				m_oRunTimes.addLast(oIn.parseLong(0));
+		}
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
@@ -182,23 +186,103 @@ public class Metro extends ImrcpBlock
 	}
 
 
+	public void queue(String sStart, String sEnd, StringBuilder sBuffer)
+	{
+		try
+		{
+			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
+			oSdf.setTimeZone(Directory.m_oUTC);
+			int nPeriodInMillis = m_nPeriod * 1000;
+			long lStartTime = oSdf.parse(sStart).getTime();
+			lStartTime = (lStartTime / nPeriodInMillis) * nPeriodInMillis;
+			long lEndTime = oSdf.parse(sEnd).getTime();
+			lEndTime = (lEndTime / nPeriodInMillis) * nPeriodInMillis;
+			int nCount = 0;
+			while (lStartTime <= lEndTime && nCount++ < m_nMaxQueue)
+			{
+				synchronized (m_oRunTimes)
+				{
+					m_oRunTimes.addLast(lStartTime);
+				}
+				lStartTime += nPeriodInMillis;
+			}
+			synchronized (m_oRunTimes)
+			{
+				try (BufferedWriter oOut = new BufferedWriter(new FileWriter(m_sQueueFile)))
+				{
+					Iterator<Long> oIt = m_oRunTimes.iterator();
+					while (oIt.hasNext())
+					{
+						Long lTime = oIt.next();
+						oOut.write(lTime.toString());
+						oOut.write("\n");
+						sBuffer.append(lTime.toString()).append("<br></br>");
+					}
+				}
+			}
+		}
+		catch (Exception oEx)
+		{
+			m_oLogger.error(oEx, oEx);
+		}
+	}
+	
+	
+	public void queueStatus(StringBuilder sBuffer)
+	{
+		synchronized (m_oRunTimes)
+		{
+			sBuffer.append(m_oRunTimes.size()).append(" times in queue");
+			Iterator<Long> oIt = m_oRunTimes.iterator();
+			while (oIt.hasNext())
+			{
+				Long lTime = oIt.next();
+				sBuffer.append("<br></br>").append(lTime.toString());
+			}
+		}
+	}
+	
+	
 	/**
 	 * Wrapper for runMetro()
 	 */
 	@Override
 	public void execute()
 	{
-		runMetro();
-	}
-
-
-	/**
-	 * Wrapper for runMetro()
-	 */
-	@Override
-	public void executeTest()
-	{
-		runMetro();
+		long lNow = System.currentTimeMillis();
+		lNow = (lNow / 60000) * 60000;
+		int nTimesToRun;
+		String sCurrentFile;
+		synchronized (m_oRunTimes)
+		{
+			if (m_bRealTime)
+				m_oRunTimes.addFirst(lNow);
+			sCurrentFile = m_oFileFormat.format(lNow, lNow - 2400000, lNow + (m_nForecastHours - 2) * 3600000);
+			nTimesToRun = Math.min(m_nRunsPerPeriod, m_oRunTimes.size());
+		}
+		for (int i = 0; i < nTimesToRun; i++)
+		{
+			boolean bFinished = runMetro(m_oRunTimes.removeFirst());
+			if (bFinished && m_bRealTime && i == 0)
+				notify("file download", sCurrentFile);
+		}
+		
+		synchronized (m_oRunTimes)
+		{
+			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(m_sQueueFile)))
+			{
+				Iterator<Long> oIt = m_oRunTimes.iterator();
+				while (oIt.hasNext())
+				{
+					oOut.write(oIt.next().toString());
+					oOut.write("\n");
+				}
+			}
+			catch (Exception oEx)
+			{
+				m_oLogger.error(oEx, oEx);
+			}
+		}
 	}
 
 
@@ -208,155 +292,146 @@ public class Metro extends ImrcpBlock
 	 * finished processing all the segments a netcdf file is written containing
 	 * all the data we want from the METRo outputs.
 	 */
-	public void runMetro()
+	public boolean runMetro(long lRunTime)
 	{
 		try
 		{
 			if (!DoMetroWrapper.g_bLibraryLoaded) // don't run if the shared library isn't loaded
-				return;
-			m_lStartTime = System.currentTimeMillis(); // floor to nearest minute
-			m_lStartTime = (m_lStartTime / 60000) * 60000;
-			SimpleDateFormat oFormat = new SimpleDateFormat(m_sDetails);
-
+				return false;
+//			m_oProfiles.clear();
+			m_oRoadcasts.clear();
+			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+			m_oLogger.info("Running METRo for " + oSdf.format(lRunTime));
+			m_lStartTime = lRunTime;
 			m_oThreadPool.invokeAll(m_oToDo); // executes all the Callable and blocks until all threads are finished
-			if (m_bTest)
-			{
-				for (DoMetroWrapper oDMW : m_oDMWs)
-					oDMW.writeMetroDetails(oFormat.format(m_lStartTime));
-			}
-			m_oDMWs.clear();
-			writeFile();
+			boolean bReturn = writeFile(lRunTime);
+//			m_oLogger.info("Metro ran " + m_oProfiles.size() + " times ");
+			m_oLogger.info("Finished METRo for " + oSdf.format(lRunTime));
+			return bReturn;
 		}
 		catch (Exception oException)
 		{
 			m_oLogger.error(oException, oException);
 		}
+		return false;
 	}
 
 
 	/**
-	 * Writes the netcdf file for the current run. After the file is written,
-	 * subscribers are notified of the new file being available. If there is no
+	 * Writes the netcdf file for the current run. If there is no
 	 * data from METRo, the file is not written.
 	 */
-	private void writeFile()
+	private boolean writeFile(long lRunTime)
 	{
-		String sLocation = m_oFileFormat.format(m_lStartTime);
+		String sLocation = m_oFileFormat.format(lRunTime, lRunTime - 2400000, lRunTime + (m_nForecastHours - 2) * 3600000);
 		File oDir = new File(sLocation.substring(0, sLocation.lastIndexOf("/") + 1));
 		oDir.mkdirs();
 
-		try (NetcdfFileWriter oWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf3, sLocation))
+		try
 		{
-			File[] oFiles = new File(m_sBaseDir).listFiles();
-			ArrayList<RoadcastData> oRoadcasts = new ArrayList();
-			int nIndex = oFiles.length;
-			while (nIndex-- > 0)
-			{
-				if (oFiles[nIndex].getName().contains("metrooutput"))
-				{
-					oRoadcasts.add(new RoadcastData(oFiles[nIndex].getAbsolutePath()));
-					oFiles[nIndex].delete();
-				}
-			}
-			Collections.sort(oRoadcasts);
-			int nNumSegments = oRoadcasts.size();
+			Collections.sort(m_oRoadcasts);
+			int nNumSegments = m_oRoadcasts.size();
 			if (nNumSegments == 0)
 			{
 				m_oLogger.info("No roadcast data from Metro to write to file.");
-				return;
+				return false;
 			}
-			//create dimensions
-			Dimension oNumSegments = oWriter.addDimension(null, "Segment", nNumSegments);
-			Dimension oMinutes = oWriter.addDimension(null, "TimeIndex", m_nOutputs);
-			//create dimension list, only add Number of Segments for now
-			ArrayList<Dimension> oDims = new ArrayList();
-			oDims.add(oNumSegments);
-			//create all of the variables and attributes
-			Variable dMetroStartTime = oWriter.addVariable(null, "Metro_Start_Time", DataType.DOUBLE, new ArrayList());
-			dMetroStartTime.addAttribute(new Attribute("long_name", "Timestamp of the start time for this run of METRo"));
-			dMetroStartTime.addAttribute(new Attribute("unit", "milliseconds since 1970-1-1 00:00:00"));
-
-			Variable nSegList = oWriter.addVariable(null, "Segment_Ids", DataType.INT, "Segment");
-			nSegList.addAttribute(new Attribute("long_name", "List of Segment Ids"));
-
-			Variable nMinutesSince = oWriter.addVariable(null, "Forecast_Minutes", DataType.INT, "TimeIndex");
-			nMinutesSince.addAttribute(new Attribute("long name", "Minutes from start of METRo"));
-
-			oDims.add(oMinutes); //now add Minutes to the dimension list because all of the other variables need it as a dimension
-
-			Variable nStpvt = oWriter.addVariable(null, "STPVT", DataType.INT, oDims);
-			nStpvt.addAttribute(new Attribute("long_name", "Road Condition"));
-			nStpvt.addAttribute(new Attribute("units", "category"));
-
-			Variable fTpvt = oWriter.addVariable(null, "TPVT", DataType.FLOAT, oDims);
-			fTpvt.addAttribute(new Attribute("long_name", "Pavement Temperature"));
-			fTpvt.addAttribute(new Attribute("units", "degrees Celsius"));
-
-			Variable fTssrf = oWriter.addVariable(null, "TSSRF", DataType.FLOAT, oDims);
-			fTssrf.addAttribute(new Attribute("long_name", "Subsurface Temperature"));
-			fTssrf.addAttribute(new Attribute("units", "degrees Celsius"));
-
-			Variable fDphliq = oWriter.addVariable(null, "DPHLIQ", DataType.FLOAT, oDims);
-			fDphliq.addAttribute(new Attribute("long_name", "Liquid inundation depth"));
-			fDphliq.addAttribute(new Attribute("units", "mm"));
-
-			Variable fDphsn = oWriter.addVariable(null, "DPHSN", DataType.FLOAT, oDims);
-			fDphsn.addAttribute(new Attribute("long_name", "Snow/Ice inundation depth"));
-			fDphsn.addAttribute(new Attribute("units", "cm"));
-
-			oWriter.create(); //create the file
-			//add values for all of the variables to the file.
-			ArrayDouble.D0 dScalar = new ArrayDouble.D0();
-			dScalar.set(m_lStartTime); //set the StartTime
-			oWriter.write(dMetroStartTime, dScalar);
-
-			ArrayInt.D1 nSegments = new ArrayInt.D1(nNumSegments);
-			for (int i = 0; i < nNumSegments; i++) // write the segments ids
-				nSegments.setInt(i, oRoadcasts.get(i).m_nId);
-			oWriter.write(nSegList, nSegments);
-
-			ArrayInt.D1 nFcstMinArray = new ArrayInt.D1(m_nOutputs);
-			for (int i = 0; i < m_nOutputs; i++) // write the forecast minutes
+			try (NetcdfFileWriter oWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf3, sLocation))
 			{
-				if (i < 10)
-					nFcstMinArray.setInt(i, i * 2); // the first 10 values are 2 minutes apart
-				else
-					nFcstMinArray.setInt(i, 20 + ((i - 10) * 20)); // the rest are 20 minutes apart
-			}
-			oWriter.write(nMinutesSince, nFcstMinArray);
+				//create dimensions
+				Dimension oNumSegments = oWriter.addDimension(null, "Segment", nNumSegments);
+				Dimension oMinutes = oWriter.addDimension(null, "TimeIndex", m_nOutputs);
+				//create dimension list, only add Number of Segments for now
+				ArrayList<Dimension> oDims = new ArrayList();
+				oDims.add(oNumSegments);
+				//create all of the variables and attributes
+				Variable dMetroStartTime = oWriter.addVariable(null, "Metro_Start_Time", DataType.DOUBLE, new ArrayList());
+				dMetroStartTime.addAttribute(new Attribute("long_name", "Timestamp of the start time for this run of METRo"));
+				dMetroStartTime.addAttribute(new Attribute("unit", "milliseconds since 1970-1-1 00:00:00"));
 
-			ArrayInt.D2 nStpvtArray = new ArrayInt.D2(nNumSegments, m_nOutputs);
-			ArrayFloat.D2 fTpvtArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
-			ArrayFloat.D2 fTssrfArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
-			ArrayFloat.D2 fDphliqArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
-			ArrayFloat.D2 fDphsnArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
+				Variable nSegList = oWriter.addVariable(null, "Segment_Ids", DataType.INT, "Segment");
+				nSegList.addAttribute(new Attribute("long_name", "List of Segment Ids"));
 
-			for (int i = 0; i < nNumSegments; i++)
-				for (int j = 0; j < m_nOutputs; j++)
+				Variable nMinutesSince = oWriter.addVariable(null, "Forecast_Minutes", DataType.INT, "TimeIndex");
+				nMinutesSince.addAttribute(new Attribute("long name", "Minutes from start of METRo"));
+
+				oDims.add(oMinutes); //now add Minutes to the dimension list because all of the other variables need it as a dimension
+
+				Variable nStpvt = oWriter.addVariable(null, "STPVT", DataType.INT, oDims);
+				nStpvt.addAttribute(new Attribute("long_name", "Road Condition"));
+				nStpvt.addAttribute(new Attribute("units", "category"));
+
+				Variable fTpvt = oWriter.addVariable(null, "TPVT", DataType.FLOAT, oDims);
+				fTpvt.addAttribute(new Attribute("long_name", "Pavement Temperature"));
+				fTpvt.addAttribute(new Attribute("units", "degrees Celsius"));
+
+				Variable fTssrf = oWriter.addVariable(null, "TSSRF", DataType.FLOAT, oDims);
+				fTssrf.addAttribute(new Attribute("long_name", "Subsurface Temperature"));
+				fTssrf.addAttribute(new Attribute("units", "degrees Celsius"));
+
+				Variable fDphliq = oWriter.addVariable(null, "DPHLIQ", DataType.FLOAT, oDims);
+				fDphliq.addAttribute(new Attribute("long_name", "Liquid inundation depth"));
+				fDphliq.addAttribute(new Attribute("units", "mm"));
+
+				Variable fDphsn = oWriter.addVariable(null, "DPHSN", DataType.FLOAT, oDims);
+				fDphsn.addAttribute(new Attribute("long_name", "Snow/Ice inundation depth"));
+				fDphsn.addAttribute(new Attribute("units", "cm"));
+
+				oWriter.create(); //create the file
+				//add values for all of the variables to the file.
+				ArrayDouble.D0 dScalar = new ArrayDouble.D0();
+				dScalar.set(lRunTime); //set the StartTime
+				oWriter.write(dMetroStartTime, dScalar);
+
+				ArrayInt.D1 nSegments = new ArrayInt.D1(nNumSegments);
+				for (int i = 0; i < nNumSegments; i++) // write the segments ids
+					nSegments.setInt(i, m_oRoadcasts.get(i).m_nId);
+				oWriter.write(nSegList, nSegments);
+
+				ArrayInt.D1 nFcstMinArray = new ArrayInt.D1(m_nOutputs);
+				for (int i = 0; i < m_nOutputs; i++) // write the forecast minutes
 				{
-					nStpvtArray.set(i, j, oRoadcasts.get(i).m_nStpvt[j]);
-					fTpvtArray.set(i, j, oRoadcasts.get(i).m_fTpvt[j]);
-					fTssrfArray.set(i, j, oRoadcasts.get(i).m_fTssrf[j]);
-					fDphliqArray.set(i, j, oRoadcasts.get(i).m_fDphliq[j]);
-					fDphsnArray.set(i, j, oRoadcasts.get(i).m_fDphsn[j]);
-
+					if (i < 30)
+						nFcstMinArray.setInt(i, i * 2); // the first 30 values are 2 minutes apart
+					else
+						nFcstMinArray.setInt(i, 60 + ((i - 30) * 20)); // the rest are 20 minutes apart
 				}
-			oWriter.write(nStpvt, nStpvtArray);
-			oWriter.write(fTpvt, fTpvtArray);
-			oWriter.write(fTssrf, fTssrfArray);
-			oWriter.write(fDphliq, fDphliqArray);
-			oWriter.write(fDphsn, fDphsnArray);
+				oWriter.write(nMinutesSince, nFcstMinArray);
 
-			oWriter.close();	//close the file
+				ArrayInt.D2 nStpvtArray = new ArrayInt.D2(nNumSegments, m_nOutputs);
+				ArrayFloat.D2 fTpvtArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
+				ArrayFloat.D2 fTssrfArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
+				ArrayFloat.D2 fDphliqArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
+				ArrayFloat.D2 fDphsnArray = new ArrayFloat.D2(nNumSegments, m_nOutputs);
 
-			for (int nSubscriber : m_oSubscribers)
-				notify(this, nSubscriber, "file download", sLocation); // "file download" sent cause the newly written METRo file to be read into memory
+				for (int i = 0; i < nNumSegments; i++)
+				{
+					RoadcastData oRD = m_oRoadcasts.get(i);
+					for (int j = 0; j < m_nOutputs; j++)
+					{
+						nStpvtArray.set(i, j, oRD.m_nStpvt[j]);
+						fTpvtArray.set(i, j, oRD.m_fTpvt[j]);
+						fTssrfArray.set(i, j, oRD.m_fTssrf[j]);
+						fDphliqArray.set(i, j, oRD.m_fDphliq[j]);
+						fDphsnArray.set(i, j, oRD.m_fDphsn[j]);
 
+					}
+				}
+				oWriter.write(nStpvt, nStpvtArray);
+				oWriter.write(fTpvt, fTpvtArray);
+				oWriter.write(fTssrf, fTssrfArray);
+				oWriter.write(fDphliq, fDphliqArray);
+				oWriter.write(fDphsn, fDphsnArray);
+
+				oWriter.close();	//close the file
+				return true;
+			}
 		}
 		catch (Exception oException)
 		{
 			m_oLogger.error(oException, oException);
 		}
+		return false;
 	}
 
 	/**
@@ -400,97 +475,18 @@ public class Metro extends ImrcpBlock
 				if (bFill)
 				{
 					oDMW.run();
-					oDMW.saveRoadcast(m_oSegment, m_lStartTime);
-					m_oDMWs.add(oDMW);
+					oDMW.saveRoadcast(m_oSegment);
+
+					synchronized (m_oRoadcasts)
+					{
+						m_oRoadcasts.add(oDMW.m_oOutput);
+					}
 				}
 			}
 			catch (Exception oException)
 			{
 				m_oLogger.error(oException, oException);
 			}
-		}
-	}
-
-	/**
-	 * Inner class used to parse the temporary data files that contain the METRo
-	 * Roadcast outputs.
-	 */
-	private class RoadcastData implements Comparable<RoadcastData>
-	{
-
-		/**
-		 * Imrcp Segment ID
-		 */
-		int m_nId;
-
-		/**
-		 * Array containing pavement state data
-		 */
-		int[] m_nStpvt = new int[m_nOutputs];
-
-		/**
-		 * Array containing pavement temperature data
-		 */
-		float[] m_fTpvt = new float[m_nOutputs];
-
-		/**
-		 * Array containing sub surface temperature data
-		 */
-		float[] m_fTssrf = new float[m_nOutputs];
-
-		/**
-		 * Array containing liquid depth (rain reservoir from METRo) data
-		 */
-		float[] m_fDphliq = new float[m_nOutputs];
-
-		/**
-		 * Array containing snow/ice depth (snow reservoir from METRo) data
-		 */
-		float[] m_fDphsn = new float[m_nOutputs];
-
-
-		/**
-		 * Creates a new RoadcastData from parsing the data in the given file.
-		 *
-		 * @param sFilename absolute path of the file to parse
-		 * @throws Exception
-		 */
-		RoadcastData(String sFilename) throws Exception
-		{
-			try (BufferedReader oIn = new BufferedReader(new InputStreamReader(new FileInputStream(sFilename))))
-			{
-				m_nId = Integer.parseInt(sFilename.substring(sFilename.indexOf("metrooutput") + "metrooutput".length(), sFilename.lastIndexOf(".csv")));
-				String sLine = null;
-				int[] nEndpoints = new int[2];
-				for (int i = 0; i < m_nOutputs; i++)
-				{
-					sLine = oIn.readLine();
-					nEndpoints[0] = 0;
-					nEndpoints[1] = sLine.indexOf(",", nEndpoints[0]);
-					m_nStpvt[i] = Integer.parseInt(sLine.substring(nEndpoints[0], nEndpoints[1]));
-					Util.moveEndpoints(sLine, nEndpoints);
-					m_fTpvt[i] = Float.parseFloat(sLine.substring(nEndpoints[0], nEndpoints[1]));
-					Util.moveEndpoints(sLine, nEndpoints);
-					m_fTssrf[i] = Float.parseFloat(sLine.substring(nEndpoints[0], nEndpoints[1]));
-					Util.moveEndpoints(sLine, nEndpoints);
-					m_fDphliq[i] = Float.parseFloat(sLine.substring(nEndpoints[0], nEndpoints[1]));
-					nEndpoints[0] = sLine.lastIndexOf(",") + 1;
-					m_fDphsn[i] = Float.parseFloat(sLine.substring(nEndpoints[0]));
-				}
-			}
-		}
-
-
-		/**
-		 * Compares RoadcastDatas by Id
-		 *
-		 * @param o The RoadcastData to compare to
-		 * @return
-		 */
-		@Override
-		public int compareTo(RoadcastData o)
-		{
-			return m_nId - o.m_nId;
 		}
 	}
 }

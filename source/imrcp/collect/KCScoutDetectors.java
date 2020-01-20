@@ -1,23 +1,7 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.collect;
 
-import imrcp.ImrcpBlock;
-import imrcp.geosrv.DetectorMapping;
-import imrcp.geosrv.KCScoutDetectorMappings;
+import imrcp.geosrv.KCScoutDetectorLocation;
+import imrcp.geosrv.KCScoutDetectorLocations;
 import imrcp.store.KCScoutDetector;
 import imrcp.store.TimeoutBufferedWriter;
 import imrcp.system.Directory;
@@ -28,7 +12,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -38,7 +21,7 @@ import java.util.TimeZone;
 /**
  * This collector handles downloading detector information from KCScout.
  */
-public class KCScoutDetectors extends ImrcpBlock
+public class KCScoutDetectors extends Collector
 {
 	/**
 	 * Passwords as they are passed in a browser for KCScout's transsuite site. 
@@ -89,36 +72,17 @@ public class KCScoutDetectors extends ImrcpBlock
 	 */
 	private StringBuilder m_sBuffer;
 
-	/**
-	 * Period of execution in seconds
-	 */
-	private int m_nPeriod;
-
-	/**
-	 * Schedule offset from midnight in seconds
-	 */
-	private int m_nOffset;
-
-	/**
-	 * Formatting object used to generate the correct file path for the given
-	 * time
-	 */
-	private SimpleDateFormat m_oFileFormat;
 
 	/**
 	 * ArrayList that contains the detector mappings
 	 */
-	private final ArrayList<DetectorMapping> m_oDetectorMapping = new ArrayList();
+	private final ArrayList<KCScoutDetectorLocation> m_oDetectorMapping = new ArrayList();
 
 	/**
 	 * ArrayList of writers that stay open until they timeout
 	 */
 	private final ArrayList<TimeoutBufferedWriter> m_oOpenFiles = new ArrayList(2);
 
-	/**
-	 * How often a new observation file is created in milliseconds
-	 */
-	private int m_nFileFrequency;
 
 	/**
 	 * Timestamp of the last file downloaded. Used so the same data isn't
@@ -140,13 +104,9 @@ public class KCScoutDetectors extends ImrcpBlock
 	 * Resets configurable variables upon the block starting
 	 */
 	@Override
-	protected void reset()
+	public void reset()
 	{
-		m_nPeriod = m_oConfig.getInt("period", 60);
-		m_nOffset = m_oConfig.getInt("offset", 0);
-		m_oFileFormat = new SimpleDateFormat(m_oConfig.getString("dest", ""));
-		m_oFileFormat.setTimeZone(Directory.m_oUTC);
-		m_nFileFrequency = m_oConfig.getInt("freq", 86400000);
+		super.reset();
 		m_lLastTimestamp = 0;
 		m_sPasswords = m_oConfig.getStringArray("pw", null);
 		m_sUsers = m_oConfig.getStringArray("user", null);
@@ -169,8 +129,8 @@ public class KCScoutDetectors extends ImrcpBlock
 			m_oLogger.error("Failed to initialize log in information");
 			return false;
 		}
-		((KCScoutDetectorMappings)Directory.getInstance().lookup("KCScoutDetectorMappings")).getDetectors(m_oDetectorMapping, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
-		Collections.sort(m_oDetectorMapping, DetectorMapping.g_oREALTIMEIDCOMPARATOR); // sort by real time id so binary search can be used		
+		((KCScoutDetectorLocations)Directory.getInstance().lookup("KCScoutDetectorLocations")).getDetectors(m_oDetectorMapping, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
+		Collections.sort(m_oDetectorMapping, KCScoutDetectorLocation.g_oREALTIMEIDCOMPARATOR); // sort by real time id so binary search can be used		
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
@@ -218,8 +178,9 @@ public class KCScoutDetectors extends ImrcpBlock
 				m_oLogger.info("Same timestamp as the last download");
 				return;
 			}
-			DetectorMapping oSearch = new DetectorMapping();
-			TimeoutBufferedWriter oWriter = getWriter(lTimestamp);
+			KCScoutDetectorLocation oSearch = new KCScoutDetectorLocation();
+			TimeoutBufferedWriter oWriter = getWriter(lTimestamp, false);
+			TimeoutBufferedWriter oNoMappingWriter = getWriter(lTimestamp, true);
 			while (!bDone)
 			{
 				nLanes = 0;
@@ -237,10 +198,19 @@ public class KCScoutDetectors extends ImrcpBlock
 					if (nStart >= 0 && nEnd >= 0) // check if a detector is found
 					{
 						oSearch.m_nRealTimeId = Integer.parseInt(sDetector.substring(nStart + "<detector-Id>".length(), nEnd));
-						if ((nIndex = Collections.binarySearch(m_oDetectorMapping, oSearch, DetectorMapping.g_oREALTIMEIDCOMPARATOR)) < 0) // skip detectors we do not have mapping for (most likely because it is out of the study area
-							continue;
-						oDetector.m_nId = m_oDetectorMapping.get(nIndex).m_nArchiveId;
-						oDetector.m_lTimestamp = lTimestamp;
+						if ((nIndex = Collections.binarySearch(m_oDetectorMapping, oSearch, KCScoutDetectorLocation.g_oREALTIMEIDCOMPARATOR)) < 0) // skip detectors we do not have mapping for (most likely because it is out of the study area
+						{
+							oDetector.m_oLocation = new KCScoutDetectorLocation();
+							oDetector.m_oLocation.m_nRealTimeId = oSearch.m_nRealTimeId;
+							oDetector.m_lTimestamp = lTimestamp;
+							oDetector.m_nId = Integer.MIN_VALUE;
+						}
+						else
+						{
+							oDetector.m_oLocation = m_oDetectorMapping.get(nIndex);
+							oDetector.m_nId = oDetector.m_oLocation.m_nArchiveId;
+							oDetector.m_lTimestamp = lTimestamp;
+						}
 					}
 					else
 						continue;
@@ -307,7 +277,13 @@ public class KCScoutDetectors extends ImrcpBlock
 					oDetector.m_dAverageOcc = dAveOcc;
 					oDetector.m_dAverageSpeed = dAveSpeed;
 					oDetector.m_nTotalVolume = nTotalVolume;
-					oDetector.writeDetector(oWriter, nLanes);
+					if (oDetector.m_nId == Integer.MIN_VALUE)
+					{
+						oDetector.m_nId = oDetector.m_oLocation.m_nRealTimeId;
+						oDetector.writeDetector(oNoMappingWriter, nLanes);
+					}
+					else
+						oDetector.writeDetector(oWriter, nLanes);
 				}
 				else
 					bDone = true;
@@ -319,8 +295,7 @@ public class KCScoutDetectors extends ImrcpBlock
 					m_oOpenFiles.remove(nIndex);
 			}
 			m_lLastTimestamp = lTimestamp;
-			for (int nSubscriber : m_oSubscribers) //notify subscribers that a new file has been downloaded
-				notify(this, nSubscriber, "file download", oWriter.m_sFilename);
+			notify("file download", oWriter.m_sFilename);
 		}
 		catch (Exception oException)
 		{
@@ -341,7 +316,7 @@ public class KCScoutDetectors extends ImrcpBlock
 			if (m_nArrayCount >= m_sUsers.length)
 				m_nArrayCount = 0;
 			m_sBuffer = new StringBuilder(600 * 1024);
-			URL oUrl = new URL("http://www.kcscout.com/TransSuite.DataFeed.WebService/DataFeedService.svc");
+			URL oUrl = new URL(m_sBaseURL);
 			HttpURLConnection oConn = (HttpURLConnection) oUrl.openConnection();
 			String sRequest = String.format(m_sREQ_DET, m_sUsers[m_nArrayCount], m_sPasswords[m_nArrayCount]);
 			++m_nArrayCount;
@@ -352,6 +327,7 @@ public class KCScoutDetectors extends ImrcpBlock
 			oConn.setRequestProperty("Content-Length", Integer.toString(sRequest.length()));
 			oConn.setUseCaches(false);
 			oConn.setDoOutput(true);
+			oConn.setReadTimeout(60000);
 
 			OutputStream iOut = oConn.getOutputStream();
 			int nIndex = 0;
@@ -412,11 +388,13 @@ public class KCScoutDetectors extends ImrcpBlock
 	 * already it is created
 	 * @throws Exception
 	 */
-	private TimeoutBufferedWriter getWriter(long lTimestamp) throws Exception
+	private TimeoutBufferedWriter getWriter(long lTimestamp, boolean bNoMapping) throws Exception
 	{
 		TimeoutBufferedWriter oWriter = null;
 		lTimestamp = (lTimestamp / m_nFileFrequency) * m_nFileFrequency;
-		String sFilename = m_oFileFormat.format(lTimestamp);
+		String sFilename = getDestFilename(lTimestamp);
+		if (bNoMapping)
+			sFilename = sFilename.replace("/detector/", "/detector/nomapping/");
 		for (TimeoutBufferedWriter oTBWriter : m_oOpenFiles)
 		{
 			if (oTBWriter.m_sFilename.compareTo(sFilename) == 0)

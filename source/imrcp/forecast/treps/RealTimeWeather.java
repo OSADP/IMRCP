@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.treps;
 
 import imrcp.store.FileWrapper;
@@ -54,9 +39,9 @@ public class RealTimeWeather extends InputFile
 	 * @param oNotification the Notification from another ImrcpBlock
 	 */
 	@Override
-	public void process(Notification oNotification)
+	public void process(String[] sMessage)
 	{
-		if (oNotification.m_sMessage.compareTo("new data") == 0)
+		if (sMessage[MESSAGE].compareTo("new data") == 0)
 			writeFile();
 	}
 
@@ -97,7 +82,7 @@ public class RealTimeWeather extends InputFile
 			oWriter.write("\n");
 			oWriter.write("0\n"); //zero no network-wide weather, we are doing link-specific
 			Statement iStatement = oConn.createStatement();
-			ResultSet oRs = iStatement.executeQuery("SELECT COUNT(*) FROM link");
+			ResultSet oRs = iStatement.executeQuery("SELECT COUNT(*) FROM link WHERE start_node != -1");
 			if (oRs.next())
 				nCount = oRs.getInt(1);
 			oRs.close();
@@ -116,7 +101,7 @@ public class RealTimeWeather extends InputFile
 				for (int i = 0; i < m_nIntervals; i++)
 				{
 					long lForecast = lTimestamp + (i * m_nPeriod * 1000);
-					FileWrapper oRapFile = oRap.getFileFromDeque(lForecast, lTimestamp);
+					FileWrapper oRapFile = oRap.getFile(lForecast, lTimestamp);
 					if (oRapFile == null)
 						continue;
 					int nStart = i * nMinutes;

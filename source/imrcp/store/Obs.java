@@ -1,21 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
-import imrcp.system.Util;
+import imrcp.system.CsvReader;
 import java.io.BufferedWriter;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
@@ -176,6 +161,17 @@ public class Obs
 		}
 		return nReturn;
 	};
+	
+	public static final Comparator<Obs> g_oCompObsByContrib = (Obs o1, Obs o2) ->
+	{
+		return o1.m_nContribId - o2.m_nContribId;
+	};
+	
+	
+	public static final Comparator<Obs> g_oCompObsByValue = (Obs o1, Obs o2) ->
+	{
+		return Double.compare(o1.m_dValue, o2.m_dValue);
+	};
 
 
 	/**
@@ -187,55 +183,22 @@ public class Obs
 	}
 
 
-	/**
-	 * Creates a new Obs from a line from a csv file that contains obs
-	 *
-	 * @param sLine
-	 */
-	public Obs(String sLine)
+	public Obs(CsvReader oIn)
 	{
-		int[] nEndpoints = new int[]
-		{
-			0, 0
-		};
-		nEndpoints[1] = sLine.indexOf(",");
-		m_nObsTypeId = Integer.valueOf(sLine.substring(nEndpoints[0], nEndpoints[1]), 36); // obstype is written as 6 char string
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_nContribId = Integer.valueOf(sLine.substring(nEndpoints[0], nEndpoints[1]), 36); // contrib id is written as 6 char string
-		Util.moveEndpoints(sLine, nEndpoints);
-		if (sLine.substring(nEndpoints[0], nEndpoints[1]).compareTo("") == 0 || sLine.substring(nEndpoints[0], nEndpoints[1]).compareTo("80000000") == 0)
-			m_nObjId = Integer.MIN_VALUE;
-		else
-			m_nObjId = Integer.valueOf(sLine.substring(nEndpoints[0], nEndpoints[1]), 16); // object id is written in hex
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_lObsTime1 = Long.parseLong(sLine.substring(nEndpoints[0], nEndpoints[1])) * 1000; // times are written in seconds, convert to millis
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_lObsTime2 = Long.parseLong(sLine.substring(nEndpoints[0], nEndpoints[1])) * 1000;
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_lTimeRecv = Long.parseLong(sLine.substring(nEndpoints[0], nEndpoints[1])) * 1000;
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_nLat1 = Integer.parseInt(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_nLon1 = Integer.parseInt(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sLine, nEndpoints);
-		if (sLine.substring(nEndpoints[0], nEndpoints[1]).compareTo("") != 0)
-			m_nLat2 = Integer.parseInt(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		else
-			m_nLat2 = Integer.MIN_VALUE;
-		Util.moveEndpoints(sLine, nEndpoints);
-		if (sLine.substring(nEndpoints[0], nEndpoints[1]).compareTo("") != 0)
-			m_nLon2 = Integer.parseInt(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		else
-			m_nLon2 = Integer.MIN_VALUE;
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_tElev = Short.parseShort(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sLine, nEndpoints);
-		m_dValue = Double.parseDouble(sLine.substring(nEndpoints[0], nEndpoints[1]));
-		nEndpoints[0] = sLine.lastIndexOf(",");
-		if (sLine.substring(nEndpoints[0] + 1).compareTo("") != 0)
-			m_tConf = Short.parseShort(sLine.substring(nEndpoints[0] + 1));
-		else
-			m_tConf = Short.MIN_VALUE;
+		m_nObsTypeId = Integer.valueOf(oIn.parseString(0), 36); // obstype is written as 6 char string
+		m_nContribId = Integer.valueOf(oIn.parseString(1), 36); // contrib id is written as 6 char string
+		String sObjId = oIn.parseString(2);
+		m_nObjId = sObjId.isEmpty() || sObjId.compareTo("80000000") == 0 ? Integer.MIN_VALUE : Integer.valueOf(sObjId, 16); // object id is written in hex
+		m_lObsTime1 = oIn.parseLong(3) * 1000; // times are written in seconds, convert to millis
+		m_lObsTime2 = oIn.parseLong(4) * 1000;
+		m_lTimeRecv = oIn.parseLong(5) * 1000;
+		m_nLat1 = oIn.parseInt(6);
+		m_nLon1 = oIn.parseInt(7);
+		m_nLat2 = oIn.isNull(8) ? Integer.MIN_VALUE : oIn.parseInt(8);
+		m_nLon2 = oIn.isNull(9) ? Integer.MIN_VALUE : oIn.parseInt(9);
+		m_tElev = (short)oIn.parseInt(10);
+		m_dValue = oIn.parseDouble(11);
+		m_tConf = oIn.isNull(12) ? Short.MIN_VALUE : (short)oIn.parseInt(12);
 	}
 
 

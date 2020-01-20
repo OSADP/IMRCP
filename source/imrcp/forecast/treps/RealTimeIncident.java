@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.treps;
 
 import imrcp.geosrv.Segment;
@@ -75,9 +60,9 @@ public class RealTimeIncident extends InputFile
 	 * @param oNotification the Notification from another ImrcpBlock
 	 */
 	@Override
-	public void process(Notification oNotification)
+	public void process(String[] sMessage)
 	{
-		if (oNotification.m_sMessage.compareTo("new data") == 0)
+		if (sMessage[MESSAGE].compareTo("new data") == 0)
 		{
 			writeFile();
 		}
@@ -134,7 +119,7 @@ public class RealTimeIncident extends InputFile
 					oInputs.add(new IncidentInput(nUpNode, nDownNode, dStart, dEnd, dSeverity));
 			}
 			oRs.close();
-			oRs = m_oAhpsAlerts.getCurrentAlerts(); // get flooded road alerts
+			oRs = m_oAhpsAlerts.getData(ObsType.EVT, lNow, lNow + 3600000, m_nB, m_nT, m_nL, m_nR, lNow); // get flooded road alerts
 			dSeverity = 1; // severity is always 100% for flooded roads
 			while (oRs.next())
 			{
@@ -162,6 +147,12 @@ public class RealTimeIncident extends InputFile
 			oStatement.close();
 			if (oLinkRs != null)
 				oLinkRs.close();
+			int nIndex = oInputs.size();
+			while (nIndex-- > 0) // remove workzones not in treps study area
+			{
+				if (oInputs.get(nIndex).m_nUpNode < 0)
+					oInputs.remove(nIndex);
+			}
 			oWriter.write(oFormat.format(lNow));
 			oWriter.write("\n");
 			oWriter.write(Integer.toString(oInputs.size()));

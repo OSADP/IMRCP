@@ -188,6 +188,8 @@ var DateFormatter;
               {
                 if (iDatePart === 12 && vMeriOffset === 0) // 12 am = 0 hour
                   out.hour = 0;
+                else if (iDatePart === 12 && vMeriOffset === 12) // 12 pm = 12 hour
+                  out.hour = 12;
                 else
                   out.hour = iDatePart + vMeriOffset;
               }

@@ -1,28 +1,14 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.collect;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.system.CsvReader;
 import imrcp.system.Scheduling;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPFile;
@@ -31,7 +17,7 @@ import org.apache.commons.net.ftp.FTPFile;
  * This class handles connecting to and downloading sub surface temperature data
  * from the RWIS station in Gardner, KS to be used in Metro runs
  */
-public class SubSurfaceTemp extends ImrcpBlock
+public class SubSurfaceTemp extends BaseBlock
 {
 
 	/**
@@ -73,11 +59,6 @@ public class SubSurfaceTemp extends ImrcpBlock
 	 * Ftp site url
 	 */
 	private String m_sFtp;
-
-	/**
-	 * Formatting object used to get the correct file from the ftp site
-	 */
-	SimpleDateFormat m_oFileFormat = new SimpleDateFormat("'KSDOTROAD'yyyyMMddHHmm'.CSV'");
 
 
 	/**
@@ -163,27 +144,26 @@ public class SubSurfaceTemp extends ImrcpBlock
 					sMostRecent = oFile.getName();
 				}
 			}
-			try (BufferedReader oIn = new BufferedReader(new InputStreamReader(oFtpClient.retrieveFileStream(sMostRecent)))) // read the most recent KSDOTROAD file
+			try (InputStream oStream = oFtpClient.retrieveFileStream(sMostRecent)) // read the most recent KSDOTROAD file
 			{
-				String sLine = oIn.readLine(); // read header
-				String[] sCols = sLine.split(",", -1);
+				CsvReader oIn = new CsvReader(oStream);
+				int nCol = oIn.readLine(); // read header
 				int nOffset = 0;
-				for (int i = 0; i < sCols.length; i++) // determine the subsftemp column
+				for (int i = 0; i < nCol; i++) // determine the subsftemp column
 				{
-					if (sCols[i].compareTo("subsftemp") == 0)
+					if (oIn.parseString(i).compareTo("subsftemp") == 0)
 						nOffset = i;
 				}
-				while ((sLine = oIn.readLine()) != null) // find the correct site
+				while ((nCol = oIn.readLine()) > 0) // find the correct site
 				{
-					if (Integer.parseInt(sLine.substring(0, sLine.indexOf(",", 0))) == m_nSiteId)
+					if (nCol == 1 && oIn.isNull(0))
+						continue;
+					
+					if (oIn.parseInt(0) == m_nSiteId && !oIn.isNull(nOffset))
 					{
-						sCols = sLine.split(",", -1);
-						if (sCols[nOffset].compareTo("") != 0) // if there is a value, read it
-						{
-							dValue = Double.parseDouble(sCols[nOffset]);
-							sTimestamp = sCols[2];
+							dValue = oIn.parseDouble(nOffset);
+							sTimestamp = oIn.parseString(2);
 							break;
-						}
 					}
 				}
 			}

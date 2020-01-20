@@ -1,21 +1,7 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FileCache;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.route.Routes;
@@ -23,14 +9,16 @@ import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import imrcp.system.Util;
 import java.sql.ResultSet;
+import java.util.Comparator;
 import java.util.List;
+import imrcp.ImrcpBlock;
 
 /**
  * This class is used as a "one-stop shop" for Obs from all the stores. It is
  * mainly used by the web servlets to get data for the map and
  * reports/subscriptions
  */
-public class ObsView extends ImrcpBlock
+public class ObsView extends BaseBlock
 {
 
 	/**
@@ -47,12 +35,8 @@ public class ObsView extends ImrcpBlock
 	 * Reference to Directory
 	 */
 	private Directory m_oDirectory;
-
-	/**
-	 * Configurable array that contains obs types that have multiple weather
-	 * stores that contain these obs types.
-	 */
-	private int[] m_nMultiStoreWeatherObs;
+	
+	private static final Comparator<String[]> m_oSTRINGARRCOMP = (String[] o1, String[] o2) -> {return o1[0].compareTo(o2[0]);};
 
 
 	/**
@@ -65,7 +49,6 @@ public class ObsView extends ImrcpBlock
 	@Override
 	public boolean start() throws Exception
 	{
-		m_oDirectory = Directory.getInstance();
 		m_oShps = (SegmentShps)m_oDirectory.lookup("SegmentShps");
 		m_oRoutes = (Routes) m_oDirectory.lookup("Routes");
 		return true;
@@ -78,11 +61,7 @@ public class ObsView extends ImrcpBlock
 	@Override
 	public void reset()
 	{
-		String[] sMultiStoreWeatherObs = m_oConfig.getStringArray("multi", "");
-		m_nMultiStoreWeatherObs = new int[sMultiStoreWeatherObs.length];
-		m_bTest = Boolean.parseBoolean(m_oConfig.getString("test", "False"));
-		for (int i = 0; i < sMultiStoreWeatherObs.length; i++)
-			m_nMultiStoreWeatherObs[i] = Integer.valueOf(sMultiStoreWeatherObs[i], 36);
+		m_oDirectory = Directory.getInstance();
 	}
 
 
@@ -107,8 +86,17 @@ public class ObsView extends ImrcpBlock
 		return getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime, 0);
 	}
 
-
-	/**
+	
+	private FileCache getStore(String sName)
+	{
+		ImrcpBlock oBlock = m_oDirectory.lookup(sName);
+		if (oBlock == null)
+			return null;
+		return (FileCache)oBlock;
+	}
+	
+	
+		/**
 	 * Queries all the stores that contain the Obs of the given obs type to fill
 	 * the ResultSet with Obs that match the given parameters.
 	 *
@@ -126,7 +114,6 @@ public class ObsView extends ImrcpBlock
 	public ResultSet getData(int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime, int nObjId)
 	{
-		long lNow = System.currentTimeMillis();
 		int nTemp = nStartLat; // ensure that startlat/lon <= endlat/lon
 		if (nEndLat < nStartLat)
 		{
@@ -140,126 +127,21 @@ public class ObsView extends ImrcpBlock
 			nEndLon = nTemp;
 		}
 
-		long lFutureWeatherStart = lRefTime;
-		FileWrapper oMostRecentWeather = null;
 		ImrcpResultSet oReturn = new ImrcpObsResultSet();
-		boolean bFirstPass = true;
 		try
 		{
-			List<ImrcpBlock> oStores = m_oDirectory.getStoresByObs(nType);
-			boolean bMultipleStores = oStores.size() > 1;
-			for (ImrcpBlock oStore : oStores)
+			List<BaseBlock> oStores = m_oDirectory.getStoresByObs(nType);
+			for (BaseBlock oStore : oStores)
 			{
-				ResultSet oData = null;
-				if (bMultipleStores && nType != ObsType.EVT) // alerts and KCScoutIncidents both produce EVT, we want all of those
-				{
-					if (isMultiStoreWeatherObs(nType))
-					{
-						if (bFirstPass)
-						{
-							if (lRefTime >= lNow - 60000 && lRefTime < lNow + 60000) // ref time is "now", use one minutes tolerance
-							{ // find the most recent weather file based on the obstype
-								if (nType == ObsType.PCCAT || nType == ObsType.RTEPC)
-									oMostRecentWeather = ((WeatherStore) m_oDirectory.lookup("RadarPrecipStore")).m_oCurrentFiles.peekFirst();
-								else
-									oMostRecentWeather = ((WeatherStore) m_oDirectory.lookup("RTMAStore")).m_oCurrentFiles.peekFirst();
-							}
-							else // ref time is not now
-							{ // load possible files to the lru and get the correct one based off the ref time
-								WeatherStore oWeatherStore;
-								if (nType == ObsType.PCCAT || nType == ObsType.RTEPC)
-									oWeatherStore = (WeatherStore) m_oDirectory.lookup("RadarPrecipStore");
-								else
-									oWeatherStore = (WeatherStore) m_oDirectory.lookup("RTMAStore");
-
-								oMostRecentWeather = oWeatherStore.getFileFromDeque(lStartTime, lRefTime);
-								if (oMostRecentWeather == null)
-								{
-									oWeatherStore.loadFilesToLru(lStartTime, lRefTime);
-									oMostRecentWeather = oWeatherStore.getFileFromLru(lStartTime, lRefTime);
-								}
-							}
-
-							if (oMostRecentWeather != null)
-								lFutureWeatherStart = oMostRecentWeather.m_lEndTime;
-							bFirstPass = false;
-						}
-						if (oStore.getInstanceName().compareTo("RTMAStore") == 0 || oStore.getInstanceName().compareTo("RadarPrecipStore") == 0) // use RTMA and RadarPrecip only in the past if another store has the same obstype
-						{
-							if (lStartTime > lFutureWeatherStart)
-								continue;
-							if (lEndTime > lFutureWeatherStart)
-								oData = oStore.getData(nType, lStartTime, lFutureWeatherStart, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-							else
-								oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-						}
-						else if (oStore.getInstanceName().compareTo("NDFDStore") == 0 || oStore.getInstanceName().compareTo("RAPStore") == 0)
-						{
-							if (lEndTime <= lFutureWeatherStart) // use NDFD and RAP only in the future if another store has the same obstype
-								continue;
-							if (lStartTime <= lFutureWeatherStart)
-								oData = oStore.getData(nType, lFutureWeatherStart, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-							else
-								oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-						}
-					}
-					else if (nType == ObsType.TRFLNK || nType == ObsType.TDNLNK)
-					{
-						FileWrapper oMostRecent = ((TrepsStore) m_oDirectory.lookup("TrepsStore")).m_oCurrentFiles.peekFirst();
-						long lEndOfTreps = Long.MAX_VALUE;
-						if (oMostRecent != null)
-							lEndOfTreps = oMostRecent.m_lEndTime;
-						if (oStore.getInstanceName().compareTo("TrepsStore") == 0)
-						{
-							if (lStartTime >= lEndOfTreps)
-								continue;
-							oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-						}
-						else if (m_bTest)
-						{
-							if (oStore.getInstanceName().compareTo("SpeedStatsStore") == 0)
-							{
-								if (lEndOfTreps != Long.MAX_VALUE)
-								{
-									if (lEndTime < lEndOfTreps)
-										continue;
-									if (lStartTime < lEndOfTreps)
-										oData = oStore.getData(nType, lEndOfTreps, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-									else
-										oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-								}
-								else
-									oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-							}
-						}
-						else if (oStore.getInstanceName().compareTo("BayesStore") == 0)
-						{
-							if (lEndOfTreps != Long.MAX_VALUE)
-							{
-								if (lEndTime < lEndOfTreps)
-									continue;
-								if (lStartTime < lEndOfTreps)
-									oData = oStore.getData(nType, lEndOfTreps, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-								else
-									oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-							}
-							else
-								oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-						}
-					}
-					else
-						oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-				}
-				else
-					oData = oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
-
+				ImrcpResultSet oData = (ImrcpResultSet)oStore.getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
+				
 				if (oData != null)
 				{
-					while (oData.next())
+					for (int i = 0; i < oData.size(); i++)
 					{
-						if (nObjId == 0 || (nObjId != 0 && oData.getInt(3) == nObjId))
+						Obs oObs = (Obs)oData.get(i);
+						if (nObjId == 0 || (nObjId != 0 && oObs.m_nObjId == nObjId))
 						{
-							Obs oObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), oData.getShort(11), oData.getDouble(12), oData.getShort(13), oData.getString(14), oData.getLong(15));
 							if (oObs.m_sDetail == null && oObs.m_nObsTypeId != ObsType.EVT)
 							{
 								Segment oSeg = null;
@@ -281,25 +163,5 @@ public class ObsView extends ImrcpBlock
 			m_oLogger.error(oException, oException);
 		}
 		return oReturn;
-	}
-
-
-	/**
-	 * Checks if the given obs type has multiple weather stores that contain Obs
-	 * with the obs type
-	 *
-	 * @param nObsType obs type id to check
-	 * @return true if there are multiple WeatherStores that contain Obs with
-	 * the obs type, otherwise false
-	 */
-	public boolean isMultiStoreWeatherObs(int nObsType)
-	{
-		for (int nType : m_nMultiStoreWeatherObs)
-		{
-			if (nObsType == nType)
-				return true;
-		}
-
-		return false;
 	}
 }

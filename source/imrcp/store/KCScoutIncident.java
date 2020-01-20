@@ -1,27 +1,13 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
+import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.NED;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.system.Config;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
-import imrcp.system.Util;
 import java.io.BufferedWriter;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -123,17 +109,20 @@ public class KCScoutIncident extends Obs
 
 	static
 	{
-		m_nEstExtend = Config.getInstance().getInt(KCScoutIncident.class.getName(), "IncidentDbWrapper", "extend", 450000);
-		m_nLinkTol = Config.getInstance().getInt(KCScoutIncident.class.getName(), "IncidentDbWrapper", "tol", 5000);
+		m_nEstExtend = Config.getInstance().getInt(KCScoutIncident.class.getName(), "imrcp.comp.KCScoutIncidentsComp", "extend", 450000);
+		m_nLinkTol = Config.getInstance().getInt(KCScoutIncident.class.getName(), "imrcp.comp.KCScoutIncidentsComp", "tol", 5000);
 	}
 
 
 	/**
 	 * Default constructor
 	 */
-	KCScoutIncident()
+	public KCScoutIncident()
 	{
-
+		m_sDescription = "";
+		m_oStartTime.setTimeInMillis(0);
+		m_oEstimatedEnd.setTimeInMillis(0);
+		m_nLanesClosed = Integer.MIN_VALUE;
 	}
 
 
@@ -227,74 +216,46 @@ public class KCScoutIncident extends Obs
 	}
 
 
-	/**
-	 * Custom constructor. Creates a KCScoutIncident object by parsing a line of
-	 * an Incident archive file.
-	 *
-	 * @param sArchive the line of the archive file (csv)
-	 * @param bReadUTC true if the archive file is in UTC, false if it is in
-	 * Central time
-	 * @throws Exception
-	 */
-	public KCScoutIncident(String sArchive, boolean bReadUTC) throws Exception
+	public KCScoutIncident(CsvReader oIn, boolean bReadUTC, boolean bHasSegId) throws Exception
 	{
 		SimpleDateFormat oFormat = new SimpleDateFormat("M'/'d'/'yyyy hh':'mm:ss a");
 		if (bReadUTC)
 			oFormat.setTimeZone(Directory.m_oUTC);
 		else
 			oFormat.setTimeZone(TimeZone.getTimeZone("CST6CDT"));
-		int[] nEndpoints = new int[]
-		{
-			0, 0
-		}; //used to parse through the csv list
-		nEndpoints[1] = sArchive.indexOf(","); //eventId is the first column
-		m_nEventId = Integer.parseInt(sArchive.substring(nEndpoints[0], nEndpoints[1]));
-		for (int i = 0; i < 3; i++)
-			Util.moveEndpoints(sArchive, nEndpoints); //skip date created, name
-		m_sEventType = sArchive.substring(nEndpoints[0], nEndpoints[1]).trim();
-		for (int i = 0; i < 5; i++) // skip agency, enetered by, last updated by
-			Util.moveEndpoints(sArchive, nEndpoints);
-		m_lTimeUpdated = oFormat.parse(sArchive.substring(nEndpoints[0], nEndpoints[1])).getTime();
-		for (int i = 0; i < 2; i++) // skip road type
-			Util.moveEndpoints(sArchive, nEndpoints);
-//		for (int i = 0; i < 7; i++)
-//			Util.moveEndpoints(sArchive, nEndpoints); //skip  agency, entered by, last upadated by, last updated time, road type
-		m_sMainStreet = sArchive.substring(nEndpoints[0], nEndpoints[1]);
-		Util.moveEndpoints(sArchive, nEndpoints);
-		m_sCrossStreet = sArchive.substring(nEndpoints[0], nEndpoints[1]);
-		for (int i = 0; i < 3; i++)
-			Util.moveEndpoints(sArchive, nEndpoints); //skip direction, log mile
-		m_nLat1 = Integer.parseInt(sArchive.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sArchive, nEndpoints);
-		m_nLon1 = Integer.parseInt(sArchive.substring(nEndpoints[0], nEndpoints[1]));
-		for (int i = 0; i < 3; i++)
-			Util.moveEndpoints(sArchive, nEndpoints); //skip county, state
-
-		m_oStartTime.setTime(oFormat.parse(sArchive.substring(nEndpoints[0], nEndpoints[1])));
-		Util.moveEndpoints(sArchive, nEndpoints);
-		m_nEstimatedDur = Integer.parseInt(sArchive.substring(nEndpoints[0], nEndpoints[1]));
+		m_nEventId = oIn.parseInt(0);
+		m_sEventType = oIn.parseString(3).trim();
+		m_lTimeUpdated = oFormat.parse(oIn.parseString(8)).getTime();
+		m_sMainStreet = oIn.parseString(10);
+		m_sCrossStreet = oIn.parseString(11);
+		double dLat = oIn.parseDouble(14);
+		if (Math.abs(dLat) > 90)
+			m_nLat1 = oIn.parseInt(14);
+		else
+			m_nLat1 = GeoUtil.toIntDeg(dLat);
+		double dLon = oIn.parseDouble(15);
+		if (Math.abs(dLon) > 180)
+			m_nLon1 = oIn.parseInt(15);
+		else
+			m_nLon1 = GeoUtil.toIntDeg(dLon);
+		
+		int nSegmentIdOffset = bHasSegId ? 1 : 0; // the columns of the file IMRCP creates and the KCScout archvies are different
+		m_oStartTime.setTime(oFormat.parse(oIn.parseString(18 + nSegmentIdOffset)));
+		m_nEstimatedDur = oIn.parseInt(19 + nSegmentIdOffset);
 		m_oEstimatedEnd.setTime(m_oStartTime.getTime()); //calculate the estimated end time from start time and duration
 		m_oEstimatedEnd.add(Calendar.MINUTE, m_nEstimatedDur);
-		Util.moveEndpoints(sArchive, nEndpoints);
-		Util.moveEndpoints(sArchive, nEndpoints); //skip lanes cleared time
 		m_oEndTime = new GregorianCalendar(Directory.m_oUTC);
-		boolean bUseDuration = false;
-		if (nEndpoints[0] < nEndpoints[1])
-			m_oEndTime.setTime(oFormat.parse(sArchive.substring(nEndpoints[0], nEndpoints[1])));
-		else
-			m_oEndTime.setTimeInMillis(m_lTimeUpdated);
-		for (int i = 0; i < 4; i++)
-			Util.moveEndpoints(sArchive, nEndpoints); //skip queue clear time, lanes cleared duration, lane blockage duration, 
-		if (bUseDuration)
+		if (oIn.isNull(21 + nSegmentIdOffset)) // use Event Cleared Time if there is a value
+			m_oEndTime.setTime(oFormat.parse(oIn.parseString(21 + nSegmentIdOffset)));
+		else if (oIn.isNull(25 + nSegmentIdOffset)) // if no Event Cleared Time check and use Event Duration if it has a value
 		{
 			m_oEndTime.setTimeInMillis(m_oStartTime.getTimeInMillis());
-			m_oEndTime.add(Calendar.MINUTE, Integer.parseInt(sArchive.substring(nEndpoints[0], nEndpoints[1])));
-		}// event duration
-
-		for (int i = 0; i < 3; i++) //event duration, queue clear duration, lane pattern
-			Util.moveEndpoints(sArchive, nEndpoints);
-
-		String sBlockedLanes = sArchive.substring(nEndpoints[0], nEndpoints[1]);
+			m_oEndTime.add(Calendar.MINUTE, oIn.parseInt(25 + nSegmentIdOffset));
+		}
+		else
+			m_oEndTime.setTimeInMillis(m_oEstimatedEnd.getTimeInMillis());
+		
+		String sBlockedLanes = oIn.parseString(28 + nSegmentIdOffset);
 		int nStart = 0;
 		int nEnd = 0;
 		int nCount = 0;
@@ -303,17 +264,19 @@ public class KCScoutIncident extends Obs
 			nCount++;
 			nEnd = nStart + 1;
 		}
+		
 		m_nLanesClosed = nCount;
-		for (int i = 0; i < 23; i++)
-			Util.moveEndpoints(sArchive, nEndpoints);
-
+		if (nSegmentIdOffset == 0)
+			m_sDescription = oIn.parseString(51);
+		else
+			m_sDescription = oIn.parseString(4) + " " + m_sMainStreet;
+		
 		Segment oSeg = m_oSegs.getLink(m_nLinkTol, m_nLon1, m_nLat1); // assign the nearest link to the event
 		if (oSeg != null)
 			m_nLink = oSeg.m_nLinkId;
 		else // if a link isn't found set the link id to -1
 			m_nLink = -1;
-
-		m_sDescription = sArchive.substring(nEndpoints[0], nEndpoints[1]);
+		
 		m_nObsTypeId = ObsType.EVT;
 		m_bManual = false;
 
@@ -323,10 +286,10 @@ public class KCScoutIncident extends Obs
 		if (m_oEstimatedEnd.getTimeInMillis() <= System.currentTimeMillis())
 			m_oEstimatedEnd.setTimeInMillis(System.currentTimeMillis() + m_nEstExtend);
 		m_lObsTime2 = m_oEndTime.getTimeInMillis();
-		m_lTimeRecv = m_lObsTime1;
+		m_lTimeRecv = m_lTimeUpdated;
 		m_nLat2 = Integer.MIN_VALUE;
 		m_nLon2 = Integer.MIN_VALUE;
-		if (m_sEventType.compareTo("Incident") == 0)
+		if (m_sEventType.contains("Incident"))
 			m_dValue = ObsType.lookup(ObsType.EVT, "incident");
 		else
 			m_dValue = ObsType.lookup(ObsType.EVT, "workzone");
@@ -350,10 +313,17 @@ public class KCScoutIncident extends Obs
 		oPs.setString(2, m_sEventType);
 		oPs.setInt(3, m_nLink);
 		oPs.setString(4, m_sMainStreet);
-		oPs.setString(5, m_sCrossStreet);
+		if (m_sCrossStreet.length() <= 50)
+			oPs.setString(5, m_sCrossStreet);
+		else
+			oPs.setString(5, m_sCrossStreet.substring(0, 50));
+		
 		oPs.setInt(6, m_nLat1);
 		oPs.setInt(7, m_nLon1);
-		oPs.setString(8, m_sDescription);
+		if (m_sDescription.length() <= 120)
+			oPs.setString(8, m_sDescription);
+		else
+			oPs.setString(8, m_sDescription.substring(0, 120));
 		oPs.setInt(9, m_nLanesClosed);
 		oPs.setLong(10, m_oStartTime.getTimeInMillis() / 1000); //need seconds to use FROM_UNIXTIME()
 		oPs.setInt(11, m_nEstimatedDur);
@@ -368,10 +338,11 @@ public class KCScoutIncident extends Obs
 	 * @param oWriter open writer
 	 * @throws Exception
 	 */
-	public void writeToFile(TimeoutBufferedWriter oWriter) throws Exception
+	public void writeToFile(BufferedWriter oWriter) throws Exception
 	{
 		SimpleDateFormat oFormat = new SimpleDateFormat("M'/'d'/'yyyy hh':'mm:ss a");
 		oFormat.setTimeZone(Directory.m_oUTC);
+		Calendar oEndTime = m_oEndTime == null ? m_oEstimatedEnd : m_oEndTime;
 		oWriter.write(Integer.toString(m_nEventId)); //Event Id	
 		oWriter.write(",");
 		oWriter.write(oFormat.format(m_oStartTime.getTime())); //Date Created
@@ -380,7 +351,12 @@ public class KCScoutIncident extends Obs
 		oWriter.write(",");
 		oWriter.write(m_sEventType); //Event Type Group
 		oWriter.write(",");
-		oWriter.write(m_sDescription.substring(0, m_sDescription.indexOf("\t"))); //Event Type
+		int nIndex = m_sDescription.indexOf("\t");
+		if (nIndex < 0) 
+			nIndex = Math.max(m_sDescription.length(), 20);
+		if (nIndex > 20) // max length for the database field is 20
+			nIndex = 20;
+		oWriter.write(m_sDescription.substring(0, nIndex)); //Event Type
 		oWriter.write(",");
 		oWriter.write(""); //Agency
 		oWriter.write(",");
@@ -416,7 +392,7 @@ public class KCScoutIncident extends Obs
 		oWriter.write(",");
 		oWriter.write(""); //Lanes Cleared Time
 		oWriter.write(",");
-		oWriter.write(oFormat.format(m_oEndTime.getTime())); //Event Cleared Time
+		oWriter.write(oFormat.format(oEndTime.getTime())); //Event Cleared Time
 		oWriter.write(",");
 		oWriter.write(""); //Queue Clear Time
 		oWriter.write(",");
@@ -424,7 +400,7 @@ public class KCScoutIncident extends Obs
 		oWriter.write(",");
 		oWriter.write(""); //Lane Blockage Duration
 		oWriter.write(",");
-		oWriter.write(Long.toString((m_oEndTime.getTimeInMillis() - m_oStartTime.getTimeInMillis()) / 1000 / 60)); //Event Duration
+		oWriter.write(Long.toString((oEndTime.getTimeInMillis() - m_oStartTime.getTimeInMillis()) / 1000 / 60)); //Event Duration
 		oWriter.write(",");
 		oWriter.write(""); //Queue Clear Duration
 		oWriter.write(",");

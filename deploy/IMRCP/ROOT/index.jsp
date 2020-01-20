@@ -1,20 +1,3 @@
-<%
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */	
-%>
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" trimDirectiveWhitespaces="true" %>
 <%
 	session.invalidate();
@@ -66,8 +49,7 @@ $(document).ready(function()
 <body>
 
 <div>
-	<ul class="w3-navbar w3-teal">
-		<li class="w3-right"><a href="https://www.fhwa.dot.gov"><img alt="FHWA" src="images/fhwa-small.png"/>&nbsp;&nbsp;Federal Highway Administration</a></li>
+	<ul class="w3-navbar w3-teal" style="height: 39px;">
 	</ul>
 </div>
 
@@ -126,13 +108,6 @@ $(document).ready(function()
 		data filtering criteria and download URL. Report and subscription output can be downloaded using 
 		this web interface or with a unique URL and will remain available for up to two weeks after the 
 		last access time.
-		</p>
-		<br/>
-		<p>
-		Many thanks to the Federal Highway Administration for sponsoring this project and for
-		the patience and support of Kansas City Scout, the Mid-America Regional Council and Operation 
-		Green Light, and their member cities, without which this valuable research would not have been 
-		possible.
 		</p>
 	</div>
 </div>

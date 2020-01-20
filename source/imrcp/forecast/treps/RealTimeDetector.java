@@ -1,22 +1,7 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.treps;
 
-import imrcp.geosrv.DetectorMapping;
-import imrcp.geosrv.KCScoutDetectorMappings;
+import imrcp.geosrv.KCScoutDetectorLocation;
+import imrcp.geosrv.KCScoutDetectorLocations;
 import imrcp.store.KCScoutDetectorsStore;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
@@ -57,12 +42,12 @@ public class RealTimeDetector extends InputFile
 	/**
 	 * List of the detector mappings sorted by imrcp ids
 	 */
-	ArrayList<DetectorMapping> m_oMappingByImrcp = new ArrayList();
+	ArrayList<KCScoutDetectorLocation> m_oMappingByImrcp = new ArrayList();
 
 	/**
 	 * List of the detector mappings sorted by KCScout archive id
 	 */
-	ArrayList<DetectorMapping> m_oMappingByArchive = new ArrayList();
+	ArrayList<KCScoutDetectorLocation> m_oMappingByArchive = new ArrayList();
 
 	/**
 	 * Reference of the KCScout Detector Store
@@ -90,11 +75,11 @@ public class RealTimeDetector extends InputFile
 	@Override
 	public boolean start() throws Exception
 	{
-		KCScoutDetectorMappings oMappings = (KCScoutDetectorMappings)Directory.getInstance().lookup("KCScoutDetectorMappings");
+		KCScoutDetectorLocations oMappings = (KCScoutDetectorLocations)Directory.getInstance().lookup("KCScoutDetectorLocations");
 		oMappings.getDetectors(m_oMappingByImrcp, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
 		oMappings.getDetectors(m_oMappingByArchive, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
-		Collections.sort(m_oMappingByImrcp, DetectorMapping.g_oIMRCPIDCOMPARATOR); // sort by lat/lon so binary search can be used
-		Collections.sort(m_oMappingByArchive, DetectorMapping.g_oARCHIVEIDCOMPARATOR);
+		Collections.sort(m_oMappingByImrcp, KCScoutDetectorLocation.g_oIMRCPIDCOMP); // sort by lat/lon so binary search can be used
+		Collections.sort(m_oMappingByArchive, KCScoutDetectorLocation.g_oARCHIVEIDCOMPARATOR);
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
@@ -142,16 +127,18 @@ public class RealTimeDetector extends InputFile
 		ArrayList<DetectorInput> oDets = new ArrayList(m_nMinutesInFile * m_oMappingByArchive.size());
 		for (int i = 1; i <= m_nMinutesInFile; i++) // create all the entries for current time window
 		{
-			for (DetectorMapping oMapping : m_oMappingByArchive)
+			for (KCScoutDetectorLocation oMapping : m_oMappingByArchive)
 			{
 				long lTimestamp = lStartTime + (i * 60000);
+				if (oMapping.m_nINodeId == Integer.MIN_VALUE)
+					continue;
 				oDets.add(new DetectorInput(oMapping.m_nArchiveId, lTimestamp, Integer.toString(oMapping.m_nINodeId) + "-" + Integer.toString(oMapping.m_nJNodeId)));
 			}
 		}
 		try
 		{
 			int nIndex = 0;
-			DetectorMapping oMappingSearch = new DetectorMapping();
+			KCScoutDetectorLocation oMappingSearch = new KCScoutDetectorLocation();
 			DetectorInput oInputSearch = new DetectorInput();
 			ResultSet oSpdRs = m_oDetectorsStore.getData(ObsType.SPDLNK, lStartTime, lEndTime, m_nB, m_nT, m_nL, m_nR, lNow); // get speed data
 			while (oSpdRs.next()) // iterate through all the Obs and fill in the data for each entry
@@ -160,7 +147,7 @@ public class RealTimeDetector extends InputFile
 				if (oInputSearch.m_lTimestamp > oSpdRs.getLong(6)) //skip forecast obs
 					continue;
 				oMappingSearch.m_nImrcpId = oSpdRs.getInt(3);
-				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, DetectorMapping.g_oIMRCPIDCOMPARATOR)) >= 0)
+				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, KCScoutDetectorLocation.g_oIMRCPIDCOMP)) >= 0)
 					oInputSearch.m_nDetectorId = m_oMappingByImrcp.get(nIndex).m_nArchiveId;
 				else // skip obs that do not map to a detector
 					continue;
@@ -176,7 +163,7 @@ public class RealTimeDetector extends InputFile
 				if (oInputSearch.m_lTimestamp > oVolRs.getLong(6)) //skip forecast obs
 					continue;
 				oMappingSearch.m_nImrcpId = oVolRs.getInt(3);
-				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, DetectorMapping.g_oIMRCPIDCOMPARATOR)) >= 0)
+				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, KCScoutDetectorLocation.g_oIMRCPIDCOMP)) >= 0)
 					oInputSearch.m_nDetectorId = m_oMappingByImrcp.get(nIndex).m_nArchiveId;
 				else
 					continue;
@@ -192,7 +179,7 @@ public class RealTimeDetector extends InputFile
 				if (oInputSearch.m_lTimestamp > oOccRs.getLong(6)) //skip forecast obs
 					continue;
 				oMappingSearch.m_nImrcpId = oOccRs.getInt(3);
-				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, DetectorMapping.g_oIMRCPIDCOMPARATOR)) >= 0)
+				if ((nIndex = Collections.binarySearch(m_oMappingByImrcp, oMappingSearch, KCScoutDetectorLocation.g_oIMRCPIDCOMP)) >= 0)
 					oInputSearch.m_nDetectorId = m_oMappingByImrcp.get(nIndex).m_nArchiveId;
 				else
 					continue;

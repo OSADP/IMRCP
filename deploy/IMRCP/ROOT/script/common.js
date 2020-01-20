@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */	function minutesToHHmm(minutes, excludeSign)
+ */	
+const minutesToHHmm = (minutes, excludeSign) =>
 {
 
   var sign;
@@ -38,8 +39,10 @@
     return sign + hours + ':' + minutes;
 };
 
-function minutesToHH(minutes, excludeSign)
+const minutesToHH = (minutes, excludeSign) =>
 {
     var HHmm = minutesToHHmm(minutes, excludeSign);
     return HHmm.substr(0, HHmm.length - 3);
 };
+
+export {minutesToHH, minutesToHHmm};

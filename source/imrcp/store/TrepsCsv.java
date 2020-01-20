@@ -1,35 +1,16 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.system.Config;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
-import java.io.BufferedReader;
 import java.io.FileInputStream;
-import java.io.InputStreamReader;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.GregorianCalendar;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -43,8 +24,6 @@ public class TrepsCsv extends CsvWrapper implements Comparator<Segment>
 
 	private static final int[] m_nStudyArea;
 
-	private static final String m_sFileFormat;
-
 	private static Comparator<Obs> g_oObsComp = (Obs o1, Obs o2) ->
 	{
 		int nReturn = o1.m_nObjId - o2.m_nObjId;
@@ -57,14 +36,18 @@ public class TrepsCsv extends CsvWrapper implements Comparator<Segment>
 
 	static
 	{
-		Config oConfig = Config.getInstance();
-		m_sFileFormat = oConfig.getString(TrepsCsv.class.getName(), "imrcp.store.TrepsStore", "dest", "");
-		String[] sCoords = oConfig.getStringArray(TrepsCsv.class.getName(), "imrcp.ImrcpBlock", "box", null);
+		String[] sCoords = Config.getInstance().getStringArray(TrepsCsv.class.getName(), "imrcp.ImrcpBlock", "box", null);
 
 		m_nStudyArea = new int[sCoords.length];
 		for (int i = 0; i < sCoords.length; i++)
 			m_nStudyArea[i] = Integer.parseInt(sCoords[i]);
 
+	}
+
+
+	public TrepsCsv(int[] nObsTypes)
+	{
+		super(nObsTypes);
 	}
 
 
@@ -77,45 +60,33 @@ public class TrepsCsv extends CsvWrapper implements Comparator<Segment>
 	 * @param sFilename absolute path to the file
 	 */
 	@Override
-	public void load(long lStartTime, long lEndTime, String sFilename) throws Exception
+	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception
 	{
-		String[] sCoords = Config.getInstance().getStringArray(TrepsCsv.class.getName(), "imrcp.ImrcpBlock", "box", null);
-		if (sCoords.length % 4 != 0)
-			return;
 		ArrayList<Segment> oSegments = new ArrayList();
-		for (int i = 0; i < sCoords.length; i += 4) // get the segments in the study area
+		for (int i = 0; i < m_nStudyArea.length; i += 4) // get the segments in the study area
 			((SegmentShps)Directory.getInstance().lookup("SegmentShps")).getLinks(oSegments, 0, m_nStudyArea[i], m_nStudyArea[i + 1], m_nStudyArea[i + 2], m_nStudyArea[i + 3]);
 		Collections.sort(oSegments, this);
-		SimpleDateFormat oFormat = new SimpleDateFormat(m_sFileFormat);
-		oFormat.setTimeZone(Directory.m_oUTC);
-		Calendar oStart = new GregorianCalendar(Directory.m_oUTC);
-		oStart.setTime(oFormat.parse(sFilename.substring(0, sFilename.lastIndexOf("_")))); // get the run time from filename, ignore the last part of the filename because it can vary
-		m_lStartTime = oStart.getTimeInMillis();
-		int nStart = sFilename.lastIndexOf("_") + 1; // parse the number of forecast minutes from the filename
-		int nEnd = sFilename.lastIndexOf(".csv");
-		oStart.add(Calendar.MINUTE, Integer.parseInt(sFilename.substring(nStart, nEnd))); // add the forecast minutes to the start time
-		m_lEndTime = oStart.getTimeInMillis(); // that is now the end time
-		if (m_lStartTime == m_lEndTime)
-			m_lEndTime = lEndTime;
+		setTimes(lValidTime, lStartTime, lEndTime);
+		
 		m_sFilename = sFilename;
+		m_nContribId = nContribId;
 
 		int[] nObsTypeIds;
-		String sLine;
 
-		m_oCsvFile = new BufferedReader(new InputStreamReader(new FileInputStream(sFilename)));
-		sLine = m_oCsvFile.readLine(); // read the header, it contains the obstype ids in columns 2 to the end of the header
-		String[] sCols = sLine.split(",");
-		nObsTypeIds = new int[sCols.length - 2]; // the first two columns (0 and 1) are not obs type ids
-		for (int i = 2; i < sCols.length; i++)
-			nObsTypeIds[i - 2] = Integer.valueOf(sCols[i], 36);
+		m_oCsvFile = new CsvReader(new FileInputStream(sFilename));
+		int nCol = m_oCsvFile.readLine(); // read the header, it contains the obstype ids in columns 2 to the end of the header
+		nObsTypeIds = new int[nCol - 2]; // the first two columns (0 and 1) are not obs type ids
+		for (int i = 2; i < nCol; i++)
+			nObsTypeIds[i - 2] = Integer.valueOf(m_oCsvFile.parseString(i), 36);
 
 		Segment oSearch = new Segment();
 		Segment oReuse = null;
 //		ArrayList<Obs> oSpeeds = new ArrayList();
-		while ((sLine = m_oCsvFile.readLine()) != null)
+		while ((nCol = m_oCsvFile.readLine()) > 0)
 		{
-			sCols = sLine.split(",");
-			int nLinkId = Integer.parseInt(sCols[0]);
+			if (nCol == 1 && m_oCsvFile.isNull(0)) // skip blank lines
+				continue;
+			int nLinkId = m_oCsvFile.parseInt(0);
 			oSearch.m_nLinkId = nLinkId;
 			int nIndex = Collections.binarySearch(oSegments, oSearch, this);
 			if (nIndex < 0)
@@ -139,17 +110,18 @@ public class TrepsCsv extends CsvWrapper implements Comparator<Segment>
 					{
 						Obs oObs = new Obs();
 						oObs.m_nObsTypeId = nObsTypeIds[nObsIndex];
-						oObs.m_nContribId = Integer.valueOf("treps", 36);
+						oObs.m_nContribId = m_nContribId;
 						oObs.m_nObjId = oReuse.m_nId;
-						oObs.m_lObsTime1 = m_lStartTime + (Integer.parseInt(sCols[1]) * 60000);
-						oObs.m_lObsTime2 = m_lStartTime + ((Integer.parseInt(sCols[1]) + 1) * 60000);
+						int nMinuteOffset = m_oCsvFile.parseInt(1);
+						oObs.m_lObsTime1 = m_lStartTime + nMinuteOffset * 60000;
+						oObs.m_lObsTime2 = oObs.m_lObsTime1 + 60000; // obs last for a minute
 						oObs.m_lTimeRecv = m_lStartTime;
 						oObs.m_nLat1 = oReuse.m_nYmid;
 						oObs.m_nLon1 = oReuse.m_nXmid;
 						oObs.m_nLat2 = Integer.MIN_VALUE;
 						oObs.m_nLon2 = Integer.MIN_VALUE;
 						oObs.m_tElev = oReuse.m_tElev;
-						oObs.m_dValue = Double.parseDouble(sCols[nObsIndex + 2]);
+						oObs.m_dValue = m_oCsvFile.parseDouble(nObsIndex + 2);
 						oObs.m_tConf = Short.MIN_VALUE;
 						m_oObs.add(oObs);
 //						if (oObs.m_nObsTypeId == ObsType.SPDLNK)

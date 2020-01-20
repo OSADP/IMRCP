@@ -1,34 +1,25 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.collect;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FilenameFormatter;
 import imrcp.store.Obs;
+import imrcp.system.CsvReader;
+import imrcp.system.ObsType;
 import imrcp.system.Scheduling;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.TimeZone;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
@@ -37,7 +28,7 @@ import org.apache.http.impl.client.HttpClients;
  * Class used to download data from StormWatch and create system observations
  * from that data.
  */
-public class StormWatch extends ImrcpBlock
+public class StormWatch extends BaseBlock
 {
 
 	/**
@@ -71,10 +62,17 @@ public class StormWatch extends ImrcpBlock
 	 */
 	private int m_nPeriod;
 
+	private int m_nTimeout;
+	
+	private int m_nWaitTime;
 	/**
 	 * Formatting object used to generate time dynamic file names
 	 */
-	private SimpleDateFormat m_oFileFormat;
+	private FilenameFormatter m_oFileFormat;
+	
+	private ArrayList<FloodStageMetadata> m_oFloodStages;
+	
+	private int m_nFileFrequency;
 
 
 	/**
@@ -88,12 +86,20 @@ public class StormWatch extends ImrcpBlock
 	@Override
 	public boolean start() throws Exception
 	{
-		try (BufferedReader oIn = new BufferedReader(new FileReader(m_oConfig.getString("file", ""))))
+		try (CsvReader oIn = new CsvReader(new FileInputStream(m_oConfig.getString("file", ""))))
 		{
-			String sLine = oIn.readLine(); // skip header
-			while ((sLine = oIn.readLine()) != null)
-				m_oDevices.add(new StormWatchDevice(sLine));
+			oIn.readLine(); // skip header
+			while (oIn.readLine() > 0)
+				m_oDevices.add(new StormWatchDevice(oIn));
 		}
+		m_oFloodStages = new ArrayList();
+		try (CsvReader oIn = new CsvReader(new FileInputStream(m_oConfig.getString("stages", ""))))
+		{
+			oIn.readLine(); // skip header
+			while (oIn.readLine() > 0)
+				m_oFloodStages.add(new FloodStageMetadata(oIn));
+		}
+		Collections.sort(m_oFloodStages);
 		execute();
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
@@ -112,7 +118,10 @@ public class StormWatch extends ImrcpBlock
 		m_oFormat.setTimeZone(TimeZone.getTimeZone("CST6CDT"));
 		m_nOffset = m_oConfig.getInt("offset", 0);
 		m_nPeriod = m_oConfig.getInt("period", 600);
-		m_oFileFormat = new SimpleDateFormat(m_oConfig.getString("output", ""));
+		m_oFileFormat = new FilenameFormatter(m_oConfig.getString("fileformat", ""));
+		m_nTimeout = m_oConfig.getInt("timeout", 5000);
+		m_nWaitTime = m_oConfig.getInt("wait", 4000);
+		m_nFileFrequency = m_oConfig.getInt("freq", 86400000);
 	}
 
 
@@ -128,25 +137,26 @@ public class StormWatch extends ImrcpBlock
 		{
 			long lTimestamp = System.currentTimeMillis();
 			lTimestamp = (lTimestamp / (m_nPeriod * 1000)) * (m_nPeriod * 1000) + (m_nOffset * 1000); // floor to the nearest forecast interval
-			File oFile = new File(m_oFileFormat.format(lTimestamp));
-			String sDir = oFile.getAbsolutePath().substring(0, oFile.getAbsolutePath().lastIndexOf("/"));
-			new File(sDir).mkdirs(); // ensure the directory exists
+			long lFiletime = (lTimestamp / m_nFileFrequency) * m_nFileFrequency;
+			String sFilename = m_oFileFormat.format(lFiletime, lFiletime, lFiletime + m_nFileFrequency);
+			new File(sFilename.substring(0, sFilename.lastIndexOf("/"))).mkdirs(); // ensure the directory exists
 			m_oLogger.info("writing file");
-			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(oFile, true)))
+			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(sFilename, true)))
 			{
-				if (oFile.length() == 0) // write header if needed
+				if (new File(sFilename).length() == 0) // write header if needed
 					oOut.write("ObsType,Source,ObjId,ObsTime1,ObsTime2,TimeRecv,Lat1,Lon1,Lat2,Lon2,Elev,Value,Conf\n");
 
+				RequestConfig oRequestConfig = RequestConfig.custom().setSocketTimeout(m_nTimeout).setConnectTimeout(m_nTimeout).setConnectionRequestTimeout(m_nTimeout).build();
 				for (StormWatchDevice oDevice : m_oDevices)
 				{
-					if (downloadCurrentObs(oDevice.m_oLastObs, oDevice.getUrl(m_sUrlPattern, lTimestamp), lTimestamp, oClient)) // only write if the download was successful
+					if (downloadCurrentObs(oDevice, lTimestamp, oClient, oRequestConfig)) // only write if the download was successful
 						oDevice.m_oLastObs.writeCsv(oOut);
+					Thread.sleep(m_nWaitTime);
 				}
 				oOut.flush();
 				oOut.close();
 			}
-			for (int nSubscriber : m_oSubscribers) //notify subscribers that a new file has been downloaded
-				notify(this, nSubscriber, "file download", oFile.getAbsolutePath());
+			notify("file download", sFilename);
 		}
 		catch (Exception oException)
 		{
@@ -167,13 +177,54 @@ public class StormWatch extends ImrcpBlock
 	 * @return true if a new observation was downloaded successfully, otherwise
 	 * false
 	 */
-	public boolean downloadCurrentObs(Obs oObs, String sUrl, long lTimestamp, CloseableHttpClient oClient)
+	public boolean downloadCurrentObs(StormWatchDevice oDevice, long lTimestamp, CloseableHttpClient oClient, RequestConfig oConfig) throws Exception
 	{
+		Obs oObs = oDevice.m_oLastObs;
+		String sUrl = oDevice.getUrl(m_sUrlPattern, lTimestamp);
 		HttpGet oRequest = new HttpGet(m_sBaseUrl + sUrl);
+		oRequest.setConfig(oConfig);
 		HttpResponse oResponse;
 		try
 		{
 			oResponse = oClient.execute(oRequest); // will throw an exception most of the time
+			String sLine = null;
+			int nCol;
+			InputStream oStream = oResponse.getEntity().getContent();
+			CsvReader oIn = new CsvReader(oStream);
+			oIn.readLine(); // read header
+			nCol = oIn.readLine(); // most recent reading is at the top of the file
+
+			if (nCol <= 1)
+			{
+				oStream.close();
+				return false;
+			}
+			long lObsTime = m_oFormat.parse(oIn.parseString(0)).getTime();
+			String sVal = nCol == 5 ? oIn.parseString(2) : oIn.parseString(2) + oIn.parseString(3); // handle data that contains commas in the "csv" record
+			double dVal = getValue(oObs.m_nObsTypeId, sVal, oDevice);
+			if (Double.isNaN(dVal))
+			{
+				oStream.close();
+				return false;
+			}
+			
+			if (lObsTime != oObs.m_lTimeRecv || dVal != oObs.m_dValue)
+			{
+				oObs.m_lTimeRecv = m_oFormat.parse(oIn.parseString(1)).getTime();
+				oObs.m_dValue = dVal;
+			}
+			oStream.close();
+			oObs.m_lObsTime1 = lTimestamp;
+			oObs.m_lObsTime2 = lTimestamp + (m_nPeriod * 1000);
+		}
+		catch (ClientProtocolException oException) // expection, have to change the spaces in the redirect location to %20
+		{
+			String sCause = oException.getCause().getMessage();
+			String sRedirect = sCause.substring(sCause.indexOf(":") + 2);
+			sRedirect = sRedirect.replace(" ", "%20");
+
+			oRequest = new HttpGet(m_sBaseUrl + sRedirect); // create the fixed request
+			oResponse = oClient.execute(oRequest);
 			String sLine = null;
 			try (BufferedReader oIn = new BufferedReader(new InputStreamReader(oResponse.getEntity().getContent())))
 			{
@@ -184,8 +235,12 @@ public class StormWatch extends ImrcpBlock
 			if (sCols.length == 1)
 				return false;
 			long lObsTime = m_oFormat.parse(sCols[0]).getTime();
-			double dVal = Double.parseDouble(sCols[2]);
-			if (lObsTime != oObs.m_lTimeRecv || dVal != oObs.m_dValue)
+			String sVal = sCols.length == 5 ? sCols[2] : sCols[2] + sCols[3]; // handle data that contains commas in the "csv" 
+			double dVal = getValue(oObs.m_nObsTypeId, sVal, oDevice);
+			if (Double.isNaN(dVal))
+				return false;
+			
+			if (lObsTime != oObs.m_lTimeRecv || dVal != oObs.m_dValue) // only update if the time received or the value is different that the observation
 			{
 				oObs.m_lTimeRecv = m_oFormat.parse(sCols[1]).getTime();
 				oObs.m_dValue = dVal;
@@ -193,46 +248,34 @@ public class StormWatch extends ImrcpBlock
 			oObs.m_lObsTime1 = lTimestamp;
 			oObs.m_lObsTime2 = lTimestamp + (m_nPeriod * 1000);
 		}
-		catch (ClientProtocolException oException) // expection, have to change the spaces in the redirect location to %20
-		{
-			try
-			{
-				String sCause = oException.getCause().getMessage();
-				String sRedirect = sCause.substring(sCause.indexOf(":") + 2);
-				sRedirect = sRedirect.replace(" ", "%20");
-
-				oRequest = new HttpGet(m_sBaseUrl + sRedirect); // create the fixed request
-				oResponse = oClient.execute(oRequest);
-				String sLine = null;
-				try (BufferedReader oIn = new BufferedReader(new InputStreamReader(oResponse.getEntity().getContent())))
-				{
-					sLine = oIn.readLine(); // read header
-					sLine = oIn.readLine(); // most recent reading is at the top of the file
-				}
-				String[] sCols = sLine.split(",");
-				if (sCols.length == 1)
-					return false;
-				long lObsTime = m_oFormat.parse(sCols[0]).getTime();
-				double dVal = Double.parseDouble(sCols[2]);
-				if (lObsTime != oObs.m_lTimeRecv || dVal != oObs.m_dValue) // only update if the time received or the value is different that the observation
-				{
-					oObs.m_lTimeRecv = m_oFormat.parse(sCols[1]).getTime();
-					oObs.m_dValue = dVal;
-				}
-				oObs.m_lObsTime1 = lTimestamp;
-				oObs.m_lObsTime2 = lTimestamp + (m_nPeriod * 1000);
-			}
-			catch (Exception oEx)
-			{
-				m_oLogger.error(oEx, oEx);
-				return false;
-			}
-		}
-		catch (Exception oException)
-		{
-			m_oLogger.error(oException, oException);
-			return false;
-		}
 		return true;
+	}
+	
+	private double getValue(int nObsTypeId, String sVal, StormWatchDevice oDevice)
+	{
+		double dVal = Double.NaN;
+		if (nObsTypeId == ObsType.STPVT && !Character.isDigit(sVal.charAt(0)))
+		{
+			dVal = ObsType.lookup(ObsType.STPVT, sVal.toLowerCase());
+			if (dVal == Integer.MIN_VALUE)
+			{
+				m_oLogger.debug(String.format("Couldn't determine pavement state value for %s", sVal));
+				return Double.NaN;
+			}
+		}
+		else if (nObsTypeId == ObsType.STG)
+		{
+			FloodStageMetadata oTemp = new FloodStageMetadata();
+			oTemp.m_sId = oDevice.getSiteUuid();
+			int nIndex = Collections.binarySearch(m_oFloodStages, oTemp);
+			if (nIndex < 0)
+				return Double.NaN; // no flood stage metadata
+			double dStage = Double.parseDouble(sVal);
+			dVal = m_oFloodStages.get(nIndex).getStageValue(dStage);
+		}
+		else
+			dVal = Double.parseDouble(sVal);
+		
+		return dVal;
 	}
 }

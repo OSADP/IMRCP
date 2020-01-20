@@ -1,25 +1,15 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
+import imrcp.export.GoogleSegment;
+import imrcp.export.LocalNED;
+import imrcp.export.MarcRoad;
+import imrcp.export.OsmWay;
+import imrcp.export.Way;
 import imrcp.imports.DataImports;
 import imrcp.imports.shp.Point;
 import imrcp.system.Config;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
-import imrcp.system.Util;
 import java.io.BufferedWriter;
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -27,6 +17,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 
 /**
@@ -35,7 +26,7 @@ import java.util.Collections;
  */
 public class Segment
 {
-
+	private static final int ROUTETOL;
 	/**
 	 * ImrcpId of the segment. Has the format 0x4xxxxxxx for segments and
 	 * 0x5xxxxxxx
@@ -111,12 +102,6 @@ public class Segment
 	public final boolean m_bBridge;
 
 	/**
-	 * Tells whether the segment is still in used by the segment. Not used at
-	 * all right now but allows for segment definitions to change if needed
-	 */
-	public final boolean m_bInUse;
-
-	/**
 	 * NUTC I node Id
 	 */
 	public int m_nINode;
@@ -140,8 +125,21 @@ public class Segment
 	 * Name of the segment/route
 	 */
 	public final String m_sName;
+	
+	public int m_nLanes;
+	
+	public long m_lStartTime = 0;
+	public long m_lEndTime = Long.MAX_VALUE;
+	
+	public String m_sType = "";
+	
+	private static String H = "H";
+	private static String A = "A";
 
-
+	static
+	{
+		ROUTETOL = Config.getInstance().getInt(Segment.class.getName(), "route", "tol", 2500);
+	}
 	/**
 	 * Creates a new "blank" instance of a road with no metadata or points
 	 */
@@ -152,7 +150,6 @@ public class Segment
 		   = m_nXmid = m_nYmid = m_nId = Integer.MIN_VALUE;
 		m_tElev = Short.MIN_VALUE;
 		m_bBridge = false;
-		m_bInUse = true;
 		m_sName = "Road name";
 	}
 
@@ -170,61 +167,43 @@ public class Segment
 		   = m_nXmid = m_nYmid = Integer.MIN_VALUE;
 		m_tElev = Short.MIN_VALUE;
 		m_bBridge = false;
-		m_bInUse = true;
 		m_sName = "Road name";
 	}
 
-
+	
 	/**
 	 * Creates a new Segment from a csv line of the segment definition file.
 	 *
 	 * @param sSegment Line from the segment definition file
 	 * @throws Exception
 	 */
-	public Segment(String sSegment) throws Exception
+	public Segment(CsvReader oIn) throws Exception
 	{
 		int nYmax = Integer.MIN_VALUE; // init temp bounds to opposite extremes
 		int nXmax = Integer.MIN_VALUE; // so that bounding box can be narrowed
 		int nYmin = Integer.MAX_VALUE;
 		int nXmin = Integer.MAX_VALUE;
 
-		int[] nEndpoints = new int[]
-		{
-			0, 0
-		};
-
-		nEndpoints[1] = sSegment.indexOf(",");
-		m_nId = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_nLinkId = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_sName = sSegment.substring(nEndpoints[0], nEndpoints[1]);
-		Util.moveEndpoints(sSegment, nEndpoints);
-
-		int nBridge = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-		if (nBridge == 0)
-			m_bBridge = false;
-		else
-			m_bBridge = true;
-
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_nPoints = new int[2 * Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]))];
-		Util.moveEndpoints(sSegment, nEndpoints);
-
-		m_dPavementLayerThickness = new double[Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]))];
-		m_nPavementLayerMaterial = new int[Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]))];
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_nXmid = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_nYmid = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-		Util.moveEndpoints(sSegment, nEndpoints);
-		m_tElev = Short.parseShort(sSegment.substring(nEndpoints[0], nEndpoints[1]));
+		m_nId = oIn.parseInt(0);
+		m_nLinkId = oIn.parseInt(1);
+		String sType = oIn.parseString(2);
+		if (sType.equals("H"))
+			m_sType = H;
+		else if (sType.equals("A"))
+			m_sType = A;
+		m_sName = oIn.parseString(3);
+		m_bBridge = oIn.parseInt(4) != 0;
+		m_nPoints = new int[2 * oIn.parseInt(5)];
+		m_dPavementLayerThickness = new double[oIn.parseInt(6)];
+		m_nPavementLayerMaterial = new int[oIn.parseInt(6)];
+		m_nXmid = oIn.parseInt(7);
+		m_nYmid = oIn.parseInt(8);
+		m_tElev = (short)oIn.parseInt(9);
+		int nCol = 10;
 		for (int i = 0; i < m_nPoints.length;)
 		{
-			Util.moveEndpoints(sSegment, nEndpoints);
-			int nLon = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
-			Util.moveEndpoints(sSegment, nEndpoints);
-			int nLat = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
+			int nLon = oIn.parseInt(nCol++);
+			int nLat = oIn.parseInt(nCol++);
 
 			if (nLat > nYmax) // adjust vertical bounds
 				nYmax = nLat;
@@ -249,19 +228,15 @@ public class Segment
 
 		for (int i = 0; i < m_nPavementLayerMaterial.length; i++)
 		{
-			Util.moveEndpoints(sSegment, nEndpoints);
-			m_nPavementLayerMaterial[i] = Integer.parseInt(sSegment.substring(nEndpoints[0], nEndpoints[1]));
+			m_nPavementLayerMaterial[i] = oIn.parseInt(nCol++);
 		}
 
 		for (int i = 0; i < m_dPavementLayerThickness.length; i++)
 		{
-			Util.moveEndpoints(sSegment, nEndpoints);
-			m_dPavementLayerThickness[i] = Double.parseDouble(sSegment.substring(nEndpoints[0], nEndpoints[1]));
+			m_dPavementLayerThickness[i] = oIn.parseDouble(nCol++);
 		}
-		if (sSegment.indexOf("d", sSegment.lastIndexOf(",")) >= 0)
-			m_bInUse = false;
-		else
-			m_bInUse = true;
+		m_lStartTime = oIn.parseLong(nCol++);
+		m_lEndTime = oIn.parseLong(nCol++);
 	}
 
 
@@ -315,13 +290,193 @@ public class Segment
 		m_tElev = (short)nMidpoint[2];
 		calcGrade();
 		m_bBridge = false;
-		m_bInUse = true;
 		m_nPavementLayerMaterial = new int[]{1};
 		m_dPavementLayerThickness = new double[]{0.5};
 		m_sName = "Road name";
 	}
 
 
+	public Segment(Way oWay)
+	{
+		m_nId = (int)oWay.m_lId;
+		m_nLinkId = 0;
+		m_nPoints = new int[2 * oWay.m_oNodes.size()];
+		int nYmax = Integer.MIN_VALUE; // init temp bounds to opposite extremes
+		int nXmax = Integer.MIN_VALUE; // so that bounding box can be narrowed
+		int nYmin = Integer.MAX_VALUE;
+		int nXmin = Integer.MAX_VALUE;
+		int nIndex = 0;
+		for (int i = 0; i < oWay.m_oNodes.size(); i++)
+		{
+			int nLon = oWay.m_oNodes.get(i).m_nLon;
+			int nLat = oWay.m_oNodes.get(i).m_nLat;
+
+			if (nLat > nYmax) // adjust vertical bounds
+				nYmax = nLat;
+
+			if (nLat < nYmin)
+				nYmin = nLat;
+
+			if (nLon > nXmax) // adjust horizontal bounds
+				nXmax = nLon;
+
+			if (nLon < nXmin)
+				nXmin = nLon;
+
+			m_nPoints[nIndex++] = nLon;
+			m_nPoints[nIndex++] = nLat;
+		}
+		m_nYmax = nYmax;
+		m_nYmin = nYmin;
+		m_nXmax = nXmax;
+		m_nXmin = nXmin;
+		m_nXmid = oWay.m_nXmid;
+		m_nYmid = oWay.m_nYmid;
+		m_tElev = Short.MIN_VALUE;
+		m_bBridge = oWay.m_bBridge;
+		m_nPavementLayerMaterial = new int[]{1};
+		m_dPavementLayerThickness = new double[]{0.5};
+		m_sName = oWay.m_sName;
+	}
+	
+	public Segment(GoogleSegment oSeg, int nId)
+	{
+		m_nId = nId;
+		m_nLinkId = (int)oSeg.m_lWayId;
+		m_nPoints = new int[2 * oSeg.m_oPoints.size()];
+		int nYmax = Integer.MIN_VALUE; // init temp bounds to opposite extremes
+		int nXmax = Integer.MIN_VALUE; // so that bounding box can be narrowed
+		int nYmin = Integer.MAX_VALUE;
+		int nXmin = Integer.MAX_VALUE;
+		int nIndex = 0;
+		for (int i = 0; i < oSeg.m_oPoints.size(); i++)
+		{
+			int nLon = GeoUtil.toIntDeg(oSeg.m_oPoints.get(i).m_dX);
+			int nLat = GeoUtil.toIntDeg(oSeg.m_oPoints.get(i).m_dY);
+
+			if (nLat > nYmax) // adjust vertical bounds
+				nYmax = nLat;
+
+			if (nLat < nYmin)
+				nYmin = nLat;
+
+			if (nLon > nXmax) // adjust horizontal bounds
+				nXmax = nLon;
+
+			if (nLon < nXmin)
+				nXmin = nLon;
+
+			m_nPoints[nIndex++] = nLon;
+			m_nPoints[nIndex++] = nLat;
+		}
+		m_nYmax = nYmax;
+		m_nYmin = nYmin;
+		m_nXmax = nXmax;
+		m_nXmin = nXmin;
+		m_nXmid = GeoUtil.toIntDeg(oSeg.m_oPoints.get(0).m_dX);
+		m_nYmid = GeoUtil.toIntDeg(oSeg.m_oPoints.get(0).m_dY);
+		m_tElev = Short.MIN_VALUE;
+		m_bBridge = false;
+		m_nPavementLayerMaterial = new int[]{1};
+		m_dPavementLayerThickness = new double[]{0.5};
+		m_sName = oSeg.m_sName;
+	}
+	
+	public Segment(OsmWay oWay, int nId)
+	{
+		m_nId = nId;
+		m_nLinkId = 0;
+		m_nPoints = new int[2 * oWay.m_oNodes.size()];
+		int nYmax = Integer.MIN_VALUE; // init temp bounds to opposite extremes
+		int nXmax = Integer.MIN_VALUE; // so that bounding box can be narrowed
+		int nYmin = Integer.MAX_VALUE;
+		int nXmin = Integer.MAX_VALUE;
+		int nIndex = 0;
+		for (int i = 0; i < oWay.m_oNodes.size(); i++)
+		{
+			int nLon = oWay.m_oNodes.get(i).m_nLon;
+			int nLat = oWay.m_oNodes.get(i).m_nLat;
+
+			if (nLat > nYmax) // adjust vertical bounds
+				nYmax = nLat;
+
+			if (nLat < nYmin)
+				nYmin = nLat;
+
+			if (nLon > nXmax) // adjust horizontal bounds
+				nXmax = nLon;
+
+			if (nLon < nXmin)
+				nXmin = nLon;
+
+			m_nPoints[nIndex++] = nLon;
+			m_nPoints[nIndex++] = nLat;
+		}
+		m_nYmax = nYmax;
+		m_nYmin = nYmin;
+		m_nXmax = nXmax;
+		m_nXmin = nXmin;
+		m_nXmid = oWay.m_nMidLon;
+		m_nYmid = oWay.m_nMidLat;
+		m_tElev = Short.MIN_VALUE;
+		String sBridge = oWay.get("bridge");
+		m_bBridge = sBridge != null && !sBridge.equals("no");
+		m_nPavementLayerMaterial = new int[]{1};
+		m_dPavementLayerThickness = new double[]{0.5};
+		String sName = oWay.get("name");
+		if (sName == null || sName.isEmpty())
+			sName = oWay.get("ref");
+		if (sName == null)
+			sName = "";
+		m_sName = sName;
+		String sLanes = oWay.get("lanes");
+		if (sLanes != null)
+			m_nLanes = Integer.parseInt(sLanes);
+	}
+	
+	public Segment(MarcRoad oRoad, ArrayList<Integer> oIdsUsed)
+	{
+		m_nLinkId = 0;
+		int[] nPoints = oRoad.m_oLine.getPoints();
+		m_nPoints = new int[nPoints.length];
+		int nYmax = oRoad.m_oLine.m_nYmax;
+		int nXmax = oRoad.m_oLine.m_nXmax;
+		int nYmin = oRoad.m_oLine.m_nYmin;
+		int nXmin = oRoad.m_oLine.m_nXmin;
+		int nIndex = 0;
+		System.arraycopy(nPoints, 0, m_nPoints, 0, nPoints.length);
+		m_nYmax = nYmax;
+		m_nYmin = nYmin;
+		m_nXmax = nXmax;
+		m_nXmin = nXmin;
+		m_nXmid = oRoad.m_nMidLon;
+		m_nYmid = oRoad.m_nMidLat;
+		m_tElev = Short.MIN_VALUE;
+		m_bBridge = false;
+		m_nPavementLayerMaterial = new int[]{1};
+		m_dPavementLayerThickness = new double[]{0.5};
+		m_sName = "";
+		m_nLanes = oRoad.m_nLanes;
+		boolean bDone = false;
+		int nId = 0;
+		SecureRandom oRng = new SecureRandom();
+		byte[] yBytes = new byte[4];
+		while (!bDone) // create a new random id until one that hasn't been used yet is generated
+		{
+			oRng.nextBytes(yBytes);
+			nId = new BigInteger(yBytes).intValue();
+			nId = (nId & 0x0FFFFFFF) | (0x40000000);
+			nIndex = Collections.binarySearch(oIdsUsed, nId);
+			if (nIndex < 0)
+			{
+				oIdsUsed.add(~nIndex, nId);
+				bDone = true;
+			}
+		}
+		m_nId = nId;
+	}
+	
+	
 	/**
 	 * Custom constructor. Called when a bridge is detected to be on a segment.
 	 * Determines whether the segment needs to be divided into 2 or 3 new
@@ -411,7 +566,6 @@ public class Segment
 
 		m_nLinkId = oSeg.m_nLinkId;
 		m_bBridge = true;
-		m_bInUse = true;
 		m_nPavementLayerMaterial = new int[]{1};
 		m_dPavementLayerThickness = new double[]{0.5};
 
@@ -481,7 +635,6 @@ public class Segment
 
 		m_nLinkId = nLinkId;
 		m_bBridge = false;
-		m_bInUse = true;
 		m_nPavementLayerMaterial = new int[]{1};
 		m_dPavementLayerThickness = new double[]{0.5};
 
@@ -504,6 +657,54 @@ public class Segment
 		m_nId = nId;
 		m_sName = "Road name";
 	}
+	
+	
+		public Segment(ArrayList<Integer> oPoints, int nId, int nLinkId, String sName) throws Exception
+	{
+		int nYmax = Integer.MIN_VALUE; // init temp bounds to opposite extremes
+		int nXmax = Integer.MIN_VALUE; // so that bounding box can be narrowed
+		int nYmin = Integer.MAX_VALUE;
+		int nXmin = Integer.MAX_VALUE;
+		m_nPoints = new int[oPoints.size()];
+		for (int i = 0; i < m_nPoints.length; i++)
+		{
+			m_nPoints[i] = oPoints.get(i);
+		}
+		
+		for (int i = 0; i < m_nPoints.length;)
+		{
+			int nLon = m_nPoints[i++];
+			int nLat = m_nPoints[i++];
+
+			if (nLat > nYmax) // adjust vertical bounds
+				nYmax = nLat;
+
+			if (nLat < nYmin)
+				nYmin = nLat;
+
+			if (nLon > nXmax) // adjust horizontal bounds
+				nXmax = nLon;
+
+			if (nLon < nXmin)
+				nXmin = nLon;
+		}
+		m_nYmax = nYmax;
+		m_nYmin = nYmin;
+		m_nXmax = nXmax;
+		m_nXmin = nXmin;
+		int[] nMidpoint = findMidpoint();
+		m_nXmid = nMidpoint[0];
+		m_nYmid = nMidpoint[1];
+		m_tElev = (short)nMidpoint[2];
+
+		m_nLinkId = nLinkId;
+		m_bBridge = false;
+		m_nPavementLayerMaterial = new int[]{1};
+		m_dPavementLayerThickness = new double[]{0.5};
+
+		m_nId = nId;
+		m_sName = sName;
+	}
 
 
 	/**
@@ -513,13 +714,12 @@ public class Segment
 	 * @param oAllSegs list that contains all of the segments in study area
 	 * @throws Exception
 	 */
-	Segment(String sRoute, ArrayList<Segment> oAllSegs) throws Exception
+	Segment(CsvReader oIn, ArrayList<Segment> oAllSegs, int nCol) throws Exception
 	{
 		ArrayList<Segment> oAllSegments = new ArrayList(oAllSegs);
-		String[] sCols = sRoute.split(",");
-		m_nId = Integer.parseInt(sCols[0]);
-		m_sName = sCols[1];
-		int nTol = Config.getInstance().getInt("route", "route", "tol", 100);
+		m_nId = oIn.parseInt(0);
+		m_sName = oIn.parseString(1);
+		int nTol = ROUTETOL;
 		ArrayList<LinkNodes> oLinks = new ArrayList();
 		ArrayList<Segment> oSegments = new ArrayList();
 		try (Connection oConn = Directory.getInstance().getConnection();
@@ -529,10 +729,10 @@ public class Segment
 			ResultSet oRs = null;
 			oPs.setQueryTimeout(5);
 			oNodeCoords.setQueryTimeout(5);
-			for (int i = 2; i < sCols.length - 1;) // get all of the links based off of the node list
+			for (int i = 2; i < nCol - 1;) // get all of the links based off of the node list
 			{
-				oPs.setString(1, sCols[i++]);
-				oPs.setString(2, sCols[i]);
+				oPs.setString(1, oIn.parseString(i++));
+				oPs.setString(2, oIn.parseString(i));
 				oRs = oPs.executeQuery();
 				if (oRs.next())
 					oLinks.add(new LinkNodes(oRs.getInt(1), oRs.getInt(2), oRs.getInt(3)));
@@ -628,10 +828,61 @@ public class Segment
 		m_nYmid = nMidpoint[1];
 		m_tElev = (short)nMidpoint[2];
 		m_bBridge = false;
-		m_bInUse = false;
 	}
+	
+	
+//	public void setGeoValues() throws Exception
+//	{
+//		
+//		calcGrade();
+//	}
 
+	public void writeSegmentWithName(BufferedWriter oOut) throws Exception
+	{
+		oOut.write(Integer.toString(m_nId));
+		oOut.write(",");
+		oOut.write(Integer.toString(m_nLinkId));
+		oOut.write(",");
+		oOut.write(m_sName);
+		oOut.write(",");
+		if (m_bBridge)
+			oOut.write(Integer.toString(1));
+		else
+			oOut.write(Integer.toString(0));
+		oOut.write(",");
+		oOut.write(Integer.toString(m_nPoints.length / 2));
+		oOut.write(",");
+		oOut.write(Integer.toString(m_nPavementLayerMaterial.length));
+		oOut.write(",");
+		oOut.write(Integer.toString(m_nXmid));
+		oOut.write(",");
+		oOut.write(Integer.toString(m_nYmid));
+		oOut.write(",");
+		oOut.write(Short.toString(m_tElev));
+		oOut.write(",");
 
+		for (int i = 0; i < m_nPoints.length; i++)
+		{
+			oOut.write(Integer.toString(m_nPoints[i]));
+			oOut.write(",");
+		}
+
+		for (int i = 0; i < m_nPavementLayerMaterial.length; i++)
+		{
+			oOut.write(Integer.toString(m_nPavementLayerMaterial[i]));
+			oOut.write(",");
+		}
+
+		for (int i = 0; i < m_dPavementLayerThickness.length; i++)
+		{
+			oOut.write(Double.toString(m_dPavementLayerThickness[i]));
+			oOut.write(",");
+		}
+		oOut.write(Long.toString(m_lStartTime));
+		oOut.write(",");
+		oOut.write(Long.toString(m_lEndTime));
+		oOut.write("\n");
+	}
 	/**
 	 * Writes a line of the csv segment file. This does not include the road
 	 * name. A different process handles adding the road name to the already
@@ -704,6 +955,7 @@ public class Segment
 		short tElev;
 
 		NED oNED = (NED)Directory.getInstance().lookup("NED");
+//		LocalNED oNED = LocalNED.getInstance();
 		while (nNodeIndex < m_nPoints.length - 2) // derive midpoint
 		{
 			System.arraycopy(m_nPoints, nNodeIndex, nSeg, 0, 4); //make a copy of the current segment
@@ -729,12 +981,12 @@ public class Segment
 		nIndex = 0;
 		while (nIndex < dLens.length && dLen < dMidLen)
 			dLen += dLens[nIndex++]; // find length immediately before the midpoint
-
+		
 		if (nIndex == 0) //start and end points are the same
 		{
 			nXmid = nSeg[0];
 			nYmid = nSeg[1];
-			tElev = (short)Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(nYmid, nXmid));
+			tElev = (short)Double.parseDouble(oNED.getAlt(nYmid, nXmid));
 			return new int[]
 			{
 				nXmid, nYmid, tElev
@@ -749,7 +1001,7 @@ public class Segment
 		int nDeltaY = (int)((nSeg[3] - nSeg[1]) * dRatio);
 		nXmid = nSeg[0] + nDeltaX;
 		nYmid = nSeg[1] + nDeltaY;
-		tElev = (short)Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(nYmid, nXmid));
+		tElev = (short)Double.parseDouble((oNED.getAlt(nYmid, nXmid)));
 		return new int[]
 		{
 			nXmid, nYmid, tElev
@@ -765,9 +1017,11 @@ public class Segment
 	 */
 	public final void calcGrade() throws Exception
 	{
-		double dEi = Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(m_nPoints[1], m_nPoints[0]));
+//		NED oNed = (NED)Directory.getInstance().lookup("NED");
+		LocalNED oNed = LocalNED.getInstance();
+		double dEi = Double.parseDouble(oNed.getAlt(m_nPoints[1], m_nPoints[0]));
 
-		double dEj = Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(m_nPoints[m_nPoints.length - 1], m_nPoints[m_nPoints.length - 2]));
+		double dEj = Double.parseDouble(oNed.getAlt(m_nPoints[m_nPoints.length - 1], m_nPoints[m_nPoints.length - 2]));
 
 		m_dGrade = (double)Math.round(((dEj - dEi) / m_dLength) * 1000) / 1000;
 	}
@@ -825,6 +1079,15 @@ public class Segment
 	}
 
 
+	public boolean intersectsBox(int nTol, int nX, int nY)
+	{
+		int nY1 = nY - nTol;
+		int nY2 = nY + nTol;
+		int nX1 = nX - nTol;
+		int nX2 = nX + nTol;
+		return nY2 >= m_nYmin && nY1 <= m_nYmax && nX1 <= m_nXmax && nX2 >= m_nXmin;
+	}
+	
 	/**
 	 * Returns the number of points the segment's polyline contains
 	 *
@@ -950,6 +1213,41 @@ public class Segment
 		}
 	}
 
+	public int[] getJNodeCoord()
+	{
+		int[] nReturn = new int[2];
+		nReturn[0] = m_nPoints[m_nPoints.length - 2];
+		nReturn[1] = m_nPoints[m_nPoints.length - 1];
+		return nReturn;
+	}
+	
+	public int[] getINodeCoord()
+	{
+		int[] nReturn = new int[2];
+		nReturn[0] = m_nPoints[0];
+		nReturn[1] = m_nPoints[1];
+		return nReturn;
+	}
+	
+	public void getINodeCoord(int[] nPoint)
+	{
+		nPoint[0] = m_nPoints[0];
+		nPoint[1] = m_nPoints[1];
+	}
+	
+	public void getJNodeCoord(int[] nPoint)
+	{
+		nPoint[0] = m_nPoints[m_nPoints.length - 2];
+		nPoint[1] = m_nPoints[m_nPoints.length - 1];
+	}
+	
+	
+	public int[] getPoints()
+	{
+		return Arrays.copyOf(m_nPoints, m_nPoints.length);
+	}
+	
+	
 	/**
 	 * Private inner class used to encapsulate a link id with its start and end
 	 * node ids. The ids internal IMRCP ids

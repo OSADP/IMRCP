@@ -21,12 +21,6 @@ html, body
   margin-left: 5px;
 }
 
-body {
-    font-family: Trebuchet MS,sans-serif,arial,verdana;
-  /*  line-height: 1.42857; */
-}
-
-
 
 #divSubResult
 {
@@ -36,13 +30,23 @@ body {
     color: #ffffff;
     position:absolute; 
     padding-bottom:2px;
-    height: 44px; 
+    height: 22px; 
     left:0; 
     bottom:0; 
     width:100%;
     font-size: 12px;
     z-index: auto; /* override w3c z-index so legend is on top of map */
   }
+  
+  
+  #legendDeck{
+  	display: none;
+	position: fixed;
+	bottom: 424px;
+	z-index: 1000;
+  height:0px;
+  }
+  
   
   #spnTime
   {
@@ -64,7 +68,7 @@ body {
   #bodyContent,#map-container { 
     position: absolute; 
     top:39px; 
-    bottom:44px; 
+    bottom:22px; 
     left:0;
     width:100%;
   }
@@ -180,15 +184,11 @@ body {
 
 
 
-#divReportTabs, #divCurrentTime div
+#divCurrentTime div
 { 
   display: inline-block;
 }
 
-#divReportTabs
-{
-  float:left;
-}
 
 TD.LatLngLabel
 {
@@ -206,9 +206,13 @@ TD.LatLngLabel
   margin-left:0px;
   margin-right: .5em;
 }
-#divReportDialog input[type="text"], #divReportDialog textarea
+#divReportDialog textarea, #txtName
 {
   width: 100%;
+}
+#divReportDialog input[type="text"]
+{
+  width: 60%;
 }
 
 #divReportDialog td
@@ -222,6 +226,15 @@ TD.LatLngLabel
   width:80px;
   margin-right:4px;
   margin-left: 0px;
+}
+
+.reportObstypeLabel
+{
+  width:5em;
+}
+
+.obstype-pane-list label input {
+    margin-right: 5px;
 }
 
 .alert-marker-icon
@@ -240,7 +253,18 @@ TD.LatLngLabel
 .no-title-form .ui-dialog-titlebar-close
 {
   top:0.3em !important;
-  left:0.3em !important;
+  right:0.3em !important;
+}
+/*This resolves a ui-dialog bug where the right margin starts to inccrease
+the more you resize the dialog*/
+.ui-dialog .ui-dialog-content 
+{
+  width: 100% !important;
+}
+
+#obs-data
+{
+  width:100%
 }
 
 thead.obs-table {
@@ -256,32 +280,12 @@ thead.obs-table {
 	color: #000;
 }
 
- div.obs-table {
-	display: block;
-	position: relative;
-	margin: 0;
-	padding: 0;
-	max-height: 300px;
-	overflow: hidden;
-	overflow-y: scroll;
-}
 
 #divReportDialog label
 {
   margin-right:.25em;
 }
 
-.legend
-{
-	display: none;
-	position: fixed;
-	bottom: 44px;
-	padding: 5px;
-	border: 1px solid #000; 
-	background-color: #FFF;
-  color: #000;
-	z-index: 1000;
-} 
 
 #slider-container .ui-slider-horizontal
 {
@@ -319,9 +323,9 @@ label > input[type="checkbox"]
 }
 #divCurrentTime
 {
-  float:right; 
+  float:left; 
   position:relative;
-  padding-left: 5px;
+  padding-right: 5px;
 }
 
 
@@ -329,14 +333,9 @@ label > input[type="checkbox"]
 {
   position: absolute; 
   top: 0px; 
-  right: 0px; 
   z-index: -10
 }
 
-#divReportStep2, #divReportStep3, #chkRoadLayer
-{
-  display:none;
-}
 
 #divFooterControlsLeft
 {
@@ -350,6 +349,17 @@ label > input[type="checkbox"]
 }
 
 
+#lstReportObstypes
+{
+  width: auto;
+}
+
+
+#txtLocationLookup
+{
+  width: 22em;
+}
+
 .ui-autocomplete
 {
   z-index: 5000;
@@ -362,4 +372,142 @@ label > input[type="checkbox"]
 .input-not-focused
 {
   color: gray;
+}
+
+#save-user-view
+{
+  min-width:150px;
+  cursor: pointer;
+}
+
+
+ul.layer-legend li
+{
+  padding: 2px 2px 2px 16px;
+  margin-right: 5px;
+}
+
+.footer-icon
+{
+  margin-right:.5em;
+  font-size:20px;
+  height:20px;
+  width:20px;  
+  cursor: pointer !important;
+}
+
+div.settingsRow div
+{
+    padding-right:.5em;
+    border-right: 1px solid #ddd;
+}
+div.settingsRow
+{
+  display:flex; flex-direction: row;
+  border-bottom: 1px solid #ddd;
+  padding: .5em;
+}
+div.settingsRow:last-of-type
+{
+  border-bottom: none;
+}
+
+div.settingsRow div:last-child {
+    border-right: none;
+}
+.tooltip{
+    position:relative;
+    }
+    .tooltip:hover{
+    text-decoration:none;
+    }
+    .tooltip:after{
+    content: attr(tip);
+    position:absolute;
+    bottom:27px;
+    left:10px;
+    display:none;
+    }
+
+    .tooltip:hover{
+    z-index:1001;
+    position:relative;
+    }
+    .tooltip:hover:after{
+    display:block;
+    }
+    .tooltip:hover:before{
+    display:block;
+    }
+   
+    
+    .tooltip-content,.tooltip:after  {;
+    font-size: 15px;
+    font-style:normal;
+    line-height:1.2em;
+    width:200px;
+    padding:5px 10px;
+    border-radius:6px;
+    color: #000!important;
+    background-color: #fdf5e6!important;
+    box-shadow: 3px 3px 4px rgba(0,0,0, .65);
+    }
+
+    
+    
+    .over-map
+    {
+      z-index:2000;
+    }
+    
+    ul.w3-ul.ul-no-border li
+    {
+      border: none;
+    }
+    
+    .chart-link
+    {
+      cursor: pointer;
+    }
+    
+    #chart-container .close-chart
+    {
+      top:20px;
+      right:5px;
+      position:absolute;
+      cursor: pointer;
+    }
+    
+    #chart
+    {
+      background-color: white;
+    }
+        
+    .clickable {
+      cursor:pointer !important;
+    }
+    
+    .selected-obstype {
+      padding-right:.5em;
+    }
+    
+.divStack div.ui-widget-content {
+    background: #c9c9c9;
+}
+
+.legend-heading {
+    padding: 3px;
+    display: inline-block;
+    width: 100%;
+}
+
+.layer-legend li i {
+    margin-right: 5px;
+}
+.obstype-pane-list li i, #obs-data i
+{
+  margin-left:5px;
+}
+div.divStackLayer ul.w3-ul.ul-no-border li{
+  padding-left:5px;
 }

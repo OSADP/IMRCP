@@ -1,27 +1,19 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
+
+import imrcp.system.Directory;
+import java.util.Comparator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Generic class used to represent the location of any type of sensor that
  * produces point data to be used on the map
  */
-abstract public class SensorLocation
+public class SensorLocation
 {
-
+	public static NED g_oNED = (NED)Directory.getInstance().lookup("NED");
+//	public static LocalNED g_oNED = LocalNED.getInstance();
+	public static final Logger g_oLogger = LogManager.getLogger(SensorLocation.class);
 	/**
 	 * Latitude of the sensor written in integer degrees scaled to 7 decimal
 	 * places
@@ -33,9 +25,44 @@ abstract public class SensorLocation
 	 * places
 	 */
 	public int m_nLon;
+	
+	public short m_tElev;
+	
+	public boolean m_bInUse = true;
 
 	/**
 	 * ImrcpId of the Sensor
 	 */
 	public int m_nImrcpId = Integer.MIN_VALUE;
+	
+	public String m_sMapDetail = null;
+	
+	public static final Comparator<SensorLocation> g_oIMRCPIDCOMP = (SensorLocation o1, SensorLocation o2) -> {return o1.m_nImrcpId - o2.m_nImrcpId;};
+	
+	protected SensorLocation()
+	{
+		
+	}
+	
+	SensorLocation(int nImrcpId)
+	{
+		m_nImrcpId = nImrcpId;
+	}
+	
+	public int getMapValue()
+	{
+		return Integer.MIN_VALUE;
+	}
+	
+	protected final void setElev()
+	{
+		try
+		{
+			m_tElev = (short)Double.parseDouble(g_oNED.getAlt(m_nLat, m_nLon));
+		}
+		catch (Exception oEx)
+		{
+			g_oLogger.error(oEx, oEx);
+		}
+	}
 }

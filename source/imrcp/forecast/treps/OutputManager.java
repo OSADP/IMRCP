@@ -1,21 +1,7 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.treps;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FilenameFormatter;
 import imrcp.system.Directory;
 import imrcp.system.IntKeyValue;
 import java.io.BufferedReader;
@@ -35,7 +21,7 @@ import java.util.TimeZone;
  * This class manages saving the data from the different output files received
  * from the Treps model.
  */
-public class OutputManager extends ImrcpBlock
+public class OutputManager extends BaseBlock
 {
 
 	/**
@@ -59,16 +45,8 @@ public class OutputManager extends ImrcpBlock
 	 * Directory where Treps output files are stored
 	 */
 	private String m_sSrcDir;
-
-	/**
-	 * Formatting object that generates the time dynamic part of filenames
-	 */
-	private SimpleDateFormat m_oDestFileFormat = new SimpleDateFormat("'_'yyyyMMdd'_'HHmm'_'");
-
-	/**
-	 * Formatting object that generates time dynamic directory names
-	 */
-	private SimpleDateFormat m_oDestDirFormat;
+	
+	private FilenameFormatter[] m_oFormatters;
 
 	/**
 	 * Name of the file read to get the time of the current treps run
@@ -89,13 +67,16 @@ public class OutputManager extends ImrcpBlock
 	{
 		m_sSrcDir = m_oConfig.getString("dir", "");
 		m_sNetworkFile = m_oConfig.getString("network", "");
-		m_oDestDirFormat = new SimpleDateFormat(m_oConfig.getString("destdir", ""));
 		String[] sFileMapping = m_oConfig.getStringArray("mapping", "");
 		for (int i = 0; i < sFileMapping.length; i += 2)
 			m_oOutputFiles.add(new IntKeyValue(Integer.valueOf(sFileMapping[i], 36), sFileMapping[i + 1]));
 		Collections.sort(m_oOutputFiles);
 		m_sTimeFile = m_oConfig.getString("time", "");
 		m_sDate = m_oConfig.getString("date", "'Date 'MM/dd/yy'; Time 'HH:mm:ss");
+		String[] sFormatters = m_oConfig.getStringArray("format", "");
+		m_oFormatters = new FilenameFormatter[sFormatters.length];
+		for (int i = 0; i < sFormatters.length; i++)
+			m_oFormatters[i] = new FilenameFormatter(sFormatters[i]);
 	}
 
 
@@ -145,12 +126,12 @@ public class OutputManager extends ImrcpBlock
 	/**
 	 * Processes Notifications received from other ImrcpBlocks
 	 *
-	 * @param oNotification the Notification from another ImrcpBlock
+	 * @param oNotification the Notification from another BaseBlock
 	 */
 	@Override
-	public void process(Notification oNotification)
+	public void process(String[] sMessage)
 	{
-		if (oNotification.m_sMessage.compareTo("file ready") == 0)
+		if (sMessage[MESSAGE].compareTo("file ready") == 0)
 			execute();
 	}
 
@@ -168,7 +149,10 @@ public class OutputManager extends ImrcpBlock
 			long lTrepsRunTime = System.currentTimeMillis();
 			lTrepsRunTime = (lTrepsRunTime / 60000) * 60000;
 			ArrayList<double[][]> oOutputValues = new ArrayList(); // [forecast minute][link id]
-			String sDirs = m_oDestDirFormat.format(lTrepsRunTime);
+			String sDirs = m_oFormatters[0].format(System.currentTimeMillis(), 0, 0);
+			sDirs = sDirs.substring(0, sDirs.lastIndexOf("/"));
+			new File(sDirs).mkdirs(); // make sure the directories exists
+			sDirs = m_oFormatters[1].format(System.currentTimeMillis(), 0, 0);
 			sDirs = sDirs.substring(0, sDirs.lastIndexOf("/"));
 			new File(sDirs).mkdirs(); // make sure the directories exists
 			try (BufferedReader oIn = new BufferedReader(new FileReader(m_sSrcDir + m_sTimeFile))) //
@@ -186,15 +170,14 @@ public class OutputManager extends ImrcpBlock
 					}
 					if (sLine.matches("[\\s]*[0-9]+.[0-9]+[\\s]*") && sPrev.matches("[ ]")) // finds the line that contains the minute offset from the start of treps
 					{
-						int nMinuteOffset = (int)Double.parseDouble(sLine); // read the minute offset
-						String sResource = Integer.toString(nMinuteOffset * 60 * 1000) + "," + Long.toString(lTrepsRunTime);
-						for (int nSubscriber : m_oSubscribers) // notify subscribers the start time of the forecast
-							notify(this, nSubscriber, "start time", sResource);
+						long lMinuteOffset = (long)Double.parseDouble(sLine); // read the minute offset
+						notify("treps start time", Long.toString(lMinuteOffset * 60 * 1000), Long.toString(lTrepsRunTime));
 						break;
 					}
 					sPrev = sLine;
 				}
 			}
+			FilenameFormatter oFormatter = null;
 			for (IntKeyValue<String> oFile : m_oOutputFiles)
 			{
 				File oSrcFile = new File(m_sSrcDir + oFile.value());
@@ -215,7 +198,15 @@ public class OutputManager extends ImrcpBlock
 				}
 				double[][] dValues = new double[nForecastMinutes][m_nLinks.length]; // create the array with the correct lengths
 				boolean bFirstTime = true;
-				String sDestFile = renameFile(oFile.value(), lTrepsRunTime, nForecastMinutes); // rename the file to save it
+				for (FilenameFormatter oFileFormat : m_oFormatters)
+				{
+					if (oFileFormat.contains(oFile.value().substring(0, oFile.value().lastIndexOf((".")))))
+					{
+						oFormatter = oFileFormat;
+						break;
+					}
+				}
+				String sDestFile = oFormatter.format(lTrepsRunTime, lTrepsRunTime, lTrepsRunTime + nForecastMinutes * 60 * 1000);
 				try (BufferedWriter oOut = new BufferedWriter(new FileWriter(sDestFile)))
 				{
 					try (BufferedReader oIn = new BufferedReader(new FileReader(oSrcFile))) // read the file a second time to fill the data arrays and make a copy of the file
@@ -255,7 +246,9 @@ public class OutputManager extends ImrcpBlock
 			}
 
 			// write all the data to one "TrepsResults" file
-			String sResultsFile = m_oDestDirFormat.format(lTrepsRunTime) + "TrepsResults" + m_oDestFileFormat.format(lTrepsRunTime) + nForecastMinutes + ".csv";
+			String sResultsFile = m_oFormatters[0].format(lTrepsRunTime, lTrepsRunTime, lTrepsRunTime + nForecastMinutes * 60 * 1000);
+			if (new File(sResultsFile).exists())
+				return;
 			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(sResultsFile)))
 			{
 				oOut.write("LinkId,MinuteOffset"); // write the header
@@ -274,27 +267,11 @@ public class OutputManager extends ImrcpBlock
 					}
 				}
 			}
-			for (int nSubscriber : m_oSubscribers) //notify subscribers that a new file has been downloaded
-				notify(this, nSubscriber, "file download", sResultsFile);
+			notify("file download", sResultsFile);
 		}
 		catch (Exception oException)
 		{
 			m_oLogger.error(oException, oException);
 		}
-	}
-
-
-	/**
-	 * Renames a treps .dat file to have a time dynamic file name
-	 *
-	 * @param sSrcFile the original .dat file
-	 * @param lTimestamp timestamp of the current Treps run
-	 * @param nForecastMinutes the number of forecast minutes in the file
-	 * @return newly formatted time dynamic file name
-	 */
-	private String renameFile(String sSrcFile, long lTimestamp, int nForecastMinutes)
-	{
-		String sFileEnd = Integer.toString(nForecastMinutes) + ".dat";
-		return m_oDestDirFormat.format(lTimestamp) + sSrcFile.substring(0, sSrcFile.indexOf(".dat")) + m_oDestFileFormat.format(lTimestamp) + sFileEnd;
 	}
 }

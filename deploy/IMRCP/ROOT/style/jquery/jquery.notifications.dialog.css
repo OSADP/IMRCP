@@ -49,11 +49,17 @@ span.sp-notification-type
   color:white;
 }
 
+.sp-notification-predicted
+{
+  font-size: 1.5em;  
+  margin: .3em;
+  display:none;
+}
+
 .alert-icon
 {
     height: 37px;
     width:32px;
-    float:left;
     margin: .3em;
 }
  
@@ -74,6 +80,12 @@ span.sp-notification-type
  
 .sp-notification.alert-306{background-color:#9c0000;}
 .sp-notification.alert-306 .alert-icon {background-image: url("../../images/icons/lengthy_queue.png");}
+ 
+.sp-notification.alert-109{background-color:#0000d7;}
+.sp-notification.alert-109 .alert-icon {background-image: url("../../images/icons/flooded_road.png");}
+ 
+.sp-notification.alert-108{background-color:#0000d7;}
+.sp-notification.alert-108 .alert-icon {background-image: url("../../images/icons/flooded_road.png");}
  
 .sp-notification.alert-107{background-color:#737373;}
 .sp-notification.alert-107 .alert-icon {background-image: url("../../images/icons/low_visibility.png");}

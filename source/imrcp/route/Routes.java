@@ -1,43 +1,27 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.route;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FilenameFormatter;
 import imrcp.geosrv.Route;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.store.Obs;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import java.io.BufferedInputStream;
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
 /**
- * This ImrcpBlock keeps the route definitions stored in memory and processes
- * the VehTrajectory files received from Treps.
+ * This BaseBlock keeps the route definitions stored in memory and processes
+ the VehTrajectory files received from Treps.
  *
  */
-public class Routes extends ImrcpBlock
+public class Routes extends BaseBlock
 {
 
 	/**
@@ -90,7 +74,9 @@ public class Routes extends ImrcpBlock
 	/**
 	 * Formatting object used to generate time dynamic file names
 	 */
-	private SimpleDateFormat m_oFileFormat;
+	private FilenameFormatter m_oFilenameFormat;
+	
+	private int m_nFileFrequency;
 
 	/**
 	 * Header of the csv obs file
@@ -110,11 +96,11 @@ public class Routes extends ImrcpBlock
 		ArrayList<Segment> oAllSegments = new ArrayList();
 		for (int i = 0; i < m_nStudyArea.length; i += 4) // get the segments in the study area
 			((SegmentShps)Directory.getInstance().lookup("SegmentShps")).getLinks(oAllSegments, 0, m_nStudyArea[i], m_nStudyArea[i + 1], m_nStudyArea[i + 2], m_nStudyArea[i + 3]);
-		try (BufferedReader oIn = new BufferedReader(new FileReader(m_sRoutesFile)))
+		try (CsvReader oIn = new CsvReader(new FileInputStream(m_sRoutesFile)))
 		{
-			String sLine = null;
-			while ((sLine = oIn.readLine()) != null)
-				m_oRoutes.add(new Route(sLine, oAllSegments));
+			int nCol;
+			while ((nCol = oIn.readLine()) > 0)
+				m_oRoutes.add(new Route(oIn, oAllSegments, nCol));
 		}
 		return true;
 	}
@@ -133,9 +119,9 @@ public class Routes extends ImrcpBlock
 		m_lCurrentRun = 0;
 		m_nForecastMin = m_oConfig.getInt("fcstmin", 121);
 		m_bUpdated = false;
-		m_oFileFormat = new SimpleDateFormat(m_oConfig.getString("dest", ""));
-		m_oFileFormat.setTimeZone(Directory.m_oUTC);
+		m_oFilenameFormat = new FilenameFormatter(m_oConfig.getString("format", ""));
 		m_nTimeout = m_oConfig.getInt("timeout", 120000);
+		m_nFileFrequency = m_oConfig.getInt("freq", 86400000);
 	}
 
 
@@ -145,15 +131,14 @@ public class Routes extends ImrcpBlock
 	 * @param oNotification the Notification to be processed
 	 */
 	@Override
-	public void process(Notification oNotification)
+	public void process(String[] sMessage)
 	{
-		if (oNotification.m_sMessage.compareTo("file ready") == 0)
+		if (sMessage[MESSAGE].compareTo("file ready") == 0)
 			processRoutes();
-		else if (oNotification.m_sMessage.compareTo("start time") == 0) // the notification in is the form (millisecondOffset),currentRunTime
+		else if (sMessage[MESSAGE].compareTo("treps start time") == 0) // the notification in is the form (millisecondOffset),currentRunTime
 		{
-			String[] sCols = oNotification.m_sResource.split(",");
-			m_lCurrentRun = Long.parseLong(sCols[1]);
-			m_lTrepsStart = m_lCurrentRun - (Integer.parseInt(sCols[0]));
+			m_lCurrentRun = Long.parseLong(sMessage[3]);
+			m_lTrepsStart = m_lCurrentRun - (Long.parseLong(sMessage[2]));
 			m_bUpdated = true;
 		}
 	}
@@ -227,9 +212,8 @@ public class Routes extends ImrcpBlock
 			String sNodes = null;
 			String sUstmN = null;
 			String sNodesToFind = null;
-			String[] sTravelTimes = null;
-			String[] sTravelNodes = null;
 			ArrayList<TrepsVehicle> oVehicles = new ArrayList();
+			ArrayList<Obs> oObsList = new ArrayList();
 			while (nVehStart >= 0) // loop until no more vehicles are found in the file
 			{
 				nVehStart = sBuffer.indexOf("Veh #", nVehStart + 1);
@@ -262,7 +246,10 @@ public class Routes extends ImrcpBlock
 						oVeh.m_sTravelTimes = sVeh.substring(nStart + "==>Node Exit Time Point".length(), nEnd).replaceAll("[\\s]+", ",").replaceAll("^,|,$", "").split(",");
 						nStart = sVeh.indexOf("Total Travel Time=");
 						nEnd = sVeh.indexOf("#", nStart);
-						oVeh.m_dTotalTravelTime = Double.parseDouble(sVeh.substring(nStart + "Total Travel Time=".length(), nEnd).trim());
+						String sTravelTime = sVeh.substring(nStart + "Total Travel Time=".length(), nEnd).trim();
+						if (sTravelTime.compareTo("*******") == 0)
+							continue;
+						oVeh.m_dTotalTravelTime = Double.parseDouble(sTravelTime);
 						nStart = sVeh.indexOf("STime=");
 						nEnd = sVeh.indexOf("Total Travel Time=", nStart);
 						oVeh.m_dSTime = Double.parseDouble(sVeh.substring(nStart + "STime=".length(), nEnd).trim());
@@ -310,32 +297,27 @@ public class Routes extends ImrcpBlock
 							oRoute.m_oTravelTimes.put(dTravelTime, 1);
 					}
 				}
-				File oFile = new File(m_oFileFormat.format(lTimestamp));
-				if (!oFile.exists())
+
+				for (Route oRoute : m_oRoutes)
 				{
-					new File(oFile.getAbsolutePath().substring(0, oFile.getAbsolutePath().lastIndexOf("/"))).mkdirs();
-					oFile.createNewFile();
-				}
-				try (BufferedWriter oOut = new BufferedWriter(new FileWriter(oFile, true)))
-				{
-					if (oFile.length() == 0)
-						oOut.write(m_sHEADER);
-					for (Route oRoute : m_oRoutes)
-					{
-						if (!oRoute.m_oTravelTimes.isEmpty())
-							new Obs(ObsType.TIMERT, Integer.valueOf("treps", 36), oRoute.m_nId, lTimestamp, lTimestamp + 60000, lNow, oRoute.m_nYmid, oRoute.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oRoute.m_tElev, oRoute.getMode(), Short.MIN_VALUE, oRoute.m_sName).writeCsv(oOut);
-						oRoute.m_oTravelTimes.clear();
-					}
+					if (!oRoute.m_oTravelTimes.isEmpty())
+						oObsList.add(new Obs(ObsType.TIMERT, Integer.valueOf("treps", 36), oRoute.m_nId, lTimestamp, lTimestamp + 60000, lNow, oRoute.m_nYmid, oRoute.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oRoute.m_tElev, oRoute.getMode(), Short.MIN_VALUE, oRoute.m_sName));
+					oRoute.m_oTravelTimes.clear();
 				}
 			}
-			String sFiles = m_oFileFormat.format(lNow);
-			if (sFiles.compareTo(m_oFileFormat.format(lNow + (m_nForecastMin * 60000))) != 0)
+			
+			long lFileTimestamp = (lNow / m_nFileFrequency) * m_nFileFrequency;
+			String sObsFile = m_oFilenameFormat.format(lFileTimestamp, lFileTimestamp, lFileTimestamp + m_nFileFrequency);
+			new File(sObsFile.substring(0, sObsFile.lastIndexOf("/"))).mkdirs();
+			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(sObsFile, true)))
 			{
-				sFiles += ",";
-				sFiles += m_oFileFormat.format(lNow + (m_nForecastMin * 60000));
+				if (new File(sObsFile).length() == 0) // write header for new file
+					oOut.write(m_sHEADER);
+				for (Obs oObs : oObsList)
+					oObs.writeCsv(oOut);
 			}
-			for (int nSubscriber : m_oSubscribers) //notify subscribers that a new file has been downloaded
-				notify(this, nSubscriber, "file download", sFiles);
+			
+			notify("file download", sObsFile);
 		}
 		catch (Exception oException)
 		{

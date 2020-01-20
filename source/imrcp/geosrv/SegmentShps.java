@@ -1,36 +1,21 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
-import imrcp.ImrcpBlock;
-import java.io.BufferedReader;
+import imrcp.BaseBlock;
+import imrcp.system.CsvReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 
 /**
  * This class reads a csv file that contains the definitions of the segments and
  * responds to queries for segments that are within a specified distance from a
  * target point.
  */
-public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
+public class SegmentShps extends BaseBlock implements Comparator<Segment>
 {
 
 	/**
@@ -48,6 +33,13 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 	 * Directory used to search for the Segment Files
 	 */
 	public String m_sBaseDir;
+	
+	private int m_nMaxLat = Integer.MIN_VALUE;
+	private int m_nMinLat = Integer.MAX_VALUE;
+	private int m_nMaxLon = Integer.MIN_VALUE;
+	private int m_nMinLon = Integer.MAX_VALUE;
+	
+	private HashMap<Integer, String> m_oImrcpToMLPIds;
 
 
 	/**
@@ -60,6 +52,12 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 	@Override
 	public boolean start() throws Exception
 	{
+		try (CsvReader oIn = new CsvReader(new FileInputStream((m_oConfig.getString("mlpmap", "")))))
+		{
+			oIn.readLine(); // skip header
+			while (oIn.readLine() > 0)
+				m_oImrcpToMLPIds.put(oIn.parseInt(1), oIn.parseString(0));
+		}
 		ArrayList<RoadBucket> oBuckets = new ArrayList(); // bucket/segment intersections
 		try
 		{
@@ -70,15 +68,25 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 				if (oFile.isDirectory() || !oFile.getName().endsWith(m_sFileEnding))
 					continue; // skip directories, only need processed Segment file
 
-				try (BufferedReader oSegmentIn = new BufferedReader(new InputStreamReader(new FileInputStream(oFile))))
+				try (CsvReader oSegmentIn = new CsvReader(new FileInputStream(oFile)))
 				{
-					String sSegment = null;
-					while ((sSegment = oSegmentIn.readLine()) != null) // this will execute until end-of-file is thrown
+					while (oSegmentIn.readLine() > 0) // this will execute until end-of-file is thrown
 					{
 						try
 						{
+							if (oSegmentIn.parseString(0).startsWith("#"))
+								continue;
 							oBuckets.clear(); // reuse bucket buffer
-							Segment oSegment = new Segment(sSegment); // load segment definition
+							Segment oSegment = new Segment(oSegmentIn); // load segment definition
+							if (oSegment.m_nXmax > m_nMaxLon)
+								m_nMaxLon = oSegment.m_nXmax;
+							if (oSegment.m_nXmin < m_nMinLon)
+								m_nMinLon = oSegment.m_nXmin;
+							if (oSegment.m_nYmax > m_nMaxLat)
+								m_nMaxLat = oSegment.m_nYmax;
+							if (oSegment.m_nYmin < m_nMinLat)
+								m_nMinLat = oSegment.m_nYmin;
+							
 							SegIterator oSegIt = oSegment.iterator();
 							while (oSegIt.hasNext())
 							{
@@ -95,6 +103,7 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 						}
 						catch (Exception oException) // discard exception, continue reading
 						{
+							m_oLogger.error(oException, oException);
 							if (oException instanceof java.io.EOFException)
 								throw oException; // rethrow end-of-file exception
 						}
@@ -102,6 +111,8 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 				}
 				catch (Exception oException)
 				{
+					m_oLogger.error(oException, oException);
+					return false;
 				}
 			}
 		}
@@ -110,8 +121,6 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 			m_oLogger.error(oException, oException);
 			return false;
 		}
-		for (int nSubscriber : m_oSubscribers) //notify subscribers that a new file has been downloaded
-			notify(this, nSubscriber, "segments ready", "");
 		return true;
 	}
 
@@ -124,9 +133,22 @@ public class SegmentShps extends ImrcpBlock implements Comparator<Segment>
 	{
 		m_sFileEnding = m_oConfig.getString("segment", "Segments.csv");
 		m_sBaseDir = m_oConfig.getString("dir", "");
+		m_oImrcpToMLPIds = new HashMap();
+	}
+	
+	
+	public int[] getBoundingBox()
+	{
+		return new int[]{m_nMinLat, m_nMaxLat, m_nMinLon, m_nMaxLon};
 	}
 
 
+	public String getMlpId(int nSegmentId)
+	{
+		return m_oImrcpToMLPIds.get(nSegmentId);
+	}
+	
+	
 	/**
 	 * Determines the set of bucket cells that intersect the specified area.
 	 *

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +26,13 @@ public class ObsRequest
 
 	private long m_lRequestTimestampStart;
 
+	private long m_lRequestTimestampEnd;
+
 	private long m_lRequestTimestampRef;
 
-	private int[] m_nlatformIds;
+	private int[] m_nPlatformIds;
 
+	private int m_nSourceId;
 
 	/**
 	 *
@@ -97,7 +100,7 @@ public class ObsRequest
 	 */
 	public int[] getPlatformIds()
 	{
-		return m_nlatformIds;
+		return m_nPlatformIds;
 	}
 
 
@@ -107,7 +110,7 @@ public class ObsRequest
 	 */
 	public void setPlatformIds(int... nPlatformIds)
 	{
-		this.m_nlatformIds = nPlatformIds;
+		this.m_nPlatformIds = nPlatformIds;
 	}
 
 
@@ -117,7 +120,29 @@ public class ObsRequest
 	 */
 	public long getRequestTimestampEnd()
 	{
-		return m_lRequestTimestampStart + 60000;
+		return m_lRequestTimestampEnd;
 	}
 
+
+	/**
+	 *
+   * @param lRequestTimestampEnd
+	 * @return
+	 */
+	public long setRequestTimestampEnd(long lRequestTimestampEnd)
+	{
+		return m_lRequestTimestampEnd = lRequestTimestampEnd;
+	}
+
+	
+	public int getSourceId()
+	{
+		return m_nSourceId;
+	}
+	
+	
+	public void setSourceId(int nSourceId)
+	{
+		m_nSourceId = nSourceId;
+	}
 }

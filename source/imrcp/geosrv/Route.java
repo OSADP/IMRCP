@@ -1,20 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
+import imrcp.system.CsvReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -55,12 +41,15 @@ public class Route extends Segment
 	 * study area
 	 * @throws Exception
 	 */
-	public Route(String sLine, ArrayList<Segment> oAllSegments) throws Exception
+	public Route(CsvReader oIn, ArrayList<Segment> oAllSegments, int nCol) throws Exception
 	{
-		super(sLine, oAllSegments);
-		int nIndex = sLine.indexOf(",") + 1;
-		m_sNodes = sLine.substring(sLine.indexOf(",", nIndex + 1) + 1);
-		m_sNodes = m_sNodes.replaceAll("[,]{1,}$", ""); // remove any extra commas at the end of the line
+		super(oIn, oAllSegments, nCol);
+		m_sNodes = oIn.parseString(2);
+		for (int i = 3; i < nCol; i++)
+		{
+			m_sNodes += ",";
+			m_sNodes += oIn.parseString(i);
+		}
 		m_sNodesSplit = m_sNodes.split(",");
 	}
 

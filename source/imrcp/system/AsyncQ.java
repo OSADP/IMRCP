@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.system;
 
 import java.util.ArrayDeque;
@@ -121,6 +106,13 @@ public class AsyncQ<T> implements Runnable, IRunTarget<T>
 				m_oThreadPool.execute(this);
 			}
 		}
+	}
+	
+	
+	public void stop()
+	{
+		m_nMaxThreads = Integer.MIN_VALUE;
+		m_oDeque.clear();
 	}
 
 

@@ -1,124 +1,96 @@
+import {minutesToHHmm, minutesToHH} from '../common.js';
+import {addSourceAndLayers, removeSourceAndLayers,
+  pointToPaddedBounds, featureInSources, getBoundsForCoordArray, iconDivFromSprite} from '../map-util.js';
 
-function IconMarkerSelectionStyler(defaultIcon, selectedIcon)
-{
-  this.defaultIcon = defaultIcon;
-  this.selectedIcon = selectedIcon;
-}
+const ROAD_MODEL_SOURCE = 'Road Network Model';
+const POINT_SELECTION_SOURCES = ['Traffic Detectors'];
 
-IconMarkerSelectionStyler.prototype.styleLayer = function (layer)
-{
-  if (layer.setIcon)
-    layer.setIcon(layer.selected ? this.selectedIcon : this.defaultIcon);
-};
-
-function StaticIconMarkerStyler(icon)
-{
-  this.icon = icon;
-}
-
-StaticIconMarkerStyler.prototype.styleLayer = function (layer)
-{
-  if (layer.setIcon)
-    layer.setIcon(this.icon);
-};
-
-function RoadSelectionStyler(defaultStyle, selectedStyle)
-{
-  this.defaultStyle = defaultStyle;
-  this.selectedStyle = selectedStyle;
-}
-
-RoadSelectionStyler.prototype.styleLayer = function (layer)
-{
-  if (layer.setStyle)
-    layer.setStyle(layer.selected ? this.selectedStyle : this.defaultStyle);
-};
-
-function RoadSelectionHighlighter(style, selectedElements)
-{
-  this.style = style;
-  this.selectedElements = selectedElements;
-}
-
-RoadSelectionHighlighter.prototype.styleLayer = function (layer)
-{
-
-  var allowed = false;
-  if (this.selectedElements.length > 0)
-  {
-    var layerBounds = layer.getBounds();
-    var padAmount = 0.0003;
-    layerBounds = L.latLngBounds(L.latLng(layerBounds.getSouthWest().lat - padAmount, layerBounds.getSouthWest().lng - padAmount),
-            L.latLng(layerBounds.getNorthEast().lat + padAmount, layerBounds.getNorthEast().lng + padAmount));
-
-    $.each(this.selectedElements, function (i, segment)
-    {
-      if (segment.getBounds().intersects(layerBounds))
-      {
-        allowed = true;
-        return false;
-      }
-    });
-  }
-  else
-    allowed = true;
-
-  layer.selectable = allowed;
-
-  if (!allowed)
-    return;
-
-  if (layer.setStyle)
-    layer.setStyle(this.style);
-};
-
-var SelectionModes = {AREA: 1, SEGMENTS: 2, POINTS: 3};
+const SelectionModes = {AREA: 1, SEGMENTS: 2, POINTS: 3};
 
 
 $.widget("sp.segmentSelector", {
   options: {
-    map: null
+    map: null,
+    sources: null
   },
-  beginAreaSelection: function ()
+  beginAreaSelection: function (selectedStart)
   {
     this._trigger("beforeSelection");
+    this._reportTooltip.html('<ul><li>Click and drag to select an area.</li><li>Click and drag markers to adjust selected area.<li>[Enter] to proceed with selected area.</li><li>[Esc] to cancel process.</l></ul>');
+    this._beginSelection(selectedStart);
+
     this.isSelecting = true;
     this.selectionMode = SelectionModes.AREA;
     var mymap = this.options.map;
-    var thisWidget = this;
-    var mouseDown = function (e)
-    {
-      thisWidget.selectedRectangle = L.rectangle([e.latlng, e.latlng]);
-      var selectedRectangle = thisWidget.selectedRectangle;
-      selectedRectangle.addTo(mymap);
 
-      var mouseMove = function (e2)
-      {
-        selectedRectangle.setBounds([e.latlng, e2.latlng]);
+    const feature = {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Polygon',
+        'coordinates': [[[0, 0], [1, 1], [2, 2], [0, 0]]]
+      }
+    };
+
+    mymap.addSource('report-area', {type: 'geojson', data: feature});
+
+    mymap.addLayer({
+      "id": "report-area",
+      "type": "fill",
+      "source": "report-area",
+      "paint": {
+        "fill-color": "blue", "fill-antialias": false, "fill-opacity": 0.4
+      }
+    });
+
+
+
+    var thisWidget = this;
+    var mouseDown = e => {
+      const calculateRectCoords = (p1, p2) => [[
+            [p1.lng, p1.lat],
+            [p2.lng, p1.lat],
+            [p2.lng, p2.lat],
+            [p1.lng, p2.lat],
+            [p1.lng, p1.lat]]];
+
+      var mouseMove = e2 => {
+        feature.geometry.coordinates = calculateRectCoords(e.lngLat, e2.lngLat);
+        mymap.getSource('report-area').setData(feature);
       };
 
       mymap.on('mousemove', mouseMove);
-      var mouseOut;
-      mouseOut = function ()
-      {
+      const mouseOut = (outE) => {
         mymap.off('mousemove', mouseMove);
         mymap.off('mousedown', mouseDown);
-        mymap.dragging.enable();
+        mymap.dragPan.enable();
 
-        thisWidget.nw = L.marker(selectedRectangle.getBounds().getNorthWest(), {draggable: true}).addTo(mymap);
-        thisWidget.se = L.marker(selectedRectangle.getBounds().getSouthEast(), {draggable: true}).addTo(mymap);
 
-        var nw = thisWidget.nw;
-        var se = thisWidget.se;
+        const [[p1Lng, p1Lat], p2, [p3Lng, p3Lat], p4] = feature.geometry.coordinates[0];
+        const neMarker = this.ne = new mapboxgl.Marker({draggable: true})
+          .setLngLat([Math.max(p1Lng, p3Lng), Math.max(p1Lat, p3Lat)])
+          .addTo(mymap);
 
-        var dragEnd = function (e3)
-        {
-          selectedRectangle.setBounds([nw.getLatLng(), se.getLatLng()]);
+        const swMarker = this.sw = new mapboxgl.Marker({draggable: true})
+          .setLngLat([Math.min(p1Lng, p3Lng), Math.min(p1Lat, p3Lat)])
+          .addTo(mymap);
+
+
+        this.selectedRectangle = new mapboxgl.LngLatBounds(swMarker.getLngLat(), neMarker.getLngLat());
+
+
+        var dragEnd = () => {
+          const l1 = neMarker.getLngLat();
+          const l2 = swMarker.getLngLat();
+          feature.geometry.coordinates = calculateRectCoords(l1, l2);
+
+          this.selectedRectangle.setNorthEast([Math.max(l1.lng, l2.lng), Math.min(l1.lat, l2.lat)]);
+          this.selectedRectangle.setSouthWest([Math.min(l1.lng, l2.lng), Math.min(l1.lat, l2.lat)]);
+          mymap.getSource('report-area').setData(feature);
         };
         document.getSelection().removeAllRanges();
 
-        nw.on("dragend", dragEnd);
-        se.on("dragend", dragEnd);
+        neMarker.on("dragend", dragEnd);
+        swMarker.on("dragend", dragEnd);
 
         mymap.off('mouseup', mouseOut);
         mymap.off('mouseout', mouseOut);
@@ -131,82 +103,104 @@ $.widget("sp.segmentSelector", {
     };
 
     mymap.on('mousedown', mouseDown);
-    mymap.dragging.disable();
+    mymap.dragPan.disable();
 
   },
-  beginSegmentSelection: function ()
+  _beginSelection: function (selectedStart)
+  {
+    this.selectedStart = selectedStart;
+    this._bindReportSelectionMouseEvents();
+    $(document).keydown(this._onKeyPress);
+  },
+  beginSegmentSelection: function (selectedStart)
   {
     this.selectionMode = SelectionModes.SEGMENTS;
+    this._reportTooltip.html('<ul><li>Click road segments to select them.</li><li>[Enter] to proceed with selected segments.</li><li>[Esc] to cancel process.</l></ul>');
     this._trigger("beforeSelection");
+    this._beginSelection(selectedStart);
     this.isSelecting = true;
-    this.options.map.refreshLayers();
+
+    const {map, sources} = this.options;
+    addSourceAndLayers(map, sources.get(ROAD_MODEL_SOURCE));
+    map.on('click', this._roadMapClickHandler);
   },
-  beginPointSelection: function ()
+  beginPointSelection: function (selectedStart)
   {
     this.selectionMode = SelectionModes.POINTS;
     this._trigger("beforeSelection");
+    this._reportTooltip.html('<ul><li>Click dector icons to select them.<li>[Enter] to proceed with selected stations.</li><li>[Esc] to cancel process.</l></ul>');
+    this._beginSelection(selectedStart);
+
     this.isSelecting = true;
-    this.options.map.refreshLayers();
+
+    const {map, sources} = this.options;
+    POINT_SELECTION_SOURCES.forEach(source => addSourceAndLayers(map, sources.get(source)));
+    map.on('click', this._symbolMapClickHandler);
   },
-  endSelection: function ()
+  endSelection: function (cancel)
   {
     if (!this.isSelecting)
       return;
 
+    const {map, sources} = this.options;
     switch (this.selectionMode)
     {
       case SelectionModes.AREA:
-        if (!this.selectedRectangle)
-          return false;
         this.isSelecting = false;
+
         this._trigger("afterSelection");
-        this.nw.remove();
-        this.se.remove();
-        this.selectedRectangle.remove();
+        this.sw.remove();
+        this.ne.remove();
+        this.options.map.removeLayer("report-area");
+        this.options.map.removeSource("report-area");
         break;
       case SelectionModes.SEGMENTS:
-        if (this.selectedElements.length === 0)
-          return false;
         this.isSelecting = false;
+
+        removeSourceAndLayers(map, sources.get(ROAD_MODEL_SOURCE));
+        map.off('click', this._roadMapClickHandler);
+        this.selectedElements.clear();
         this._trigger("afterSelection");
-        
-        this._resetSelectedItems(this.roadStyler);
-        this.options.map.refreshLayers();
+
         break;
       case SelectionModes.POINTS:
-        if (this.selectedElements.length === 0)
-          return false;
         this.isSelecting = false;
+
+        POINT_SELECTION_SOURCES.forEach(source => removeSourceAndLayers(map, sources.get(source)));
+        map.off('click', this._symbolMapClickHandler);
+
+        this.selectedElements.forEach(marker => marker.remove());
+        this.selectedElements.clear();
+
         this._trigger("afterSelection");
-        
-        this._resetSelectedItems(this.detectorStyler);
-        this.options.map.refreshLayers();
+
         break;
+
+        $(document).off("keydown", this._onKeyPress);
     }
   },
-  _resetSelectedItems(styler)
+  _resetSelectedItems: function (styler)
   {
-    var thisSelector = this;
     $.each(this.selectedElements, function (i, element)
     {
       element.selected = false;
       styler.styleLayer(element);
     });
-    this.selectedElements.length = 0;
+    this.selectedElements.clear();
   },
   hasValidSelection: function ()
   {
     switch (this.selectionMode)
     {
       case SelectionModes.AREA:
-        return true && this.selectedRectangle.getBounds();
+        return true && this.selectedRectangle;
       case SelectionModes.SEGMENTS:
       case SelectionModes.POINTS:
-        return this.selectedElements.length > 0;
+        return this.selectedElements.size > 0;
     }
     return false;
   },
-  mode: function()
+  mode: function ()
   {
     return this.selectionMode;
   },
@@ -218,24 +212,16 @@ $.widget("sp.segmentSelector", {
     switch (this.selectionMode)
     {
       case SelectionModes.AREA:
-        return this.selectedRectangle.getBounds();
+        return this.selectedRectangle;
       case SelectionModes.POINTS:
-          var selectedBounds = L.latLngBounds(this.selectedElements[0].getLatLng(),this.selectedElements[0].getLatLng());
-          
-        $.each(this.selectedElements, function (i, segment)
-        {
-          selectedBounds.extend(segment.getLatLng());
-        });
-        return selectedBounds;
-      break;
+        
+        return getBoundsForCoordArray([...this.selectedElements.values()].map(m => [m.getLngLat().lng,m.getLngLat().lat]));
+        break;
       case SelectionModes.SEGMENTS:
-
-        var selectedBounds=this.selectedElements[0].getBounds();
-        $.each(this.selectedElements, function (i, segment)
-        {
-          selectedBounds.extend(segment.getBounds());
-        });
-        return selectedBounds;
+        const allRoadPoints = [];
+        for (let roadFeature of this.selectedElements.values())
+          allRoadPoints.splice(0, 0, ...roadFeature.geometry.coordinates);
+        return getBoundsForCoordArray(allRoadPoints);
     }
   },
   elements: function ()
@@ -244,127 +230,275 @@ $.widget("sp.segmentSelector", {
   },
   _create: function ()
   {
-
+    const {map, sources, spriteDef} = this.options;
     var thisWidget = this;
 
-    var selectedElements = [];
-    this.selectedElements = selectedElements;
+    const selectedElements = this.selectedElements = new Map();
 
-    var roadOptions = {
-      highlighter: new RoadSelectionHighlighter({weight: 7}, selectedElements),
-      showObsLabels: false,
-      hasDetailsPopup: false,
-      isForecastOnly: true,
-      //  requiresObstype: true,
-      isUserSelectedFn: function ()
-      {
-        return thisWidget.isSelecting && thisWidget.selectionMode === SelectionModes.SEGMENTS;
-      },
-      layerObstypeFunction: function ()
-      {
-        return 0;
-      },
-      obsRequestBoundsFunction: function (layer)
-      {
-        return L.latLngBounds(layer.getLatLng(), layer.getLatLng());
-      }};
+    this._roadMapClickHandler = ({target, point, lngLat}) => {
+      const features = target.queryRenderedFeatures(pointToPaddedBounds(point))
+        .filter(featureInSources(sources));
 
-    function setStandardPolylineStyleProperties(style)
-    {
-      style.fillColor = style.color;
-      style.weight = 2;
-      style.opacity = 1;
-      style.fillOpacity = 0.8;
-      return style;
-    }
-
-
-    var roadStyler = new RoadSelectionStyler(setStandardPolylineStyleProperties({color: "#000000"}), {weight: 7}, this.options.map, roadOptions.highlighter);
-
-    this.roadStyler = roadStyler;
-
-    var roadLayer = L.wxdeLayer('RoadLayer/segselect', new PolylineParser(), roadStyler, roadOptions);
-
-
-    roadLayer._markerMouseClick = function (event)
-    {
-      var layer = event.target;
-
-      if (!layer.selectable)
+      if (features.length === 0)
         return;
 
-      layer.selected = !(layer.selected);
-      if (layer.selected)
-        selectedElements.push(layer);
+      const feature = features[0];
+      if (selectedElements.has(feature.id))
+      {
+        selectedElements.delete(feature.id);
+        map.setFeatureState(feature, {clicked: false});
+      }
       else
       {
-        $.each(selectedElements, function (i, segment)
-        {
-          if (segment === layer)
-            selectedElements.splice(i);
-        });
+        selectedElements.set(feature.id, feature);
+        map.setFeatureState(feature, {clicked: true});
+    }
+    };
+
+
+    const markerDivHtml = iconDivFromSprite(spriteDef['detector-white']);
+    this._symbolMapClickHandler = ({target, point}) => {
+      const features = target.queryRenderedFeatures(pointToPaddedBounds(point))
+        .filter(featureInSources(sources));
+
+      if (features.length === 0)
+        return;
+
+      const feature = features[0];
+      const {id} = feature;
+      if (selectedElements.has(id))
+      {
+        selectedElements.get(id).remove();
+        selectedElements.delete(id);
+      }
+      else
+      {
+        selectedElements.set(id, new mapboxgl.Marker($(markerDivHtml).get(0))
+          .setLngLat(feature.geometry.coordinates)
+          .addTo(map));
+    }
+    };
+
+
+    const reportTooltip = $('<div></div>').addClass("tooltip-content over-map").hide()
+      .css({position: "absolute"}).appendTo(document.body);
+
+    this._reportTooltip = reportTooltip;
+
+    const orientTooltipOnMouse = (e) => reportTooltip.css({left: e.pageX + 10, top: e.pageY + 10});
+    reportTooltip.mousemove(orientTooltipOnMouse);
+
+
+    this._onKeyPress = (event) => {
+      switch (event.which)
+      {
+        case 13:
+          setReportArea();
+          this._clearReportSelectionMouseEvents();
+          break;
+        case 27:
+          this.endSelection();
+          this._clearReportSelectionMouseEvents();
+          break;
       }
     };
 
-    this.options.map.registerWxdeLayer(roadLayer);
+    this._bindReportSelectionMouseEvents = selectionToolTip => {
+      $("#mapid").mousemove(orientTooltipOnMouse);
+      reportTooltip.html(selectionToolTip).show();
+    };
+
+    this._clearReportSelectionMouseEvents = () => {
+      $("#mapid").off("mousemove", orientTooltipOnMouse).off("mousenter", orientTooltipOnMouse);
+      reportTooltip.hide();
+    };
 
 
-    var alertIconSize = [20, 20];
-    var iconAnchor = [10, 20];
-    var alertClassName = "alert-marker-icon";
-    var alertIconFolder = "images/icons/";
-
-    var detectorBlack = L.icon({
-      iconUrl: alertIconFolder + "detectorblack.png",
-      iconSize: alertIconSize,
-      className: alertClassName,
-      iconAnchor: iconAnchor
-    });
-
-    var detectorWhite = L.icon({
-      iconUrl: alertIconFolder + "detectorwhite.png",
-      iconSize: alertIconSize,
-      className: alertClassName,
-      iconAnchor: iconAnchor
-    });
 
 
-    var alertLayerOptions = {
-      hasDetailsPopup: false,
-      highlighter: new StaticIconMarkerStyler(detectorWhite),
-      layerObstypeFunction: function ()
-      {
-        return 4;
-      },
-      isUserSelectedFn: function ()
-      {
-        return thisWidget.isSelecting && thisWidget.selectionMode === SelectionModes.POINTS;
-      }};
-
-
-    this.detectorStyler = new IconMarkerSelectionStyler(detectorBlack, detectorWhite);
-
-    var detectorLayer = L.wxdeLayer('alerts/segselect', new IconMarkerParser(detectorBlack), this.detectorStyler, alertLayerOptions);
-
-
-    detectorLayer._markerMouseClick = function (event)
+    const setReportArea = () =>
     {
-      var layer = event.target;
+      if (!thisWidget.hasValidSelection())
+        return;
+      $("#divReportDialog").dialog("open");
+      $('#txtReportRefTime').datetimepicker('setOptions', {value: new Date(this.selectedStart)});
+//      $('#txtReportEnd').datetimepicker('setOptions', {value: new Date(currentMoment.valueOf())});
 
-      layer.selected = !(layer.selected);
-      if (layer.selected)
-        selectedElements.push(layer);
-      else
-      {
-        $.each(selectedElements, function (i, segment)
-        {
-          if (segment === layer)
-            selectedElements.splice(i);
-        });
-      }
+
+      const selectedBounds = this.bounds();
+      const latLonTol = 0.000001;
+      const viewPadding = 0.001;
+      
+      const paddedBounds = selectedBounds.toArray();
+      paddedBounds[0][0] -= viewPadding;
+      paddedBounds[0][1] -= viewPadding;
+      paddedBounds[1][0] += viewPadding;
+      paddedBounds[1][1] += viewPadding;
+      
+      this.options.map.fitBounds(paddedBounds);
+      const selectedNw = selectedBounds.getNorthWest();
+      const selectedSe = selectedBounds.getSouthEast();
+      $("#txtLat1").val((selectedNw.lat + latLonTol).toFixed(6));
+      $("#txtLng1").val((selectedNw.lng - latLonTol).toFixed(6));
+      $("#txtLat2").val((selectedSe.lat - latLonTol).toFixed(6));
+      $("#txtLng2").val((selectedSe.lng + latLonTol).toFixed(6));
     };
 
-    this.options.map.registerWxdeLayer(detectorLayer);
+
+
+
+    var updateRangeFn = function (event, ui)
+    {
+      var offset = ui.values[0];
+      var duration = ui.values[1] - offset;
+      $('#spnOffset').text(minutesToHHmm(offset));
+      $('#spnDuration').text(minutesToHHmm(duration, true));
+    };
+
+    var subWindowSlider = $("#divSubOffsetSlider").labeledSlider({
+      min: -1440,
+      range: true,
+      max: 480,
+      step: 30,
+      values: [0, 30],
+      ticks: true,
+      labelValues: [-1440, -1200, -960, -720, -480, -240, 0, 240, 480],
+      defaultLabelFn: minutesToHH,
+      slide: updateRangeFn,
+      change: updateRangeFn
+    });
+
+
+    $("#radTypeReport").click(function ()
+    {
+      $(".SubscriptionOnly").hide();
+      var subWindowSlider = $("#divSubOffsetSlider");
+      subWindowSlider.labeledSlider('option', 'values', [0, 30]);
+      subWindowSlider.labeledSlider('option', 'min', -1440);
+      subWindowSlider.labeledSlider('option', 'labelValues', [-1440, -1200, -960, -720, -480, -240, 0, 240, 480]);
+      $(".ReportOnly").show();
+      $('#spnType').text("Report");
+    });
+    $("#radTypeSubscription").click(function ()
+    {
+      $(".ReportOnly").hide();
+      var subWindowSlider = $("#divSubOffsetSlider");
+      subWindowSlider.labeledSlider('option', 'values', [0, 30]);
+      subWindowSlider.labeledSlider('option', 'min', -240);
+      subWindowSlider.labeledSlider('option', 'labelValues', [-240, -120, 0, 120, 240, 360, 480]);
+      $(".SubscriptionOnly").show();
+      $('#spnType').text("Subscription");
+    });
+
+    $("#radTypeReport").click();
+
+    $("#lstReportObstypes").change(function ()
+    {
+      var jqThis = $(this);
+      var selectedVal = jqThis.val();
+      if (selectedVal.length > 5)
+      {
+        selectedVal.splice(5, selectedVal.length - 5);
+        jqThis.val(selectedVal);
+      }
+
+      if (selectedVal.length === 1)
+        $('#trMinMax').show();
+      else
+        $('#trMinMax').hide();
+    });
+
+    $("#lstReportObstypes").change();
+
+
+    $('#divReportDialog').on('dialogclose', function (event)
+    {
+      thisWidget.endSelection();
+
+      thisWidget._clearReportSelectionMouseEvents();
+    });
+
+    $("#btnSubmitReport").click(function ()
+    {
+      const obstypeList = $('#lstReportObstypes').val();
+
+      const offset = subWindowSlider.labeledSlider('values', 0);
+      const duration = subWindowSlider.labeledSlider('values', 1) - offset;
+
+      const elementIds = [...thisWidget.elements().keys()];
+
+      const requestData = {
+        lat1: $('#txtLat1').val(),
+        lon1: $('#txtLng1').val(),
+        lat2: $('#txtLat2').val(),
+        lon2: $('#txtLng2').val(),
+        format: $('#lstFormat').val(),
+        offset: offset,
+        duration: duration,
+        elementIds: elementIds,
+        elementType: elementIds.length === 0 ? null : thisWidget.mode(),
+        name: $('#txtName').val(),
+        description: $('#txtDescription').val()
+      };
+      if (obstypeList.length > 0)
+      {
+        requestData.obsTypeId = obstypeList;
+        if (obstypeList.length === 1)
+        {
+          requestData.maxValue = $('#txtMax').val();
+          requestData.minValue = $('#txtMin').val();
+        }
+      }
+      else
+      {
+        alert('At least one Obstype must be selected.');
+        return;
+      }
+
+      if ($('#radTypeReport').prop("checked"))
+      {
+        requestData.reftime = $('#txtReportRefTime').datetimepicker('getValue').getTime();
+        requestData.starttime = requestData.reftime + offset * 60000;
+        requestData.endtime = requestData.starttime + duration * 60000;
+      }
+      else
+      {
+        requestData.cycle = $('input[name="interval"]:checked').val();
+      }
+
+
+      $.ajax({url: 'reports',
+        type: 'post', dataType: 'json',
+        data: requestData,
+        success: function (data)
+        {
+          $('#spnName').text(data.name);
+          $('#spnDesc').text(data.desc);
+          $('#spnUuid').text(data.uuid);
+
+          let url = window.location.href;
+          url = url.substring(0, url.lastIndexOf('/')) + '/reports/' + data.uuid + '/files/[filename]';
+          $('#spnUrl').text(url);
+
+          $('#divSubInput').hide();
+          $('#divSubResult').show();
+          $("#divReportDialog").dialog("option", "position", {my: "center", at: "center", of: '#map-container'});
+        },
+        error: function ()
+        {
+          $('#divSubInput').hide();
+          $('#divSubError').show();
+        }
+      });
+
+
+      $("#btnSubmitReport").hide();
+      $("#btnClose").val('Close');
+    });
+
+    $("#btnClose").click(() => $("#divReportDialog").dialog("close"));
+
+
   },
   _destroy: function ()
   {
@@ -374,3 +508,5 @@ $.widget("sp.segmentSelector", {
     this._super(key, value);
   }
 });
+
+export {SelectionModes};

@@ -1,20 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
+import imrcp.system.CsvReader;
 import imrcp.system.ObsType;
 import java.io.BufferedWriter;
 import java.text.SimpleDateFormat;
@@ -24,7 +10,6 @@ import java.text.SimpleDateFormat;
  */
 public class AlertObs extends Obs
 {
-
 	/**
 	 * Default Constructor
 	 */
@@ -90,44 +75,33 @@ public class AlertObs extends Obs
 	 *
 	 * @param sLine
 	 */
-	AlertObs(String sLine)
+	AlertObs(CsvReader oIn, int nCol)
 	{
-		String[] sCol = sLine.split(",", -1);
-		m_nObsTypeId = Integer.valueOf(sCol[0], 36);
-		m_nContribId = Integer.valueOf(sCol[1], 36);
-		if (sCol[2].compareTo("") == 0 || sCol[2].compareTo("80000000") == 0)
-			m_nObjId = Integer.MIN_VALUE;
-		else
-			m_nObjId = Integer.valueOf(sCol[2], 16); // object id is written in hex
+		m_nObsTypeId = Integer.valueOf(oIn.parseString(0), 36);
+		m_nContribId = Integer.valueOf(oIn.parseString(1), 36);
+		String sObjId = oIn.parseString(2);
+		m_nObjId = sObjId.isEmpty() || sObjId.compareTo("80000000") == 0 ? Integer.MIN_VALUE : Integer.valueOf(sObjId, 16); // object id is written in hex
 
-		m_lObsTime1 = Long.parseLong(sCol[3]) * 1000; // convert seconds to millis
-		m_lObsTime2 = Long.parseLong(sCol[4]) * 1000;
-		m_lTimeRecv = Long.parseLong(sCol[5]) * 1000;
-		m_nLat1 = Integer.parseInt(sCol[6]);
-		m_nLon1 = Integer.parseInt(sCol[7]);
-		if (sCol[8].compareTo("") != 0)
-			m_nLat2 = Integer.parseInt(sCol[8]);
-		else
-			m_nLat2 = Integer.MIN_VALUE;
-		if (sCol[9].compareTo("") != 0)
-			m_nLon2 = Integer.parseInt(sCol[9]);
-		else
-			m_nLon2 = Integer.MIN_VALUE;
+		m_lObsTime1 = oIn.parseLong(3) * 1000; // convert seconds to millis
+		m_lObsTime2 = oIn.parseLong(4) * 1000;
+		m_lTimeRecv = oIn.parseLong(5) * 1000;
+		m_nLat1 = oIn.parseInt(6);
+		m_nLon1 = oIn.parseInt(7);
+		m_nLat2 = oIn.isNull(8) ? Integer.MIN_VALUE : oIn.parseInt(8);
+		m_nLon2 = oIn.isNull(9) ? Integer.MIN_VALUE : oIn.parseInt(9);
 
-		m_tElev = Short.parseShort(sCol[10]);
-		m_dValue = Double.parseDouble(sCol[11]);
-		if (sCol[12].compareTo("") != 0)
-			m_tConf = Short.parseShort(sCol[12]);
-		else
-			m_tConf = Short.MIN_VALUE;
+		m_tElev = (short)oIn.parseInt(10);
+		m_dValue = oIn.parseDouble(11);
+		m_tConf = oIn.isNull(12) ? Short.MIN_VALUE : (short)oIn.parseInt(12);
 
-		if (sCol.length > 13 && sCol[13].compareTo("") != 0)
-			m_lClearedTime = Long.parseLong(sCol[13]) * 1000;
+
+		if (nCol > 13 && !oIn.isNull(13))
+			m_lClearedTime = oIn.parseLong(13) * 1000;
 		else
 			m_lClearedTime = Long.MIN_VALUE;
 
-		if (sCol.length > 14 && sCol[14].compareTo("") != 0)
-			m_sDetail = sCol[14];
+		if (nCol > 14 && !oIn.isNull(14))
+			m_sDetail = "";
 		else
 			m_sDetail = ObsType.lookup(ObsType.EVT, (int)m_dValue);
 	}

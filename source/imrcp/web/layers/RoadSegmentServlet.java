@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,22 +20,26 @@ import imrcp.geosrv.SegIterator;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.route.Routes;
+import imrcp.store.ImrcpObsResultSet;
 import imrcp.store.Obs;
 import imrcp.store.ObsView;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
+import imrcp.system.Util;
 import imrcp.web.LatLngBounds;
+import imrcp.web.ObsChartRequest;
+import imrcp.web.ObsInfo;
 import imrcp.web.ObsRequest;
 import imrcp.web.PlatformRequest;
 import java.io.IOException;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.TreeMap;
 import javax.naming.NamingException;
 import javax.servlet.annotation.WebServlet;
 import org.apache.logging.log4j.LogManager;
@@ -132,16 +136,16 @@ public class RoadSegmentServlet extends LayerServlet
 		DecimalFormat oValueFormatter = new DecimalFormat("0.##");
 
 		HashMap<Integer, Obs> oRoadObsMap = new HashMap<>();
+		Directory oDir = Directory.getInstance();
 		if (oPlatformRequest.hasObsType())
 		{
-			try (ResultSet oData = m_oObsView.getData(oPlatformRequest.getRequestObsType(), oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth(), currentRequestBounds.getNorth(), currentRequestBounds.getWest(), currentRequestBounds.getEast(), oPlatformRequest.getRequestTimestampRef()))
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(oPlatformRequest.getRequestObsType(), oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth(), currentRequestBounds.getNorth(), currentRequestBounds.getWest(), currentRequestBounds.getEast(), oPlatformRequest.getRequestTimestampRef()))
 			{
-				while (oData.next())
+				for (Obs oNewObs : oData)
 				{
-					Obs oNewObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
 					Obs oCurrentObs = oRoadObsMap.get(oNewObs.m_nObjId);
 
-					if (oCurrentObs == null || oNewObs.m_lObsTime1 >= oCurrentObs.m_lObsTime1)
+					if (oCurrentObs == null || oDir.getContribPreference(oNewObs.m_nContribId) < oDir.getContribPreference(oCurrentObs.m_nContribId) || oNewObs.m_lObsTime1 >= oCurrentObs.m_lObsTime1)
 						oRoadObsMap.put(oNewObs.m_nObjId, oNewObs);
 				}
 			}
@@ -151,7 +155,6 @@ public class RoadSegmentServlet extends LayerServlet
 
 		for (Segment oRoad : roadList)
 		{
-
 			if (oLastBounds != null && oLastBounds.intersects(oRoad.m_nYmax, oRoad.m_nXmax, oRoad.m_nYmin, oRoad.m_nXmin))
 				continue;
 
@@ -178,10 +181,11 @@ public class RoadSegmentServlet extends LayerServlet
 			}
 			else
 			{
-				String sFromUnits = getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
-				double dVal = Units.getInstance().convert(sFromUnits, sEnglishUnits, oObs.m_dValue); // english
+				Units oUnits = Units.getInstance();
+				String sFromUnits = oUnits.getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+				double dVal = oUnits.convert(sFromUnits, sEnglishUnits, oObs.m_dValue); // english
 				oOutputGenerator.writeString(oValueFormatter.format(dVal));
-				dVal = Units.getInstance().convert(sFromUnits, sMetricUnits, oObs.m_dValue); // metric
+				dVal = oUnits.convert(sFromUnits, sMetricUnits, oObs.m_dValue); // metric
 				oOutputGenerator.writeString(oValueFormatter.format(dVal));
 			}
 
@@ -207,7 +211,7 @@ public class RoadSegmentServlet extends LayerServlet
 	private static void serializeRoadProperties(JsonGenerator oJsonGenerator, Segment oRoad, String sStatus) throws IOException
 	{
 		oJsonGenerator.writeNumber(oRoad.m_nId);
-		oJsonGenerator.writeString("");
+		oJsonGenerator.writeString(oRoad.m_sType);
 		oJsonGenerator.writeNumber(GeoUtil.fromIntDeg(oRoad.m_nYmid));
 		oJsonGenerator.writeNumber(GeoUtil.fromIntDeg(oRoad.m_nXmid));
 		oJsonGenerator.writeString(sStatus);
@@ -265,7 +269,7 @@ public class RoadSegmentServlet extends LayerServlet
 		Segment oRequestRoad = null;
 
 		ArrayList<Segment> oRoadCandidates = new ArrayList<>();
-		if ((nRoadId & 0xF0000000) == 0x50000000)
+		if (Util.isRoute(nRoadId))
 			m_oRoutes.getRoutes(oRoadCandidates);
 		else
 			m_oRoads.getLinks(oRoadCandidates, m_nSnapTolerance, currentRequestBounds.getEast() + nRoadBoundaryPadding, currentRequestBounds.getNorth() + nRoadBoundaryPadding, currentRequestBounds.getWest() - nRoadBoundaryPadding, currentRequestBounds.getSouth() - nRoadBoundaryPadding);
@@ -291,34 +295,21 @@ public class RoadSegmentServlet extends LayerServlet
 		ArrayList<Obs> oObsList = new ArrayList<>();
 		for (int nObstype : ROAD_OBSTYPES)
 		{
-			Obs oCurrentObs = null;
-			try (ResultSet oData = m_oObsView.getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oPlatformSearchBounds.getSouth(), oPlatformSearchBounds.getNorth(), oPlatformSearchBounds.getWest(), oPlatformSearchBounds.getEast(), oObsRequest.getRequestTimestampRef(), nRoadId))
+			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oPlatformSearchBounds.getSouth(), oPlatformSearchBounds.getNorth(), oPlatformSearchBounds.getWest(), oPlatformSearchBounds.getEast(), oObsRequest.getRequestTimestampRef(), nRoadId))
 			{
-				while (oData.next())
+				for (Obs oNewObs : oData)
 				{
-					Obs oNewObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
+					ObsInfo oInfo = new ObsInfo(nObstype, oNewObs.m_nContribId);
+					Obs oCurrentObs = oObsMap.get(oInfo);
 					if (oCurrentObs == null || oNewObs.m_lObsTime1 >= oCurrentObs.m_lObsTime1 && oNewObs.m_nObjId == nRoadId)
-						oCurrentObs = oNewObs;
+						oObsMap.put(oInfo, oNewObs);
 				}
 			}
-			if (oCurrentObs != null)
-				oObsList.add(oCurrentObs);
+			oObsList.addAll(oObsMap.values());
 		}
 
-		Collections.sort(oObsList, (Obs o1, Obs o2) -> 
-		{
-			int nReturn = ObsType.getName(o1.m_nObsTypeId).compareTo(ObsType.getName(o2.m_nObsTypeId));
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = o1.m_nContribId - o2.m_nContribId;
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = (int)(o1.m_lObsTime1 - o2.m_lObsTime1);
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = (int)(o1.m_lObsTime2 - o2.m_lObsTime2);
-			return nReturn;
-		});
+		Collections.sort(oObsList, g_oObsDetailComp);
 
 		for (Obs oObs : oObsList)
 			serializeObsRecord(oOutputGenerator, oNumberFormatter, oConfFormat, oObs);
@@ -332,12 +323,70 @@ public class RoadSegmentServlet extends LayerServlet
 			oOutputGenerator.writeStringField("tel", oElevationFormatter.format(nElevation));
 		}
 
-		oOutputGenerator.writeStringField("sdet", oRequestRoad.m_sName);
+		oOutputGenerator.writeStringField("sdet", oRequestRoad.m_sName + " " + oRequestRoad.m_nId);
 
 		oOutputGenerator.writeEndObject();
 	}
 
+	@Override
+	protected void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
+	{
 
+		int nRoadBoundaryPadding = m_nSnapTolerance + 10000;
+
+
+		LatLngBounds currentRequestBounds = oObsRequest.getRequestBounds();
+
+		int nRoadId = oObsRequest.getPlatformIds()[0];
+		int nContribId = oObsRequest.getSourceId();
+		Segment oRequestRoad = null;
+
+		ArrayList<Segment> oRoadCandidates = new ArrayList<>();
+		if ((nRoadId & 0xF0000000) == 0x50000000)
+			m_oRoutes.getRoutes(oRoadCandidates);
+		else
+			m_oRoads.getLinks(oRoadCandidates, m_nSnapTolerance, currentRequestBounds.getEast() + nRoadBoundaryPadding, currentRequestBounds.getNorth() + nRoadBoundaryPadding, currentRequestBounds.getWest() - nRoadBoundaryPadding, currentRequestBounds.getSouth() - nRoadBoundaryPadding);
+
+		for (Segment oRoad : oRoadCandidates)
+		{
+			if (oRoad.m_nId == nRoadId)
+			{
+				oRequestRoad = oRoad;
+				break;
+			}
+		}
+
+		if (oRequestRoad == null)
+			return;
+
+		LatLngBounds oPlatformSearchBounds = new LatLngBounds(oRequestRoad.m_nYmax + nRoadBoundaryPadding, oRequestRoad.m_nXmax + nRoadBoundaryPadding, oRequestRoad.m_nYmin - nRoadBoundaryPadding, oRequestRoad.m_nXmin - nRoadBoundaryPadding);
+
+		ArrayList<Obs> oObsList = new ArrayList<>();
+		try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(oObsRequest.getObstypeId(), oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oPlatformSearchBounds.getSouth(), oPlatformSearchBounds.getNorth(), oPlatformSearchBounds.getWest(), oPlatformSearchBounds.getEast(), oObsRequest.getRequestTimestampRef(), nRoadId))
+		{
+			for (Obs oNewObs : oData)
+			{
+				if (oNewObs.m_nObjId == nRoadId && oNewObs.m_nContribId == nContribId)
+					oObsList.add(oNewObs);
+			}
+		}
+
+		Collections.sort(oObsList, Obs.g_oCompObsByTime);
+
+		Units oUnits = Units.getInstance();
+		oOutputGenerator.writeStartArray();
+		for(Obs oObs : oObsList)
+		{
+			String sToEnglish = ObsType.getUnits(oObs.m_nObsTypeId, false);
+			String sFromUnits = oUnits.getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+			oOutputGenerator.writeStartObject();
+			oOutputGenerator.writeNumberField("t", oObs.m_lObsTime1);
+			oOutputGenerator.writeNumberField("y", oUnits.convert(sFromUnits, sToEnglish, oObs.m_dValue));
+			oOutputGenerator.writeEndObject();
+		}
+		oOutputGenerator.writeEndArray();
+	}
+	
 	/**
 	 *
 	 * @return

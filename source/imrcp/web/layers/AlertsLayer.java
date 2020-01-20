@@ -1,35 +1,22 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.web.layers;
 
-import imrcp.ImrcpBlock;
-import imrcp.geosrv.DetectorMapping;
 import imrcp.geosrv.GeoUtil;
-import imrcp.geosrv.KCScoutDetectorMappings;
 import imrcp.geosrv.SensorLocation;
 import imrcp.geosrv.SensorLocations;
+import imrcp.store.ImrcpObsResultSet;
 import imrcp.store.Obs;
+import imrcp.store.ObsView;
+import imrcp.system.Config;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
+import imrcp.system.Units;
 import imrcp.system.Util;
 import imrcp.web.LatLngBounds;
+import imrcp.web.ObsChartRequest;
+import imrcp.web.ObsInfo;
 import imrcp.web.ObsRequest;
 import imrcp.web.PlatformRequest;
 import java.io.IOException;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -37,6 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import javax.naming.NamingException;
 import javax.servlet.annotation.WebServlet;
 import org.apache.logging.log4j.LogManager;
@@ -51,23 +40,17 @@ import org.codehaus.jackson.JsonGenerator;
 public class AlertsLayer extends LayerServlet
 {
 
-	private final ImrcpBlock m_oObsView = Directory.getInstance().lookup("ObsView");
+	private final ObsView m_oObsView = (ObsView)Directory.getInstance().lookup("ObsView");
 
 	private static final Logger m_oLogger = LogManager.getLogger(AlertsLayer.class);
 
-	private static final int[] g_nDETECTOROBS = new int[]
-	{
-		ObsType.SPDLNK, ObsType.VOLLNK, ObsType.DNTLNK
-	};
-
-	private static final String[] g_sSENSORBLOCKS = new String[]
-	{
-		"KCScoutDetectorMappings"
-	};
+	private static final String[] g_sSENSORBLOCKS;
 
 	private static final ArrayList<SensorLocations> g_oSENSORS = new ArrayList();
 
 	private static final Map<Integer, List<Double>> g_oEventGroups = new HashMap<>();
+	
+	private static final Map<Integer, int[]> g_oMapLayerObs = new HashMap<>();
 
 
 	static
@@ -93,13 +76,15 @@ public class AlertsLayer extends LayerServlet
 
 		ArrayList<Double> oWeatherAlerts = new ArrayList<>();
 		oWeatherAlerts.add(101d); // , "light-winter-precip"); // imrcp alert types 100s - areal weather, 200s - road weather, 300s - traffic
-		oWeatherAlerts.add(102d); // , "medium-winter-precip");
+		oWeatherAlerts.add(102d); // , "moderate-winter-precip");
 		oWeatherAlerts.add(103d); // , "heavy-winter-precip");
 		oWeatherAlerts.add(104d); // , "light-precip");
-		oWeatherAlerts.add(105d); // , "medium-precip");
+		oWeatherAlerts.add(105d); // , "moderate-precip");
 		oWeatherAlerts.add(106d); // , "heavy-precip");
 		oWeatherAlerts.add(203d); // , "blowing-snow");
 		oWeatherAlerts.add(107d); // , "low-visibility");
+		oWeatherAlerts.add(108d); // , "flood-stage-action");
+		oWeatherAlerts.add(109d); // , "flood-stage-flood");
 
 		Collections.sort(oWeatherAlerts);
 		g_oEventGroups.put(3, oWeatherAlerts);
@@ -116,8 +101,14 @@ public class AlertsLayer extends LayerServlet
 		g_oEventGroups.put(0, oAllAlerts);
 
 		Directory oDir = Directory.getInstance();
+		Config oConfig = Config.getInstance();
+		g_sSENSORBLOCKS = oConfig.getStringArray("SensorLocations", "SensorLocations", "sensors", "");
 		for (String sSensorBlock : g_sSENSORBLOCKS)
 			g_oSENSORS.add((SensorLocations) oDir.lookup(sSensorBlock));
+		
+		g_oMapLayerObs.put(Integer.valueOf("SCOUT", 36), new int[]{ObsType.SPDLNK, ObsType.VOLLNK, ObsType.DNTLNK}); // kc scout detectors
+		g_oMapLayerObs.put(Integer.valueOf("STORMW", 36), new int[]{ObsType.STPVT, ObsType.TPVT, ObsType.DPHLNK, ObsType.STG, ObsType.CONPVT, ObsType.DIRWND, ObsType.GSTWND, ObsType.PRBAR, ObsType.RH, ObsType.SPDWND, ObsType.TAIR}); // stormwatch sensors
+		g_oMapLayerObs.put(Integer.valueOf("AHPS", 36), new int[]{ObsType.STG});
 	}
 
 
@@ -151,11 +142,15 @@ public class AlertsLayer extends LayerServlet
 		{
 			ArrayList<SensorLocation> oSensors = new ArrayList();
 			for (SensorLocations oSensorLocations : g_oSENSORS)
+			{
+				if (oSensorLocations.getMapValue() != nObstype)
+					continue;
 				oSensorLocations.getSensorLocations(oSensors, currentRequestBounds.getSouth(), currentRequestBounds.getNorth(), currentRequestBounds.getWest(), currentRequestBounds.getEast());
+			}
 
 			for (SensorLocation oSensor : oSensors)
 			{
-				if (oLastBounds != null && oLastBounds.intersects(oSensor.m_nLat, oSensor.m_nLon))
+				if ((oLastBounds != null && oLastBounds.intersects(oSensor.m_nLat, oSensor.m_nLon)) || oSensor.getMapValue() != nObstype || !oSensor.m_bInUse)
 					continue;
 				oOutputGenerator.writeNumber(oSensor.m_nImrcpId);
 				oOutputGenerator.writeString(oValueFormatter.format(nObstype)); // this tell what icon to display. right now will only have detectors but will need more logic later to distinguish between ess, hyrdo, etc
@@ -166,7 +161,7 @@ public class AlertsLayer extends LayerServlet
 		else // for alerts
 		{
 			ArrayList<Obs> oAlerts = new ArrayList<>();
-			try (ResultSet oData = m_oObsView.getData(ObsType.EVT, oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth(), currentRequestBounds.getNorth(), currentRequestBounds.getWest(), currentRequestBounds.getEast(), oPlatformRequest.getRequestTimestampRef()))
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(ObsType.EVT, oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth(), currentRequestBounds.getNorth(), currentRequestBounds.getWest(), currentRequestBounds.getEast(), oPlatformRequest.getRequestTimestampRef()))
 			{
 				List<Double> oEventGroup;
 				oEventGroup = g_oEventGroups.get(nObstype);
@@ -176,13 +171,12 @@ public class AlertsLayer extends LayerServlet
 					return;
 				}
 
-				while (oData.next())
+				for (Obs oObs : oData)
 				{
-					Obs oAlertObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
-					if (oAlertObs.m_nContribId == Integer.valueOf("cap", 36))
+					if (oObs.m_nContribId == Integer.valueOf("cap", 36))
 						continue;
-					if (Collections.binarySearch(oEventGroup, oAlertObs.m_dValue) >= 0)
-						oAlerts.add(oAlertObs);
+					if (Collections.binarySearch(oEventGroup, oObs.m_dValue) >= 0)
+						oAlerts.add(oObs);
 				}
 			}
 
@@ -253,44 +247,53 @@ public class AlertsLayer extends LayerServlet
 		String sDetail = "";
 		if (nRequestObjId > -1) // alerts have no obj id so this block is for sensors, for example KCScout Detectors
 		{
-			if (Util.isDetector(nRequestObjId)) // for detectors
+			int[] nObsTypes = new int[0];
+			if (Util.isSensor(nRequestObjId)) // for detectors
 			{
-				KCScoutDetectorMappings oLocations = (KCScoutDetectorMappings)Directory.getInstance().lookup("KCScoutDetectorMappings");
-				DetectorMapping oMapping = oLocations.getDetectorById(nRequestObjId);
-				if (oMapping != null)
-					sDetail = oMapping.m_sDetectorName;
-				HashMap<Integer, Obs> oDetObsMap = new HashMap();
-				for (int nDetObsType : g_nDETECTOROBS)
+				for (String sSensorLocations : g_sSENSORBLOCKS)
 				{
-					try (ResultSet oData = m_oObsView.getData(nDetObsType, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+					SensorLocations oLocations = (SensorLocations)Directory.getInstance().lookup(sSensorLocations);
+					SensorLocation oTemp = oLocations.getLocationByImrcpId(nRequestObjId);
+					if (oTemp != null)
 					{
-						while (oData.next())
-						{
-							if (nRequestObjId != oData.getInt(3)) // skip if the obs doesn't match the detector id
-								continue;
-							Obs oDetObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
-							Obs oCurrentObs = oDetObsMap.get(nDetObsType);
-							if (oCurrentObs == null || oDetObs.m_lObsTime1 > oCurrentObs.m_lObsTime1) // filter for the most recent observation
-								oDetObsMap.put(nDetObsType, oDetObs);
-						}
+						sDetail = oTemp.m_sMapDetail;
+						if (g_oMapLayerObs.containsKey(oTemp.getMapValue()))
+							nObsTypes = g_oMapLayerObs.get(oTemp.getMapValue());
+						break;
 					}
-					Obs oDetObs = oDetObsMap.get(nDetObsType);
-					if (oDetObs != null)
-						serializeObsRecord(oOutputGenerator, oNumberFormatter, oConfFormat, oDetObs);
 				}
+			}
+			
+			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
+			for (int nObsType : nObsTypes)
+			{
+				try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(nObsType, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+				{
+					for (Obs oObs : oData)
+					{
+						if (nRequestObjId != oObs.m_nObjId) // skip if the obs doesn't match the detector id
+							continue;
+						ObsInfo oInfo = new ObsInfo(nObsType, oObs.m_nContribId);
+						Obs oCurrentObs = oObsMap.get(oInfo);
+						if (oCurrentObs == null || oObs.m_lObsTime1 > oCurrentObs.m_lObsTime1) // filter for the most recent observation
+							oObsMap.put(oInfo, oObs);
+					}
+				}
+			}
+			for (Entry<ObsInfo, Obs> oEntry : oObsMap.entrySet())
+			{
+				serializeObsRecord(oOutputGenerator, oNumberFormatter, oConfFormat, oEntry.getValue());
 			}
 		}
 		else // this block for alerts
 		{
-			try (ResultSet oData = m_oObsView.getData(ObsType.EVT, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(ObsType.EVT, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef()))
 			{
-
-				while (oData.next())
+				for (Obs oObs : oData)
 				{
-					Obs oAlertObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
-					serializeObsRecord(oOutputGenerator, oNumberFormatter, oConfFormat, oAlertObs);
-					if (oAlertObs.m_sDetail != null && oAlertObs.m_sDetail.length() > sDetail.length())
-						sDetail = oAlertObs.m_sDetail;
+					serializeObsRecord(oOutputGenerator, oNumberFormatter, oConfFormat, oObs);
+					if (oObs.m_sDetail != null && oObs.m_sDetail.length() > sDetail.length())
+						sDetail = oObs.m_sDetail;
 				}
 			}
 		}
@@ -311,5 +314,68 @@ public class AlertsLayer extends LayerServlet
 	{
 		return false;
 	}
-
+	
+	/**
+	 *
+	 * @param oOutputGenerator
+	 * @param oObsRequest
+	 * @throws Exception
+	 */
+	@Override
+	protected  void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
+	{
+		LatLngBounds currentRequestBounds = oObsRequest.getRequestBounds();
+		int nAlertBoundaryPadding = 100;
+		LatLngBounds oSearchBounds = new LatLngBounds(currentRequestBounds.getNorth() + nAlertBoundaryPadding, currentRequestBounds.getEast() + nAlertBoundaryPadding, currentRequestBounds.getSouth() - nAlertBoundaryPadding, currentRequestBounds.getWest() - nAlertBoundaryPadding);
+		int nRequestObjId = oObsRequest.getPlatformIds()[0];
+		if (nRequestObjId < 0) // alerts have no obj id so this block is for sensors, for example KCScout Detectors
+			return;
+		
+		int[] nObsTypes = new int[0];
+		
+		if (Util.isSensor(nRequestObjId)) // for detectors
+		{
+			for (String sSensorLocations : g_sSENSORBLOCKS)
+			{
+				SensorLocations oLocations = (SensorLocations)Directory.getInstance().lookup(sSensorLocations);
+				SensorLocation oTemp = oLocations.getLocationByImrcpId(nRequestObjId);
+				if (oTemp != null)
+				{
+					if (g_oMapLayerObs.containsKey(oTemp.getMapValue()))
+						nObsTypes = g_oMapLayerObs.get(oTemp.getMapValue());
+					break;
+				}
+			}
+		}
+		oOutputGenerator.writeStartArray();
+		boolean bFound = false;
+		for (int nObsType : nObsTypes)
+		{
+			if (nObsType == oObsRequest.getObstypeId())
+			{
+				bFound = true;
+				break;
+			}
+		}
+		if (!bFound)
+			return;
+		Units oUnits = Units.getInstance();
+		int nContribId = oObsRequest.getSourceId();
+		try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(oObsRequest.getObstypeId(), oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+		{
+			Collections.sort(oData, Obs.g_oCompObsByTime);
+			for (Obs oObs : oData)
+			{
+				if (nRequestObjId != oObs.m_nObjId || nContribId != oObs.m_nContribId) // skip if the obs doesn't match the detector id
+					continue;
+				
+				String sToEnglish = ObsType.getUnits(oObs.m_nObsTypeId, false);
+				String sFromUnits = oUnits.getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+				oOutputGenerator.writeStartObject();
+				oOutputGenerator.writeNumberField("t", oObs.m_lObsTime1);
+				oOutputGenerator.writeNumberField("y", oUnits.convert(sFromUnits, sToEnglish, oObs.m_dValue));
+				oOutputGenerator.writeEndObject();
+			}
+		}
+	}
 }

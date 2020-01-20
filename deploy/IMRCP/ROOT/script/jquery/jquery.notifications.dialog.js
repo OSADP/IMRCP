@@ -6,6 +6,12 @@ $.widget("sp.notificationDialog", {
     displayUtcTimes: false,
     displayOnNewAlerts: true
   },
+  _getDisplayOnNewAlerts: function()
+  {
+    if($.isFunction(this.options.displayOnNewAlerts))
+      return this.options.displayOnNewAlerts();
+    else return this.options.displayOnNewAlerts;
+  },
   processNotifications: function (notifications)
   {
     var thisDialog = this;
@@ -62,7 +68,7 @@ $.widget("sp.notificationDialog", {
     this.spnCount.text(count + ' ' + (count === 1 ? 'Notification' : 'Notifications'));
     if (newNotifications.length > 0)
     {
-      if (thisDialog.options.displayOnNewAlerts)
+      if (thisDialog._getDisplayOnNewAlerts())
       {
         if (!thisDialog.uiDialog.dialog("isOpen"))
           thisDialog.open();
@@ -87,7 +93,7 @@ $.widget("sp.notificationDialog", {
     this.notifications[notification.id] = notification;
 
     var divNotification = $(
-            '<div class="sp-notification alert-' + notification.typeId + '"><div class="alert-icon"></div><div class="sp-notification-content-left">' +
+            '<div class="sp-notification alert-' + notification.typeId + '"><div class="sp-notification-predicted">P</div><div class="alert-icon"></div><div class="sp-notification-content-left">' +
             '<div class="sp-notification-content-left-top"><span class="sp-notification-type"></span>' +
             '<span class="sp-notification-time-started"></span>' +
             '</div>' +
@@ -107,13 +113,13 @@ $.widget("sp.notificationDialog", {
     spnType.text(notification.typeName);
 
 
-    this._updateNotification(notification);
 
     var thisDialog = this;
     divNotification.prependTo(this.uiDialog).click(function ()
     {
       thisDialog._trigger("selectNotification", null, notification);
     });
+    this._updateNotification(notification);
 
   },
   _updateNotification: function (notification)
@@ -123,13 +129,14 @@ $.widget("sp.notificationDialog", {
     var duration = notification.end - notification.start;
     duration /= 1000 * 60;
 
-    var pIndicator = (notification.start.valueOf() - new Date().getTime() > 1000 * 60 * 15) ? 'P ' : '';
+    if (notification.start.valueOf() - new Date().getTime() > 1000 * 60 * 15)
+      divNotification.find('.sp-notification-predicted').show();
 
     var spnDuration = divNotification.find('.sp-notification-duration');
     var spnStartTime = divNotification.find('.sp-notification-time-started');
     var spnIssueClearTime = divNotification.find('.sp-notification-time-issued-cleared');
     spnDuration.text('Duration: ' + duration + ' minutes');
-    spnStartTime.text('Estimated Start Time: ' + pIndicator + this._formatTime(notification.start));
+    spnStartTime.text('Estimated Start Time: ' + this._formatTime(notification.start));
 
     spnIssueClearTime.text('Issued: ' + this._formatTime(notification.issued));
 

@@ -1,46 +1,14 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
+import imrcp.FileCache;
 import java.util.ArrayList;
 import java.util.Collections;
 
 /**
  * A store that uses csv files to store all of its data
  */
-public abstract class CsvStore extends Store
+public class CsvStore extends FileCache
 {
-
-	/**
-	 * Attempts to download a file into the current files cache in memory for
-	 * the current time.
-	 *
-	 * @return always true
-	 * @throws Exception
-	 */
-	@Override
-	public boolean start() throws Exception
-	{
-		long lTime = System.currentTimeMillis();
-		lTime = (lTime / m_nFileFrequency) * m_nFileFrequency;
-		loadFileToDeque(m_oFileFormat.format(lTime));
-		return true;
-	}
-
-
 	/**
 	 * Fills in the ImrcpResultSet with obs that match the query.
 	 *
@@ -62,23 +30,13 @@ public abstract class CsvStore extends Store
 		long lObsTime = lStartTime;
 		while (lObsTime < lEndTime)
 		{
-			CsvWrapper oFile = (CsvWrapper) getFileFromDeque(lObsTime, lRefTime);
-			if (oFile == null) // file isn't in current files
-			{
-				if (loadFilesToLru(lObsTime, lRefTime)) // load all files that could match the requested time
-					oFile = (CsvWrapper) getFileFromLru(lObsTime, lRefTime); // get the most recent file
-			}
+			CsvWrapper oFile = (CsvWrapper) getFile(lObsTime, lRefTime);
 			if (oFile != null)
 				getDataFromFile(oReturn, nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime, oFile);
 			lObsTime += m_nFileFrequency;
 		}
 
-		CsvWrapper oFile = (CsvWrapper) getFileFromDeque(lObsTime, lRefTime); // always do one more file
-		if (oFile == null) // file isn't in current files
-		{
-			if (loadFilesToLru(lObsTime, lRefTime)) // load all files that could match the requested time
-				oFile = (CsvWrapper) getFileFromLru(lObsTime, lRefTime); // get the most recent file
-		}
+		CsvWrapper oFile = (CsvWrapper) getFile(lObsTime, lRefTime); // always do one more file
 		if (oFile != null)
 			getDataFromFile(oReturn, nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime, oFile);
 	}
@@ -103,9 +61,9 @@ public abstract class CsvStore extends Store
 	public void getDataFromFile(ImrcpResultSet oReturn, int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime, CsvWrapper oFile)
 	{
-		synchronized (oFile)
+		oFile.m_lLastUsed = System.currentTimeMillis();
+		synchronized (oFile.m_oObs)
 		{
-			oFile.m_lLastUsed = System.currentTimeMillis();
 			ArrayList<Obs> oObsList = oFile.m_oObs;
 			if (oFile.m_oObs.isEmpty())
 				return;
@@ -123,5 +81,12 @@ public abstract class CsvStore extends Store
 				}
 			}
 		}
+	}
+	
+	
+	@Override
+	protected FileWrapper getNewFileWrapper()
+	{
+		return new CsvWrapper(m_nSubObsTypes);
 	}
 }

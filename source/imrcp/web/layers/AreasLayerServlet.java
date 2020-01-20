@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,23 +15,26 @@
  */
 package imrcp.web.layers;
 
-import imrcp.ImrcpBlock;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Polygons;
+import imrcp.store.ImrcpObsResultSet;
 import imrcp.store.Obs;
+import imrcp.store.ObsView;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
 import imrcp.web.LatLngBounds;
+import imrcp.web.ObsChartRequest;
+import imrcp.web.ObsInfo;
 import imrcp.web.ObsRequest;
 import imrcp.web.PlatformRequest;
 import java.io.IOException;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.TreeMap;
 import javax.naming.NamingException;
 import javax.servlet.annotation.WebServlet;
 import org.codehaus.jackson.JsonGenerator;
@@ -47,7 +50,7 @@ import org.codehaus.jackson.JsonGenerator;
 public class AreasLayerServlet extends LayerServlet
 {
 
-	private final ImrcpBlock m_oObsView = Directory.getInstance().lookup("ObsView");
+	private final ObsView m_oObsView = (ObsView)Directory.getInstance().lookup("ObsView");
 
 	private final Polygons m_oPolygons = (Polygons) Directory.getInstance().lookup("Polygons");
 
@@ -91,21 +94,62 @@ public class AreasLayerServlet extends LayerServlet
 
 		DecimalFormat oValueFormatter = new DecimalFormat("0.##");
 		int nObsType = oPlatformRequest.getRequestObsType();
-//	 if (nObsType == ObsType.RDR0)
-//	 {
-//		 StringBuilder sBuffer = ((PresentationCache)Directory.getInstance().lookup("PresentationCache")).getDataString(nObsType, oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth() - nRequestBoundsPadding, currentRequestBounds.getNorth() + nRequestBoundsPadding, currentRequestBounds.getWest() - nRequestBoundsPadding, currentRequestBounds.getEast() + nRequestBoundsPadding);
-//		 if (sBuffer != null)
-//			oJsonGenerator.writeRaw(sBuffer.toString());
-//		 return;
-//	 }
-		try (ResultSet oData = m_oObsView.getData(oPlatformRequest.getRequestObsType(), oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth() - nRequestBoundsPadding, currentRequestBounds.getNorth() + nRequestBoundsPadding, currentRequestBounds.getWest() - nRequestBoundsPadding, currentRequestBounds.getEast() + nRequestBoundsPadding, oPlatformRequest.getRequestTimestampRef()))
+//		PresentationCache oCache = m_oObsView.getPresentationCache(nObsType, oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), oPlatformRequest.getRequestTimestampRef());
+//		if (oCache != null)
+//		{
+//			ViewState oView = (ViewState)oPlatformRequest.getSession().getAttribute("viewstate");
+//			if (oView == null)
+//			{
+//				oView = new ViewState();
+//				oPlatformRequest.getSession().setAttribute("viewstate", oView);
+//			}
+//			if (oPlatformRequest.getRequestTimestampStart() != oView.m_lLastTimestamp || nObsType != oView.m_nLastObsType)
+//			{
+//				oView.m_oPolyIds.clear();
+//				oView.m_lLastTimestamp = oPlatformRequest.getRequestTimestampStart();
+//				oView.m_nLastObsType = nObsType;
+//			}
+////			oCache.getHexDataString(oJsonGenerator, oValueFormatter, nObsType, oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth() - nRequestBoundsPadding, currentRequestBounds.getNorth() + nRequestBoundsPadding, currentRequestBounds.getWest() - nRequestBoundsPadding, currentRequestBounds.getEast() + nRequestBoundsPadding, oPlatformRequest.getRequestTimestampRef(), oView.m_oPolyIds);
+//			return;
+//		}
+		try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(oPlatformRequest.getRequestObsType(), oPlatformRequest.getRequestTimestampStart(), oPlatformRequest.getRequestTimestampEnd(), currentRequestBounds.getSouth() - nRequestBoundsPadding, currentRequestBounds.getNorth() + nRequestBoundsPadding, currentRequestBounds.getWest() - nRequestBoundsPadding, currentRequestBounds.getEast() + nRequestBoundsPadding, oPlatformRequest.getRequestTimestampRef()))
 		{
+			if (oData.isEmpty())
+				return;
+			Collections.sort(oData, Obs.g_oCompObsByContrib);
+			TreeMap<Integer, Integer> oContribPref = new TreeMap();
+			int nIndex = oData.size();
+			int nCurrentContrib = oData.get(nIndex - 1).m_nContribId;
+			Directory oDir = Directory.getInstance();
+			int nPref = oDir.getContribPreference(nCurrentContrib);
+			oContribPref.put(nCurrentContrib, nPref);
+
+			while (nIndex-- > 0)
+			{
+				Obs oObs = oData.get(nIndex);
+				if (oObs.m_nContribId != nCurrentContrib)
+				{
+					nCurrentContrib = oObs.m_nContribId;
+					int nCurrentPref = oDir.getContribPreference(nCurrentContrib);
+					oContribPref.put(nCurrentContrib, nCurrentPref);
+					if (nCurrentPref < nPref)
+						nPref = nCurrentPref;
+				}
+			}
 			Units oUnits = Units.getInstance();
 			String sToEnglish = ObsType.getUnits(oPlatformRequest.getRequestObsType(), false);
 			String sToMetric = ObsType.getUnits(oPlatformRequest.getRequestObsType(), true);
-			while (oData.next())
+			nCurrentContrib = oData.get(0).m_nContribId;
+			int nCurrentPref = oContribPref.get(nCurrentContrib);
+			for (Obs oObs : oData)
 			{
-				Obs oObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12));
+				if (oObs.m_nContribId != nCurrentContrib)
+				{
+					nCurrentContrib = oObs.m_nContribId;
+					nCurrentPref = oContribPref.get(nCurrentContrib);
+				}
+				if (nCurrentPref != nPref)
+					continue;
 
 				if (oLastBounds != null && oLastBounds.intersects(oObs.m_nLat2, oObs.m_nLon2, oObs.m_nLat1, oObs.m_nLon1))
 					continue;
@@ -119,7 +163,7 @@ public class AreasLayerServlet extends LayerServlet
 				oJsonGenerator.writeNumber(oObs.m_nObjId);
 				oJsonGenerator.writeString(Integer.toString(oObs.m_nContribId, 36).toUpperCase());
 
-				String sFromUnits = getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+				String sFromUnits = oUnits.getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
 				// obsvalue english
 				double dVal = oUnits.convert(sFromUnits, sToEnglish, oObs.m_dValue);
 				String sValue = oValueFormatter.format(dVal);
@@ -201,12 +245,11 @@ public class AreasLayerServlet extends LayerServlet
 		StringBuilder sDetail = new StringBuilder();
 		for (int nObstype : AREA_OBSTYPES)
 		{
-			Obs oCurrentObs = null;
-			try (ResultSet oData = m_oObsView.getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef()))
 			{
-				while (oData.next())
+				for (Obs oNewObs : oData)
 				{
-					Obs oNewObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12), oData.getShort(13), oData.getString(14));
 					if (oNewObs.m_nObsTypeId == ObsType.EVT && oNewObs.m_nContribId == Integer.valueOf("cap", 36))
 					{
 						int[] nPoints = m_oPolygons.getPolygonPoints(oNewObs.m_nLat1, oNewObs.m_nLat2, oNewObs.m_nLon1, oNewObs.m_nLon2);
@@ -218,28 +261,19 @@ public class AreasLayerServlet extends LayerServlet
 							sDetail.append(oNewObs.m_sDetail).append(" ");
 						}
 					}
-					else if (oCurrentObs == null || (oRequestBounds.intersects(oNewObs.m_nLat1, oNewObs.m_nLon1, oNewObs.m_nLat2, oNewObs.m_nLon2) && oNewObs.m_lTimeRecv > oCurrentObs.m_lTimeRecv))
-						oCurrentObs = oNewObs;
+					else
+					{
+						ObsInfo oInfo = new ObsInfo(nObstype, oNewObs.m_nContribId);
+						Obs oCurrentObs = oObsMap.get(oInfo);
+						if (oCurrentObs == null || (oRequestBounds.intersects(oNewObs.m_nLat1, oNewObs.m_nLon1, oNewObs.m_nLat2, oNewObs.m_nLon2) && oNewObs.m_lTimeRecv > oCurrentObs.m_lTimeRecv))
+							oObsMap.put(oInfo, oNewObs);
+					}
 				}
 			}
-			if (oCurrentObs != null)
-				oObsList.add(oCurrentObs);
+			oObsList.addAll(oObsMap.values());
 		}
 
-		Collections.sort(oObsList, (Obs o1, Obs o2) -> 
-		{
-			int nReturn = ObsType.getName(o1.m_nObsTypeId).compareTo(ObsType.getName(o2.m_nObsTypeId));
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = o1.m_nContribId - o2.m_nContribId;
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = (int)(o1.m_lObsTime1 - o2.m_lObsTime1);
-			if (nReturn != 0)
-				return nReturn;
-			nReturn = (int)(o1.m_lObsTime2 - o2.m_lObsTime2);
-			return nReturn;
-		});
+		Collections.sort(oObsList, g_oObsDetailComp);
 
 		oOutputGenerator.writeStartObject();
 
@@ -272,4 +306,45 @@ public class AreasLayerServlet extends LayerServlet
 
 		oOutputGenerator.writeEndObject();
 	}
+
+	@Override
+	protected void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
+	{
+		LatLngBounds oRequestBounds = oObsRequest.getRequestBounds();
+		int nContribId = oObsRequest.getSourceId();
+		ArrayList<Obs> oObsList = new ArrayList<>();
+
+			try (ImrcpObsResultSet oData = (ImrcpObsResultSet)m_oObsView.getData(oObsRequest.getObstypeId(), oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef()))
+			{
+				for (Obs oNewObs : oData)
+				{
+					if (oNewObs.m_nContribId != nContribId)
+						continue;
+
+					if (oNewObs.m_nObsTypeId == ObsType.EVT && oNewObs.m_nContribId == Integer.valueOf("cap", 36))
+					{
+						int[] nPoints = m_oPolygons.getPolygonPoints(oNewObs.m_nLat1, oNewObs.m_nLat2, oNewObs.m_nLon1, oNewObs.m_nLon2);
+						if (GeoUtil.isInsidePolygon(nPoints, oRequestBounds.getEast(), oRequestBounds.getNorth()))
+							oObsList.add(oNewObs);
+					}
+					else if (oRequestBounds.intersects(oNewObs.m_nLat1, oNewObs.m_nLon1, oNewObs.m_nLat2, oNewObs.m_nLon2))
+						oObsList.add(oNewObs);
+				}
+			}
+
+		Units oUnits = Units.getInstance();
+		oOutputGenerator.writeStartArray();
+		for(Obs oObs : oObsList)
+		{
+			String sToEnglish = ObsType.getUnits(oObs.m_nObsTypeId, false);
+			String sFromUnits = oUnits.getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+			oOutputGenerator.writeStartObject();
+			oOutputGenerator.writeNumberField("t", oObs.m_lObsTime1);
+			oOutputGenerator.writeNumberField("y", oUnits.convert(sFromUnits, sToEnglish, oObs.m_dValue));
+			oOutputGenerator.writeEndObject();
+		}
+		oOutputGenerator.writeEndArray();
+
+  }
+
 }

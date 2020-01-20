@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,20 +16,17 @@
 package imrcp.web.layers;
 
 import imrcp.store.Obs;
-import imrcp.store.SourceUnit;
-import imrcp.system.Config;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
 import imrcp.web.LatLngBounds;
+import imrcp.web.ObsChartRequest;
 import imrcp.web.ObsRequest;
 import imrcp.web.PlatformRequest;
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.TimeZone;
@@ -59,8 +56,11 @@ public abstract class LayerServlet extends HttpServlet
 
 	private final Pattern m_oObsRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/-?[0-9]{1,10}(?:/[0-9]{11,14}){2}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
 
+  private final Pattern m_oObsChartRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}chartObs(?:/-?[0-9]{1,10}){2}(?:/[0-9]{11,14}){3}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
 	private final Pattern m_oLayerRequestPatter = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}(?:[0-9]{11,14}/){2}[0-9]{1,2}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}/-?[0-9]{1,10}$");
 
+	
+	
 	private static final Logger m_oLogger = LogManager.getLogger(LayerServlet.class);
 
 	private final JsonFactory m_oJsonFactory = new JsonFactory();
@@ -86,7 +86,22 @@ public abstract class LayerServlet extends HttpServlet
 	/**
 	 *
 	 */
-	protected ArrayList<SourceUnit> m_oSourceUnits = new ArrayList();
+	
+	protected static Comparator<Obs> g_oObsDetailComp = (Obs o1, Obs o2) ->
+	{
+		int nReturn = ObsType.getDescription(o1.m_nObsTypeId).compareTo(ObsType.getDescription(o2.m_nObsTypeId));
+		if (nReturn == 0)
+		{
+			nReturn = o1.m_nContribId - o2.m_nContribId;
+			if (nReturn == 0)
+			{
+				nReturn = Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
+				if (nReturn == 0)
+					nReturn = Long.compare(o1.m_lObsTime2, o2.m_lObsTime2);
+			}
+		}
+		return nReturn;
+	};
 
 
 	/**
@@ -107,48 +122,8 @@ public abstract class LayerServlet extends HttpServlet
 		Context oCtx = (Context) oInitCtx.lookup("java:comp/env");
 		m_oDatasource = (DataSource) oCtx.lookup("jdbc/imrcp");
 		oInitCtx.close();
-
-		String sFilename = Config.getInstance().getString(getClass().getName(), "SourceUnits", "file", "");
-		try (BufferedReader oIn = new BufferedReader(new FileReader(sFilename)))
-		{
-			String sLine = null;
-			while ((sLine = oIn.readLine()) != null)
-			{
-				m_oSourceUnits.add(new SourceUnit(sLine));
-			}
-		}
-		catch (Exception oException)
-		{
-			m_oLogger.error("Error reading in Source Units file");
-		}
 	}
 
-
-	/**
-	 *
-	 * @param nObsTypeId
-	 * @param nContribId
-	 * @return
-	 */
-	protected String getSourceUnits(int nObsTypeId, int nContribId)
-	{
-		String sFromUnits = null;
-		for (SourceUnit oSearch : m_oSourceUnits)
-		{
-			if (oSearch.m_nObsTypeId == nObsTypeId)
-			{
-				if (oSearch.m_nContribId == nContribId)
-				{
-					return oSearch.m_sUnit;
-				}
-				if (oSearch.m_nContribId == 0)
-				{
-					sFromUnits = oSearch.m_sUnit;
-				}
-			}
-		}
-		return sFromUnits;
-	}
 
 
 	/**
@@ -182,7 +157,7 @@ public abstract class LayerServlet extends HttpServlet
 				}
 				return;
 			}
-
+			
 			if (sRequestUri.contains("platformObs"))
 			{// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
 				if (!m_oObsRequestPattern.matcher(sRequestUri).find())
@@ -211,9 +186,50 @@ public abstract class LayerServlet extends HttpServlet
 				oObsRequest.setPlatformIds(nPlatformId);
 				oObsRequest.setRequestTimestampRef(lRequestTimeRef);
 				oObsRequest.setRequestTimestampStart(lRequestTimeStart);
+				oObsRequest.setRequestTimestampEnd(lRequestTimeStart + 60000);
+				String sSourceId = oReq.getParameter("src");
+				oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
 
 				processObsRequest(oResp, oObsRequest);
 			}
+			else if (sRequestUri.contains("chartObs"))
+			{// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
+				if (!m_oObsChartRequestPattern.matcher(sRequestUri).find())
+				{
+					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
+					return;
+				}
+
+				String[] sUriParts = oReq.getRequestURI().split("/");
+
+				if (sUriParts.length < 9)
+				{
+					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
+					return;
+				}
+
+				long lRequestTimeRef = Long.parseLong(sUriParts[sUriParts.length - 7]);
+				long lRequestTimeStart = Long.parseLong(sUriParts[sUriParts.length - 6]);
+				long lRequestTimeEnd = Long.parseLong(sUriParts[sUriParts.length - 5]);
+				double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
+				double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
+				double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
+				double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 1]);
+				int nObstypeId = Integer.parseInt(sUriParts[sUriParts.length - 8]);
+				int nPlatformId = Integer.parseInt(sUriParts[sUriParts.length - 9]);
+				ObsChartRequest oObsRequest = new ObsChartRequest();
+				oObsRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
+				oObsRequest.setPlatformIds(nPlatformId);
+				oObsRequest.setRequestTimestampRef(lRequestTimeRef);
+				oObsRequest.setRequestTimestampStart(lRequestTimeStart);
+				oObsRequest.setRequestTimestampEnd(lRequestTimeEnd);
+				oObsRequest.setObstypeId(nObstypeId);
+				String sSourceId = oReq.getParameter("src");
+				oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
+
+				processChartRequest(oResp, oObsRequest);
+			}
+
 
 			if (!m_oLayerRequestPatter.matcher(sRequestUri).find())
 			{
@@ -275,6 +291,14 @@ public abstract class LayerServlet extends HttpServlet
 		}
 	}
 
+	protected void processChartRequest(HttpServletResponse oResp, ObsChartRequest oObsRequest) throws Exception
+	{
+
+		try (JsonGenerator oOutputGenerator = m_oJsonFactory.createJsonGenerator(oResp.getOutputStream(), JsonEncoding.UTF8))
+		{
+			buildObsChartResponseContent(oOutputGenerator, oObsRequest);
+		}
+	}
 
 	/**
 	 *
@@ -396,7 +420,7 @@ public abstract class LayerServlet extends HttpServlet
 		}
 		else
 		{
-			String sFromUnits = getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
+			String sFromUnits = Units.getInstance().getSourceUnits(oObs.m_nObsTypeId, oObs.m_nContribId);
 			String sEnglishUnits = ObsType.getUnits(oObs.m_nObsTypeId, false);
 			String sMetricUnits = ObsType.getUnits(oObs.m_nObsTypeId, true);
 
@@ -425,6 +449,18 @@ public abstract class LayerServlet extends HttpServlet
 	 * @throws Exception
 	 */
 	protected abstract void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest) throws Exception;
+
+	/**
+	 *
+	 * @param oOutputGenerator
+	 * @param oObsRequest
+	 * @throws Exception
+	 */
+	protected  void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
+  {
+
+  }
+
 
 
 	/**

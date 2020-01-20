@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+ */	
 function StaticLayerStyler(style)
 {
   this.style = style;
@@ -147,6 +147,22 @@ ValueIconMarkerParser.prototype.parseLayers = function (groupData)
 };
 
 
+function ValueIconMarkerStyler(codeIconMap)
+{
+  this.codeIconMap = codeIconMap;
+}
+
+ValueIconMarkerStyler.prototype.styleLayer = function (layer)
+{
+  var icon = this.codeIconMap[layer.getStationCode()];
+  if (icon && layer.setIcon)
+  {
+    layer.setIcon(icon);
+  }
+};
+
+
+
 function PolylineParser()
 {
 
@@ -186,6 +202,11 @@ function PolygonParser()
 
 }
 
+PolygonParser.hexLookup = {"0" : 0, "1" : 1, "2" : 2, "3" : 3, "4" : 4, "5" : 5,
+						"6" : 6, "7" : 7, "8" : 8, "9" : 9, "a" : 10, "A" : 10,
+						"b" : 11, "B" : 11, "c" : 12, "C" : 12, "d" : 13,
+						"D" : 13, "e" : 14, "E" : 14, "f" : 15, "F" : 15};
+
 PolygonParser.prototype.parseLayers = function (groupData)
 {
   var rowIndex = 0;
@@ -200,6 +221,8 @@ PolygonParser.prototype.parseLayers = function (groupData)
     var metricValue = groupData[rowIndex + 3];
     var englishValue = groupData[rowIndex + 2];
     var points = groupData[rowIndex + 4];
+	if (typeof(points) == "string")
+		points = this.decodePoints(points);
 
     var marker = L.wxdePolygon(id, points, code);
 
@@ -212,25 +235,68 @@ PolygonParser.prototype.parseLayers = function (groupData)
   return platformFeatureGroup;
 };
 
-/**
- function LayerDetailsManager(thead)
- {
- this.thead = thead;
- }
+PolygonParser.prototype.decodePoints = function(points)
+{
+	var nPos = 0;
+	var nPoints = this.decodeSigned(points, nPos, 8, 2147483647);
+	nPos += 8;
+	var oOuterRing = [];
 
- LayerDetailsManager.prototype.getThead = function()
- {
- return this.thead;
- };
+	var nX = this.decodeSigned(points, nPos, 8, 2147483647);
+	nPos += 8;
+	var nY = this.decodeSigned(points, nPos, 8, 2147483647);
+	nPos += 8;
+	this.pushIntPointToArray(oOuterRing, nX, nY);
+	for (var nIndex = 1; nIndex < nPoints; nIndex++)
+	{
+		nX += this.decodeSigned(points, nPos, 8, 2147483647);
+		nPos += 8;
+		nY += this.decodeSigned(points, nPos, 8, 2147483647);
+		nPos += 8;
+		this.pushIntPointToArray(oOuterRing, nX, nY);
+	}
+	var oLatLngs = [oOuterRing];
+	var nHoles = this.decodeSigned(points, nPos, 8, 2147483647);
+	nPos += 8;
+	for (var nHoleIndex = 0; nHoleIndex < nHoles; nHoleIndex++)
+	{
+		nPoints = this.decodeSigned(points, nPos, 8, 2147483647);
+		nPos += 8;
+		nX = this.decodeSigned(points, nPos, 8, 2147483647);
+		nPos += 8;
+		nY = this.decodeSigned(points, nPos, 8, 2147483647);
+		nPos += 8;
+		var oHole = [];
+		this.pushIntPointToArray(oHole, nX, nY);
+		for (nIndex = 1; nIndex < nPoints; nIndex++)
+		{
+			nX += this.decodeSigned(points, nPos, 8, 2147483647);
+			nPos += 8;
+			nY += this.decodeSigned(points, nPos, 8, 2147483647);
+			nPos += 8;
+			this.pushIntPointToArray(oHole, nX, nY);
+		}
+		oLatLngs.push(oHole);
+	}
 
+	return oLatLngs;
+};
 
+PolygonParser.prototype.decodeSigned = function(points, offset, length, maxpos)
+{
+	var nVal = 0;
+	for (var nIndex = offset; nIndex < offset + length; nIndex++)
+	{
+		nVal *= 16;
+		nVal += PolygonParser.hexLookup[points[nIndex]];
+	}
+	return nVal > maxpos ? nVal - ((maxpos + 1) * 2) : nVal;
+};
 
- LayerDetailsManager.prototype.generateDetailRows = function(layerDetails)
- {
-
- };
- **/
-
+PolygonParser.prototype.pushIntPointToArray = function(oArray, nX, nY)
+{
+	oArray.push([nY / 10000000.0, nX / 10000000.0]);
+};
 
 L.WxdeSummaryMap = L.Map.extend({
   options: {
@@ -241,7 +307,8 @@ L.WxdeSummaryMap = L.Map.extend({
             {
               dialog: null,
               platformDetailsDiv: null,
-              platformObsTable: null
+              platformObsTable: null,
+              platformObsChart: null
             },
     selectedTimeStartFunction: function ()
     {
@@ -480,7 +547,7 @@ L.WxdeSummaryMap = L.Map.extend({
   registerWxdeLayer: function (layer)
   {
     this._wxdeLayers.push(layer);
-    layer.setMap(this);
+    return layer.setMap(this);
   }
   ,
   getsummary: function ()
@@ -490,11 +557,8 @@ L.WxdeSummaryMap = L.Map.extend({
   ,
   refreshLayers: function ()
   {
-    var layerCount = this._wxdeLayers.length;
-    for (var layerIndex = 0; layerIndex < layerCount; ++layerIndex)
-    {
-      this._wxdeLayers[layerIndex].refreshData();
-    }
+    return Promise.all(this._wxdeLayers.map( layer => layer.refreshData()));
+    
     //thisLayer.refreshData();
   }
   ,
@@ -607,6 +671,7 @@ L.WxdeLayer = L.LayerGroup.extend({
     ignoreObstype: false,
     showObsLabels: true,
     isForecastOnly: false,
+    filterFunction: () => true,
     isUserSelectedFn: function ()
     {
       return(!this.checkbox || this.checkbox.checked);
@@ -659,6 +724,34 @@ L.WxdeLayer = L.LayerGroup.extend({
     }
 
   },
+  reprocessFilter: function()
+  {
+    this.eachZoomLayer((zoomLayer) => {
+      var filteredLayers = zoomLayer.getFilteredOutLayers();
+
+      var unFilteredLayers = [];
+      var i = filteredLayers.length; 
+      while(--i >= 0)
+      {
+        if(this.filter(filteredLayers[i]))
+          unFilteredLayers.push(filteredLayers.splice(i,1)[0]);
+      }
+
+      zoomLayer.eachLayer( (layer) => {
+        if(!this.filter(layer))
+        {
+          zoomLayer.removeLayer(layer);
+          zoomLayer.filterOutLayer(layer);
+        }
+      });
+
+      i = unFilteredLayers.length;
+      while(--i >= 0)
+      {
+        zoomLayer.addLayer(unFilteredLayers[i]);
+      }
+    });
+  },
   isForecastOnly: function ()
   {
     return this.options.isForecastOnly;
@@ -693,6 +786,10 @@ L.WxdeLayer = L.LayerGroup.extend({
 
     return enabled;
   },
+  filter: function(layer)
+  {
+    return this.options.filterFunction(layer);
+  },
   isUserSelected: function ()
   {
     return this.options.isUserSelectedFn() && (!this._requiresObs() || this.getSelectedObstype() > 0);
@@ -702,7 +799,7 @@ L.WxdeLayer = L.LayerGroup.extend({
     var zoomLayer = this._zoomLayers[zoom];
     if (!zoomLayer)
     {
-      zoomLayer = new L.LayerGroup();
+      zoomLayer = L.zoomLayer();
       this.addLayer(zoomLayer);
       this._zoomLayers[zoom] = zoomLayer;
     }
@@ -783,9 +880,29 @@ L.WxdeLayer = L.LayerGroup.extend({
     if (map.options.platformDetailsWindow && this.options.hasDetailsPopup)
     {
       var thisDetailsWindow = map.options.platformDetailsWindow;
+      
+    
+    var chart;
+    
+    var platformObsChart = $(thisDetailsWindow.platformObsChart);
+    var obsTable = $(thisDetailsWindow.platformObsTable);
+    var chartContainer = platformObsChart.parent();
+    
+    const closeChart = () => 
+      {
+        chartContainer.hide();
+        obsTable.show();
+        
+        if(chart)
+          chart.destroy();
+          
+        chart = null;
+      };
+      
+      chartContainer.find('.close-chart').click(closeChart);
+    
       this._markerMouseClick = function (event)
       {
-        var obsTable = $(thisDetailsWindow.platformObsTable);
         //mae table visible or invisible based on _hasobs
         var colCount;
         var closeDetailsFn = function ()
@@ -794,6 +911,7 @@ L.WxdeLayer = L.LayerGroup.extend({
         };
         var platformDetails = thisLayer.getPlatformDetails(this);
         var detailsDiv = thisLayer._wxdeMap.options.platformDetailsWindow.platformDetailsDiv;
+        closeChart();
         var buttonElement = '<button type="button" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-icon-only no-title-form ui-dialog-titlebar-close" role="button" title="Close"><span class="ui-button-icon-primary ui-icon ui-icon-closethick"></span><span class="ui-button-text">Close</span></button>';
         var detailsContent = buttonElement;
         detailsContent += platformDetails.sc + '<br />';
@@ -807,6 +925,19 @@ L.WxdeLayer = L.LayerGroup.extend({
         obsTable.find('tbody:last-child').append('<tr><td colspan="' + colCount + '">Loading data...</td></tr>');
         if (this instanceof L.Polygon)
           this.setPlatformId(parseInt(platformDetails.sc.toString(), 36));
+        
+        const startTime = thisLayer._wxdeMap.getSelectedTimeStart() ;
+        const chartUrlTemplate = thisLayer._baseUrl + "/chartObs/" + this.getPlatformId() 
+                + "/obsstypeId"
+                + "/" + startTime
+                + "/" + (startTime - 1 * 60 * 60 * 1000)
+                + "/" + (startTime + 1 * 60 * 60 * 1000)
+                + "/" + bounds.getNorth()
+                + "/" + bounds.getWest()
+                + "/" + bounds.getSouth()
+                + "/" + bounds.getEast()
+                + "?src=srcId";
+
         $.ajax({
           type: "GET",
           url: thisLayer._baseUrl + "/platformObs/" + this.getPlatformId() + "/" + thisLayer._wxdeMap.getSelectedTimeStart() + "/" + thisLayer._wxdeMap.getSelectedTimeEnd() + "/" + bounds.getNorth() + "/" + bounds.getWest() + "/" + bounds.getSouth() + "/" + bounds.getEast(),
@@ -824,7 +955,7 @@ L.WxdeLayer = L.LayerGroup.extend({
             if (additionalDetails.tnm)
               detailsContent += additionalDetails.tnm + '<br />';
             if (additionalDetails.sdet)
-              detailsContent += additionalDetails.sdet + '<br />';
+              detailsContent += '<div style="max-width:500px; overflow-wrap:break-word;">' + additionalDetails.sdet + '</div>';
             else
               detailsContent += platformDetails.sc + '<br />';
             detailsContent += 'Lat, Lon: ';
@@ -849,37 +980,35 @@ L.WxdeLayer = L.LayerGroup.extend({
               }
               else
               {
-                var selectedObstype = thisLayer.getSelectedObstype() * 1;
-
-                var spliceCount = 0;
-                var rowIndex = obsList.length;
-                while (--rowIndex > spliceCount)
-                {
-                  if (obsList[rowIndex].oi === selectedObstype)
-                  {
-                    obsList.splice(0, 0, obsList.splice(rowIndex, 1)[0]);
-                    ++spliceCount;
-                  }
-                }
-
                 var newRows = '';
                 for (rowIndex = 0; rowIndex < obsList.length; ++rowIndex)
                 {
                   var iObs = obsList[rowIndex];
-                  newRows += '<tr';
+                  
+                  var unit;
+                  unit = iObs.eu;
+                  
+                  newRows += '<tr>';
 
-                  if (rowIndex < spliceCount)
-                    newRows += ' class="selected-obs"';
-                  newRows += '>';
+                  const chartUrl = chartUrlTemplate.replace("obsstypeId", iObs.oi).replace("srcId", iObs.src);
 
-                  newRows += "<td class=\"obsType\">" + iObs.od + "</td>\n";
+                  newRows += "<td class=\"obsType\">" + iObs.od;
+                  if(unit)
+                  {
+                    newRows += ' <i class="chart-link fa fa-line-chart" ' + 
+                          'data-unit="' + unit + '" ' + 
+                          'data-obstype="' + iObs.od + '" ' +
+                          'data-url="' + chartUrl + '" ></i>';
+                  } 
+                  
+                  newRows += '</td>\n';
+                  
                   newRows += "<td class=\"obsType\">" + iObs.src + "</td>\n";
                   newRows += "<td class=\"timestamp\">" + moment(iObs.ts1).format(obsTimeFormat) + "</td>\n";
                   newRows += "<td class=\"timestamp\">" + moment(iObs.ts2).format(obsTimeFormat) + "</td>\n";
                   newRows += "<td class=\"td-value\">" + iObs.ev + "</td>\n";
                   newRows += "<td class=\"unit\">";
-                  var unit;
-                  unit = iObs.eu;
+                  
                   if (unit)
                     newRows += unit;
                   newRows += "</td>\n";
@@ -887,7 +1016,98 @@ L.WxdeLayer = L.LayerGroup.extend({
                   newRows += '</tr>';
                 }
 
-                obsTable.find('tbody:last-child').append(newRows);
+                $(newRows).appendTo(obsTable.find('tbody:last-child'))
+                        .find('i.chart-link').click(e => {
+                          const chartObstype = $(e.target).data("obstype");
+                          const chartObsUnit = $(e.target).data("unit");
+                          
+                          const icon = $(e.target);
+                          icon.removeClass('fa-line-chart')
+                                  .addClass('fa-spinner fa-spin');
+    $.getJSON($(e.target).data("url"))
+            .done( data => {
+                            icon.addClass('fa-line-chart').removeClass('fa-spinner fa-spin fa-exclamation-circle');
+                            let max = 0;
+                            let min = 0;
+                            for (let i = 0; i < data.length; ++i)
+                            {
+                              max = Math.max(max, data[i].y);
+                              min = Math.min(min, data[i].y);
+                            }
+
+                            const step = 10;
+                            if (max !== 0) // if max is not 0, then it is above 0
+                              max += (step - max % step);
+
+                            if (min !== 0) // if min is not 0, then it is less than 0
+                              min -= (step + min % step);
+                
+              
+              
+                            var config = {
+                              type: 'line',
+                              data: {
+                                datasets: [{
+                                  label: chartObstype,
+                                  fill: false,
+                                  data: data,
+                                  borderColor: 'black'
+                                }]
+                              },
+                              options: {
+                                title: {
+                                  text: chartObstype 
+                               },
+                                scales: {
+                                  xAxes: [{
+                                    type: 'time',
+                                    time: {
+                                      // round: 'day'
+                                      unit: 'hour',
+                                      tooltipFormat: obsTimeFormat,
+                                      displayFormats: {
+                                      }
+                                    }
+                                  },{
+                                    type: 'time',
+                                    time: {
+                                       unit: 'day',
+                                      tooltipFormat: obsTimeFormat,
+                                      displayFormats: {
+                                      }
+                                    }
+                                  }],
+                                  yAxes: [{
+                                    scaleLabel: {
+                                      display: true,
+                                      labelString: chartObsUnit
+                                    },
+                                    ticks: {
+                                      min: min,
+                                      max: max,
+                                      stepSize: step
+                                    }
+                                  }]
+                                },
+                                animation: {
+                                  onComplete: () => 
+                                  {
+                                    obsTable.hide();
+                                    thisDetailsWindow.dialog.dialog("option", "position", {my: "center", at: "center", of: '#map-container'}) ;
+                                  }
+                                }
+                              }
+                            };
+
+                            chart = new Chart(platformObsChart.get(0),  config);
+                            chartContainer.show();
+
+                  })
+                          .fail(() => {
+                            icon.removeClass('fa-line-chart').addClass('fa-exclamation-circle');
+                            setTimeout(() => icon.addClass('fa-line-chart').removeClass('fa-exclamation-circle'), "3000");
+                            });
+                        }).data("chart-obs", iObs);
               }
             }
             else
@@ -949,7 +1169,7 @@ L.WxdeLayer = L.LayerGroup.extend({
 
 
     var thisLayer = this;
-    $.ajax({
+    return $.ajax({
       type: "GET",
       url: this._baseUrl + "/GetZoomLevels",
       complete: function (data, status)
@@ -970,7 +1190,7 @@ L.WxdeLayer = L.LayerGroup.extend({
         }
       },
       timeout: 3000
-    });
+    }).promise();
   },
   refreshData: function (firstLoad)
   {
@@ -1000,7 +1220,7 @@ L.WxdeLayer = L.LayerGroup.extend({
         {
           if (this._wxdeMap.hasLayer(this))
             this._wxdeMap.removeLayer(this);
-          return;
+          return Promise.resolve();
         }
       }
       else
@@ -1009,7 +1229,7 @@ L.WxdeLayer = L.LayerGroup.extend({
           this._wxdeMap.removeLayer(this);
         if (this._checkbox)
           this._checkbox.disabled = true;
-        return;
+        return Promise.resolve();
       }
 
 
@@ -1026,7 +1246,7 @@ L.WxdeLayer = L.LayerGroup.extend({
           if (zoomIndex - highestValidZoomIndex > 1)
           {
             //if it's more than one zoom level above the current zoom level, drop all points
-            zoomLayer.clearLayers();
+            zoomLayer.clear();
             zoomLevelRequest.clearValues();
           }
         }
@@ -1042,9 +1262,9 @@ L.WxdeLayer = L.LayerGroup.extend({
           //if this layer doesn't have obs the time and obstype doesnt affect what layer elements are returned
           //if it does have obs changing the type or time will clear the cached elements
           if (this._hasObs() && (zoomLevelRequest.obsType !== obstype || zoomLevelRequest.timestamp !== currentTime))
-          {
+          { 
             zoomLevelRequest.clearValues();
-            zoomLayer.clearLayers();
+            zoomLayer.clear();
           }
           else if (zoomLevelRequest.latLngBounds.contains(bounds))
             continue;
@@ -1080,7 +1300,7 @@ L.WxdeLayer = L.LayerGroup.extend({
       if (requestData)
       {
         var thisLayer = this;
-        $.ajax({
+        return $.ajax({
           type: "GET",
           url: this._baseUrl + "/" + selectedTimeStart + "/" + selectedTimeEnd + "/" + currentZoom + "/" + bounds.getNorth() + "/" + bounds.getWest() + "/" + bounds.getSouth() + "/" + bounds.getEast() + "/" + obstype,
           complete: function (data, status)
@@ -1097,7 +1317,12 @@ L.WxdeLayer = L.LayerGroup.extend({
               {
                 var layer = newLayers[layerIndex];
                 thisLayer.layerStyler.styleLayer(layer);
-                zoomLayer.addLayer(layer);
+                
+                if(thisLayer.filter(layer))
+                  zoomLayer.addLayer(layer);
+                else
+                  zoomLayer.filterOutLayer(layer);
+                  
                 layer.requestBounds = bounds;
                 if (thisLayer.showObsLabels())
                 {
@@ -1135,6 +1360,7 @@ L.WxdeLayer = L.LayerGroup.extend({
       else if (firstLoad)
         this._wxdeMap.reorderLayerElements();
     }
+    return Promise.resolve();
   }
 });
 L.wxdeLayer = function (baseUrl, minZoom, layerParser, layerStyler, options)
@@ -1320,6 +1546,34 @@ L.WxdePolygon = L.Polygon.extend({
 L.wxdePolygon = function (id, latlngs, stationCode, options)
 {
   return new L.WxdePolygon(id, latlngs, stationCode, options);
+};
+
+
+L.ZoomLayer = L.LayerGroup.extend({
+  options: {
+  },
+  initialize: function (options)
+  {
+    L.LayerGroup.prototype.initialize.call(this, null);
+    this._filteredLayers = [];
+  },
+  getFilteredOutLayers: function()
+  {
+    return this._filteredLayers;
+  },
+  filterOutLayer: function(layer)
+  {
+    this._filteredLayers.push(layer);
+  },
+  clear: function()
+  {
+    this.clearLayers();
+    this._filteredLayers = [];
+  }
+});
+L.zoomLayer = function (options)
+{
+  return new L.ZoomLayer( options);
 };
 
 

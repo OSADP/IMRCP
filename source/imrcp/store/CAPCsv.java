@@ -1,24 +1,8 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
-import java.io.BufferedReader;
+import imrcp.system.CsvReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -33,6 +17,12 @@ public class CAPCsv extends CsvWrapper implements Comparator<CAPObs>
 	final ArrayList<CAPObs> m_oCapObs = new ArrayList();
 
 
+	public CAPCsv(int[] nObsTypes)
+	{
+		super(nObsTypes);
+	}
+
+
 	/**
 	 * Loads the file into memory. If it is a file that is already in memory it
 	 * continues reading from the last file position the BufferedReader was at.
@@ -43,47 +33,48 @@ public class CAPCsv extends CsvWrapper implements Comparator<CAPObs>
 	 * @throws Exception
 	 */
 	@Override
-	public void load(long lStartTime, long lEndTime, String sFilename) throws Exception
+	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception
 	{
-		String sLine;
 		if (m_oCsvFile == null)
 		{
-			m_oCsvFile = new BufferedReader(new InputStreamReader(new FileInputStream(sFilename)));
-			sLine = m_oCsvFile.readLine(); // skip header
+			m_oCsvFile = new CsvReader(new FileInputStream(sFilename));
+			m_oCsvFile.readLine(); // skip header
 		}
 
-		if (m_oCsvFile.ready())
+
+		synchronized (m_oCapObs)
 		{
-			synchronized (m_oCapObs)
+			int nCol;
+			while ((nCol = m_oCsvFile.readLine()) > 0)
 			{
-				while ((sLine = m_oCsvFile.readLine()) != null)
+				if (nCol == 1 && m_oCsvFile.isNull(0)) // skip blank lines
+					continue;
+
+				CAPObs oObs = new CAPObs(m_oCsvFile);
+				int nIndex = Collections.binarySearch(m_oCapObs, oObs, this);
+				if (nIndex >= 0) // update existing alerts
 				{
-					CAPObs oObs = new CAPObs(sLine);
-					int nIndex = Collections.binarySearch(m_oCapObs, oObs, this);
-					if (nIndex >= 0) // update existing alerts
-					{
-						if (Double.isFinite(oObs.m_dValue)) // m_dValue is set to NaN if the obs is used to closed an existing obs
-							m_oCapObs.add(nIndex, oObs);
-						else if (nIndex != 0)
-							m_oCapObs.get(nIndex - 1).m_lClearedTime = oObs.m_lTimeRecv;
-					}
-					else // add new alerts
-					{
-						nIndex = ~nIndex;
-						if (nIndex != 0)
-						{
-							CAPObs oPrevious = m_oCapObs.get(nIndex - 1);
-							if (oPrevious.m_sId.compareTo(oObs.m_sId) == 0 && oPrevious.m_nLat1 == oObs.m_nLat1 && oPrevious.m_nLon1 == oObs.m_nLon1 && oPrevious.m_nLat2 == oObs.m_nLat2 && oPrevious.m_nLon2 == oObs.m_nLon2)
-								oObs.m_lClearedTime = oPrevious.m_lTimeRecv;
-						}
+					if (Double.isFinite(oObs.m_dValue)) // m_dValue is set to NaN if the obs is used to closed an existing obs
 						m_oCapObs.add(nIndex, oObs);
+					else if (nIndex != 0)
+						m_oCapObs.get(nIndex - 1).m_lClearedTime = oObs.m_lTimeRecv;
+				}
+				else // add new alerts
+				{
+					nIndex = ~nIndex;
+					if (nIndex != 0)
+					{
+						CAPObs oPrevious = m_oCapObs.get(nIndex - 1);
+						if (oPrevious.m_sId.compareTo(oObs.m_sId) == 0 && oPrevious.m_nLat1 == oObs.m_nLat1 && oPrevious.m_nLon1 == oObs.m_nLon1 && oPrevious.m_nLat2 == oObs.m_nLat2 && oPrevious.m_nLon2 == oObs.m_nLon2)
+							oObs.m_lClearedTime = oPrevious.m_lTimeRecv;
 					}
+					m_oCapObs.add(nIndex, oObs);
 				}
 			}
 		}
-		m_lStartTime = lStartTime;
-		m_lEndTime = lEndTime;
+		setTimes(lValidTime, lStartTime, lEndTime);
 		m_sFilename = sFilename;
+		m_nContribId = nContribId;
 	}
 
 
@@ -91,7 +82,7 @@ public class CAPCsv extends CsvWrapper implements Comparator<CAPObs>
 	 * Cleans up resources when the file is taken out of memory.
 	 */
 	@Override
-	public void cleanup()
+	public void cleanup(boolean bDelete)
 	{
 		try
 		{

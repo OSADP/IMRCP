@@ -1,20 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
+import imrcp.system.CsvReader;
 import java.io.BufferedWriter;
 
 /**
@@ -91,12 +77,12 @@ public class Polygon implements Comparable<Polygon>
 	 * @param sCols
 	 * @param nPoints
 	 */
-	Polygon(String[] sCols, int[] nPoints)
+	Polygon(CsvReader oIn, int[] nPoints)
 	{
-		m_nBot = Integer.parseInt(sCols[1]);
-		m_nTop = Integer.parseInt(sCols[2]);
-		m_nLeft = Integer.parseInt(sCols[3]);
-		m_nRight = Integer.parseInt(sCols[4]);
+		m_nBot = oIn.parseInt(1);
+		m_nTop = oIn.parseInt(2);
+		m_nLeft = oIn.parseInt(3);
+		m_nRight = oIn.parseInt(4);
 		m_nPoints = nPoints;
 	}
 

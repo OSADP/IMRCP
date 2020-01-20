@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
 /**
@@ -20,6 +5,36 @@ package imrcp.geosrv;
  */
 public class GeoUtil
 {
+	public static final double EARTH_RADIUS_KM = 6371;
+	public static final double PIOVER180 = Math.PI / 180;
+	public static void getIntersection(double dPx, double dPy, double dEnd1x, double dEnd1y, double dQx, double dQy, double dEnd2x, double dEnd2y, double[] dInter)
+	{
+		dInter[0] = Double.NaN;
+		dInter[1] = Double.NaN;
+		double dDeltaQPx = dQx - dPx;
+		double dDeltaQPy = dQy - dPy;
+		double dRx = dEnd1x - dPx;
+		double dRy = dEnd1y - dPy;
+		double dSx = dEnd2x - dQx;
+		double dSy = dEnd2y - dQy;
+		double dRCrossS = cross(dRx, dRy, dSx, dSy);
+		if (dRCrossS == 0)
+			return;
+		double dT = cross(dDeltaQPx, dDeltaQPy, dSx, dSy) / dRCrossS;
+		if (dT < 0 || dT > 1)
+			return;
+		double dU = cross(dDeltaQPx, dDeltaQPy, dRx, dRy) / dRCrossS;
+		if (dU < 0 || dU > 1)
+			return;
+		dInter[0] = dPx + dT * dRx;
+		dInter[1] = dPy + dT * dRy;
+	}
+
+
+	public static double cross(double dVx, double dVy, double dWx, double dWy)
+	{
+		return dVx * dWy - dVy * dWx;
+	}
 
 	/**
 	 * Creates a new instance of GeoUtil
@@ -329,7 +344,7 @@ public class GeoUtil
 	 */
 	public static int toIntDeg(double dValue)
 	{
-		return ((int)Math.round(dValue * 10000000.0));
+		return ((int)Math.round((dValue + 0.00000005) * 10000000.0));
 	}
 
 
@@ -342,10 +357,29 @@ public class GeoUtil
 	 */
 	public static double fromIntDeg(int nValue)
 	{
-		return (((double)nValue) / 10000000.0);
+		return fromIntDeg(nValue, 10000000);
+	}
+	
+	
+	public static double fromIntDeg(int nValue, int nScale)
+	{
+		return (((double)nValue) / (1.0 * nScale));
 	}
 
 
+	public static boolean polyLineIsInsidePolygon(int[] nPolyline, int[] nPolyPoints)
+	{
+		for (int i = 0; i < nPolyline.length;)
+		{
+			int nX = nPolyline[i++];
+			int nY = nPolyline[i++];
+			if (!isInsidePolygon(nPolyPoints, nX, nY))
+				return false;
+		}
+		
+		return true;
+	}
+	
 	/**
 	 * Determines if a given x,y coordinate is inside the polygon defined by the
 	 * array.
@@ -356,7 +390,7 @@ public class GeoUtil
 	 * @param nY y coordinate of the point
 	 * @return true if the point is inside the polygon, otherwise false
 	 */
-	public static boolean isInsidePolygon(int[] nPolyPoints, int nX, int nY)
+	public static boolean isInsidePolygon(int[] nPolyPoints, double nX, double nY)
 	{
 		int nCount = 0;
 		SegIterator oSegIt = new SegIterator(nPolyPoints);
@@ -374,5 +408,111 @@ public class GeoUtil
 				++nCount;
 		}
 		return (nCount & 1) != 0;
+	}
+	
+	
+	public static boolean boundingBoxesIntersect(double dXmin1, double dYmin1, double dXmax1, double dYmax1, double dXmin2, double dYmin2, double dXmax2, double dYmax2)
+	{
+		return dYmax1 >= dYmin2 && dYmin1 <= dYmax2 && dXmax1 >= dXmin2 && dXmin1 <= dXmax2;
+	}
+	
+	public static boolean boundingBoxesIntersect(int nXmin1, int nYmin1, int nXmax1, int nYmax1, int nXmin2, int nYmin2, int nXmax2, int nYmax2)
+	{
+		return nYmax1 >= nYmin2 && nYmin1 <= nYmax2 && nXmax1 >= nXmin2 && nXmin1 <= nXmax2;
+	}
+	
+	public static int[] ensureCapacity(int[] nArray, int nMinCapacity)
+    {
+        nMinCapacity += nArray[0];
+        if (nArray.length < nMinCapacity)
+        {
+            int[] dNew = new int[(nMinCapacity * 2)];
+            System.arraycopy(nArray, 0, dNew, 0, nArray.length);
+            return dNew;
+        }
+        return nArray; // no changes were needed
+    }
+
+
+    public static double[] ensureCapacity(double[] dArray, int nMinCapacity)
+    {
+		if ((int)dArray[0] + nMinCapacity < dArray.length)
+	        return dArray; // no changes were needed
+
+		double[] dNew = new double[dArray.length * 2 + nMinCapacity];
+		System.arraycopy(dArray, 0, dNew, 0, (int)dArray[0]);
+		return dNew;
+    }
+	
+	public static int compareTol(double d1, double d2, double dTol)
+	{
+		if (d2 > d1)
+		{
+			if (d2 - d1 > dTol)
+				return -1;
+		}
+		else if (d1 - d2 > dTol)		
+			return 1;
+		
+		return 0;
+	}
+	
+	
+	public static int compareTol(int n1, int n2, int nTol)
+	{
+		if (n2 > n1)
+		{
+			if (n2 - n1 > nTol)
+				return -1;
+		}
+		else if (n1 - n2 > nTol)		
+			return 1;
+		
+		return 0;
+	}
+	
+	public static long getSqDist(int nX1, int nY1, int nX2, int nY2)
+	{
+		long nDeltaX = nX2 - nX1;
+		long nDeltaY = nY2 - nY1;
+		return nDeltaX * nDeltaX + nDeltaY * nDeltaY;
+	}
+	
+	
+	public static double adjustLat(double dLat)
+	{
+		if (dLat > 90.0)
+			return dLat - 180.0;
+		if (dLat < -90.0)
+			return dLat + 180.0;
+		
+		return dLat;
+	}
+	
+	
+	public static double adjustLon(double dLon)
+	{
+		if (dLon > 180)
+			return dLon - 360.0;
+		if (dLon <= -180)
+			return dLon + 360.0;
+		
+		return dLon;
+	}
+	
+	/**
+	 * Adapted from the Haversine formula
+	 * @param dLat1
+	 * @param dLon1
+	 * @param dLat2
+	 * @param dLon2
+	 * @return 
+	 */
+	public static double distanceFromLatLon(double dLat1, double dLon1, double dLat2, double dLon2)
+	{
+		double dLat = (dLat2 - dLat1) * PIOVER180;
+		double dLon = (dLon2 - dLon1) * PIOVER180;
+		double dA = Math.sin(dLat / 2) * Math.sin(dLat /2) + Math.cos(dLat1 * PIOVER180) * Math.cos(dLat2 * PIOVER180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+		return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(dA));
 	}
 }

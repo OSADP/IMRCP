@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
 import imrcp.geosrv.Segment;
@@ -68,12 +53,12 @@ public class MetroNcfWrapper extends NcfWrapper
 	 * @return ArrayList of Obs containing 0 or more Obs that match the query
 	 */
 	@Override
-	public synchronized ArrayList<Obs> getData(int nObsTypeId, long lTimestamp,
+	public ArrayList<Obs> getData(int nObsTypeId, long lTimestamp,
 	   int nLat1, int nLon1, int nLat2, int nLon2)
 	{
 		ArrayList<Obs> oReturn = new ArrayList();
-		NcfEntryData oDataStruct = getEntryByObsId(nObsTypeId);
-		if (oDataStruct == null)
+		NcfEntryData oEntry = (NcfEntryData)getEntryByObsId(nObsTypeId);
+		if (oEntry == null)
 		{
 			m_oLogger.error("Requested obstype not supported");
 			return oReturn;
@@ -82,24 +67,25 @@ public class MetroNcfWrapper extends NcfWrapper
 		((SegmentShps)Directory.getInstance().lookup("SegmentShps")).getLinks(oSegs, 0, nLon1, nLat1, nLon2, nLat2);
 
 		double dTimeSinceFirstFcst = (lTimestamp - m_lStartTime) / 60000; // convert milliseconds to minutes
-		int nVrt = getTimeIndex(oDataStruct.m_dVrt, dTimeSinceFirstFcst); // vertical axis is forecast minutes for metro file
-		if (nVrt < 0 || nVrt >= oDataStruct.m_dVrt.length)
+		double[] dMins = oEntry.m_oProjProfile.m_dYs; // vertical axis is forecast minutes for metro file
+		int nVrt = getTimeIndex(dMins, dTimeSinceFirstFcst); 
+		if (nVrt < 0 || nVrt > oEntry.getVrt())
 		{
 //			m_oLogger.error("Requested time out of range");
 			return oReturn;
 		}
-		Index oIndex = oDataStruct.m_oArray.getIndex();
+		Index oIndex = oEntry.m_oArray.getIndex();
 		oIndex.setDim(1, nVrt);
 		int nObsLength;
-		long lObsTime = m_lStartTime + ((int)oDataStruct.m_dVrt[nVrt] * 60000); // convert minutes to milliseconds
-		if (nVrt == oDataStruct.m_dVrt.length - 1)
-			nObsLength = (int)((oDataStruct.m_dVrt[nVrt] - oDataStruct.m_dVrt[nVrt - 1]) * 60000);
+		long lObsTime = m_lStartTime + ((int)dMins[nVrt] * 60000); // convert minutes to milliseconds
+		if (nVrt == dMins.length - 1)
+			nObsLength = (int)((dMins[nVrt] - dMins[nVrt - 1]) * 60000);
 		else
-			nObsLength = (int)((oDataStruct.m_dVrt[nVrt + 1] - oDataStruct.m_dVrt[nVrt]) * 60000);
+			nObsLength = (int)((dMins[nVrt + 1] - dMins[nVrt]) * 60000);
 
 		for (Segment oSeg : oSegs)
 		{
-			int nHrz = Arrays.binarySearch(oDataStruct.m_dHrz, (double)oSeg.m_nId);
+			int nHrz = Arrays.binarySearch(oEntry.m_oProjProfile.m_dXs, (double)oSeg.m_nId); // horizontal axis is segment ids for metro file
 
 			if (nHrz < 0)
 				continue;
@@ -108,10 +94,10 @@ public class MetroNcfWrapper extends NcfWrapper
 			{
 				oIndex.setDim(0, nHrz);
 
-				double dVal = oDataStruct.m_oArray.getDouble(oIndex);
-				if (oDataStruct.m_oVar.isFillValue(dVal) || oDataStruct.m_oVar.isInvalidData(dVal) || oDataStruct.m_oVar.isMissing(dVal))
+				double dVal = oEntry.m_oArray.getDouble(oIndex);
+				if (oEntry.m_oVar.isFillValue(dVal) || oEntry.m_oVar.isInvalidData(dVal) || oEntry.m_oVar.isMissing(dVal))
 					continue;
-				oReturn.add(new Obs(nObsTypeId, (int)(Integer.valueOf("metro", 36)), oSeg.m_nId, lObsTime, lObsTime + nObsLength, m_oNcFile.getLastModified(), oSeg.m_nYmid, oSeg.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oSeg.m_tElev, dVal));
+				oReturn.add(new Obs(nObsTypeId, m_nContribId, oSeg.m_nId, lObsTime, lObsTime + nObsLength, m_oNcFile.getLastModified(), oSeg.m_nYmid, oSeg.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oSeg.m_tElev, dVal));
 			}
 			catch (Exception oException)
 			{
@@ -157,33 +143,33 @@ public class MetroNcfWrapper extends NcfWrapper
 	 * @return the value for the query, or NaN if a result couldn't be found
 	 */
 	@Override
-	public synchronized double getReading(int nObsTypeId, long lTimestamp,
+	public double getReading(int nObsTypeId, long lTimestamp,
 	   int nLat, int nLon, Date oTimeRecv)
 	{
 		Segment oSeg = ((SegmentShps)Directory.getInstance().lookup("SegmentShps")).getLink(0, nLon, nLat);
 		if (oSeg == null)
 			return Double.NaN;
 
-		NcfEntryData oDataStruct = getEntryByObsId(nObsTypeId);
-		if (oDataStruct == null)
+		NcfEntryData oEntry = (NcfEntryData)getEntryByObsId(nObsTypeId);
+		if (oEntry == null)
 			return Double.NaN; // requested observation type not supported
 
-		double dTimeSinceFirstFcst = lTimestamp - m_lStartTime;
-		int nVrt = getTimeIndex(oDataStruct.m_dVrt, dTimeSinceFirstFcst);
+		double dTimeSinceFirstFcst = (lTimestamp - m_lStartTime) / 60000;
+		int nVrt = getTimeIndex(oEntry.m_oProjProfile.m_dYs, dTimeSinceFirstFcst);
 		m_lLastUsed = System.currentTimeMillis();
-		int nHrz = Arrays.binarySearch(oDataStruct.m_dHrz, (double)oSeg.m_nId);
+		int nHrz = Arrays.binarySearch(oEntry.m_oProjProfile.m_dXs, (double)oSeg.m_nId);
 
 		if (nHrz < 0 || nVrt < 0)
 			return Double.NaN; // projected coordinates are outside data ranage
 
 		try
 		{
-			Index oIndex = oDataStruct.m_oArray.getIndex();
+			Index oIndex = oEntry.m_oArray.getIndex();
 			oIndex.setDim(0, nHrz);
 			oIndex.setDim(1, nVrt);
 
-			double dVal = oDataStruct.m_oArray.getDouble(oIndex);
-			if (oDataStruct.m_oVar.isFillValue(dVal) || oDataStruct.m_oVar.isInvalidData(dVal) || oDataStruct.m_oVar.isMissing(dVal))
+			double dVal = oEntry.m_oArray.getDouble(oIndex);
+			if (oEntry.m_oVar.isFillValue(dVal) || oEntry.m_oVar.isInvalidData(dVal) || oEntry.m_oVar.isMissing(dVal))
 				return Double.NaN; // no valid data for specified location
 			if (oTimeRecv != null)
 				oTimeRecv.setTime(m_oNcFile.getLastModified());
@@ -207,7 +193,7 @@ public class MetroNcfWrapper extends NcfWrapper
 	 * @throws Exception
 	 */
 	@Override
-	public void load(long lStartTime, long lEndTime, String sFilename)
+	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId)
 	   throws Exception
 	{
 		try
@@ -218,7 +204,7 @@ public class MetroNcfWrapper extends NcfWrapper
 			double[] dTime = fromArray(oNcFile, m_sTime);
 
 			// create obstype array mapping
-			ArrayList<NcfEntryData> oEntryMap = new ArrayList(m_nObsTypes.length);
+			ArrayList<EntryData> oEntryMap = new ArrayList(m_nObsTypes.length);
 			for (Variable oVar : oNcFile.getRootGroup().getVariables())
 			{
 				for (int nObsTypeIndex = 0; nObsTypeIndex < m_sObsTypes.length; nObsTypeIndex++)
@@ -228,11 +214,11 @@ public class MetroNcfWrapper extends NcfWrapper
 				}
 			}
 
+			setTimes(lValidTime, lStartTime, lEndTime);
 			m_oEntryMap = oEntryMap;
 			m_oNcFile = oNcFile;
-			m_lStartTime = lStartTime;
-			m_lEndTime = lEndTime;
 			m_sFilename = sFilename;
+			m_nContribId = nContribId;
 		}
 		catch (Exception oException)
 		{

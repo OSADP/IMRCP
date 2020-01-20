@@ -1,26 +1,10 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
-import imrcp.geosrv.DetectorMapping;
-import imrcp.geosrv.KCScoutDetectorMappings;
-import imrcp.geosrv.NED;
+import imrcp.geosrv.KCScoutDetectorLocation;
+import imrcp.geosrv.KCScoutDetectorLocations;
 import imrcp.system.Config;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
-import imrcp.system.ObsType;
 import java.io.BufferedWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -32,7 +16,7 @@ import java.util.TimeZone;
  * detector archive files and to insert detector observations into the database
  *
  */
-public class KCScoutDetector
+public class KCScoutDetector implements Comparable<KCScoutDetector>
 {
 
 	/**
@@ -80,20 +64,17 @@ public class KCScoutDetector
 	 */
 	private SimpleDateFormat m_oFormat = new SimpleDateFormat("M'/'d'/'yyyy H:mm");
 
-	private static final ArrayList<DetectorMapping> m_oDetectorMapping = new ArrayList();
+	private static final ArrayList<KCScoutDetectorLocation> m_oDetectorMapping = new ArrayList();
 
-	private static int m_nObsLength = Config.getInstance().getInt("imrcp.store.KCScoutDetectorsStore", "imrcp.store.KCScoutDetectorsStore", "obslength", 60000);
-
-	/**
-	 *
-	 */
-	public static long m_lLastRun;
+	static int m_nObsLength = Config.getInstance().getInt("imrcp.store.KCScoutDetectorsStore", "imrcp.store.KCScoutDetectorsStore", "obslength", 60000);
+	
+	public KCScoutDetectorLocation m_oLocation;
 
 
 	static
 	{
-		((KCScoutDetectorMappings)Directory.getInstance().lookup("KCScoutDetectorMappings")).getDetectors(m_oDetectorMapping, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
-		Collections.sort(m_oDetectorMapping, DetectorMapping.g_oARCHIVEIDCOMPARATOR);
+		((KCScoutDetectorLocations)Directory.getInstance().lookup("KCScoutDetectorLocations")).getDetectors(m_oDetectorMapping, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
+		Collections.sort(m_oDetectorMapping, KCScoutDetectorLocation.g_oARCHIVEIDCOMPARATOR);
 	}
 
 
@@ -110,49 +91,39 @@ public class KCScoutDetector
 	}
 
 
-	/**
-	 * Custom constructor. This creates a KCScoutDetector object by parsing a
-	 * line of an archive file.
-	 *
-	 * @param sArchive the line of the archive file
-	 * @param bReadUTC true if the archive is in UTC, false if it is is Central
-	 * time
-	 * @throws Exception
-	 */
-	public KCScoutDetector(String sArchive, boolean bReadUTC) throws Exception
+	public KCScoutDetector(CsvReader oIn, boolean bReadUTC) throws Exception
 	{
-		String[] sCols = sArchive.split(",");
-		m_nId = Integer.parseInt(sCols[0]);
-		m_sStation = sCols[1];
+		m_nId = oIn.parseInt(0);
+		m_sStation = oIn.parseString(1);
 		if (bReadUTC)
 			m_oFormat.setTimeZone(Directory.m_oUTC);
 		else
 			m_oFormat.setTimeZone(TimeZone.getTimeZone("CST6CDT"));
-		m_lTimestamp = m_oFormat.parse(sCols[4]).getTime();
-		m_oLanes = new Lane[Integer.parseInt(sCols[6])];
-		m_nTotalVolume = sCols[8].isEmpty() ? 0 : Integer.parseInt(sCols[8]);
-		m_dAverageOcc = sCols[10].isEmpty() ? 0 : Double.parseDouble(sCols[10]);
-		m_dAverageSpeed = sCols[11].isEmpty() ? 0 : Double.parseDouble(sCols[11]);
+		m_lTimestamp = m_oFormat.parse(oIn.parseString(4)).getTime();
+		m_oLanes = new Lane[oIn.parseInt(6)];
+		m_nTotalVolume = oIn.isNull(8) ? 0 : oIn.parseInt(8);
+		m_dAverageOcc = oIn.isNull(10) ? 0 : oIn.parseDouble(10);
+		m_dAverageSpeed = oIn.isNull(11) ? 0 : oIn.parseDouble(11);
 
 		for (int i = 0; i < m_oLanes.length; i++)
 		{
 			int nStart = (12 * i) + 20;
 			m_oLanes[i] = new Lane();
-			if (sCols[nStart].compareTo("") != 0)
-				m_oLanes[i].m_nVolume = Integer.parseInt(sCols[nStart]);
-			else
-				m_oLanes[i].m_nVolume = -1;
-			if (sCols[nStart + 2].compareTo("") != 0)
-				m_oLanes[i].m_dOcc = Double.parseDouble(sCols[nStart + 2]);
-			else
-				m_oLanes[i].m_dOcc = -1;
-			if (sCols[nStart + 3].compareTo("") != 0)
-				m_oLanes[i].m_dSpeed = Double.parseDouble(sCols[nStart + 3]);
-			else
-				m_oLanes[i].m_dSpeed = -1;
+			m_oLanes[i].m_nVolume = oIn.isNull(nStart) ? -1 : oIn.parseInt(nStart);
+			m_oLanes[i].m_dOcc = oIn.isNull(nStart + 2) ? -1 : oIn.parseDouble(nStart + 2);
+			m_oLanes[i].m_dSpeed = oIn.isNull(nStart + 3) ? -1 : oIn.parseDouble(nStart + 3);
 		}
-
-		//can implement getting volume, occupancy, and speed per lane later
+		
+		KCScoutDetectorLocation oSearch = new KCScoutDetectorLocation();
+		oSearch.m_nArchiveId = m_nId;
+		int nIndex = Collections.binarySearch(m_oDetectorMapping, oSearch, KCScoutDetectorLocation.g_oARCHIVEIDCOMPARATOR);
+		if (nIndex >= 0)
+			m_oLocation = m_oDetectorMapping.get(nIndex);
+		else
+		{
+			m_oLocation = new KCScoutDetectorLocation();
+			m_oLocation.m_nImrcpId = Integer.MIN_VALUE;
+		}
 	}
 
 
@@ -244,31 +215,13 @@ public class KCScoutDetector
 	}
 
 
-	/**
-	 *
-	 * @param nObsType
-	 * @return
-	 * @throws Exception
-	 */
-	public Obs createObs(int nObsType) throws Exception
+	@Override
+	public int compareTo(KCScoutDetector o)
 	{
-		DetectorMapping oSearch = new DetectorMapping();
-		oSearch.m_nArchiveId = m_nId;
-		int nIndex = Collections.binarySearch(m_oDetectorMapping, oSearch, DetectorMapping.g_oARCHIVEIDCOMPARATOR);
-		if (nIndex < 0)
-			return null;
-		oSearch = m_oDetectorMapping.get(nIndex);
-		double dVal;
-		if (nObsType == ObsType.SPDLNK)
-			dVal = m_dAverageSpeed;
-		else if (nObsType == ObsType.VOLLNK)
-			dVal = m_nTotalVolume;
-		else if (nObsType == ObsType.DNTLNK)
-			dVal = m_dAverageOcc;
-		else
-			return null;
-
-		short tElev = (short)Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(oSearch.m_nLat, oSearch.m_nLon));
-		return new Obs(nObsType, (int)Integer.valueOf("scout", 36), oSearch.m_nImrcpId, m_lTimestamp, m_lTimestamp + m_nObsLength, m_lTimestamp + 120000, oSearch.m_nLat, oSearch.m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, tElev, dVal, Short.MIN_VALUE, oSearch.m_sDetectorName);
+		int nReturn = m_oLocation.m_nImrcpId - o.m_oLocation.m_nImrcpId;
+		if (nReturn == 0)
+			nReturn = Long.compare(m_lTimestamp, o.m_lTimestamp);
+		
+		return nReturn;
 	}
 }

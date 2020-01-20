@@ -1,23 +1,9 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.collect;
 
-import imrcp.geosrv.GeoUtil;
-import imrcp.geosrv.NED;
+import imrcp.geosrv.StormwatchLocation;
+import imrcp.geosrv.StormwatchLocations;
 import imrcp.store.Obs;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import java.text.SimpleDateFormat;
 
@@ -28,26 +14,10 @@ import java.text.SimpleDateFormat;
  */
 public class StormWatchDevice
 {
-
-	/**
-	 * Name of the device
-	 */
-	private String m_sName;
-
 	/**
 	 * Obs Type of the observations received from this device
 	 */
 	private int m_nObsType;
-
-	/**
-	 * StormWatch site id
-	 */
-	private int m_nSiteId;
-
-	/**
-	 * StormWatch site uuid
-	 */
-	private String m_sSiteUuid;
 
 	/**
 	 * StormWatch device id
@@ -58,33 +28,16 @@ public class StormWatchDevice
 	 * StormWatch device uuid
 	 */
 	private String m_sDeviceUuid;
+	
+	private StormwatchLocation m_oLocation;
 
-	/**
-	 * Latitude of the device written in integer degrees scaled to 7 decimal
-	 * places
-	 */
-	private int m_nLat;
-
-	/**
-	 * Longitude of the device written in integer degrees scaled to 7 decimal
-	 * places
-	 */
-	private int m_nLon;
-
-	/**
-	 * Elevation of the device in meters looked up by NED
-	 */
-	private short m_tElev;
-
-	/**
-	 * Flag used to tell if the device is in the study area
-	 */
-	private boolean m_bInStudyArea;
+	private final static StormwatchLocations g_oSTORMWATCHLOCATIONS = (StormwatchLocations)Directory.getInstance().lookup("StormwatchLocations");
 
 	/**
 	 * Formatting object used to get the correct format of dates foro the url
 	 */
 	private SimpleDateFormat m_oFormat = new SimpleDateFormat("yyyy-MM-dd");
+
 
 	/**
 	 * Reusable Obs object that stores the data of the latest observation
@@ -100,23 +53,13 @@ public class StormWatchDevice
 	 * @param sLine csv line from the devices file
 	 * @throws Exception
 	 */
-	public StormWatchDevice(String sLine) throws Exception
+	public StormWatchDevice(CsvReader oIn) throws Exception
 	{
-		String[] sCols = sLine.split(",");
-		m_sName = sCols[0];
-		m_nObsType = Integer.valueOf(sCols[1], 36);
-		m_nLat = GeoUtil.toIntDeg(Double.parseDouble(sCols[2]));
-		m_nLon = GeoUtil.toIntDeg(Double.parseDouble(sCols[3]));
-		if (sCols[4].compareTo("x") == 0)
-			m_bInStudyArea = true;
-		else
-			m_bInStudyArea = false;
-		m_nSiteId = Integer.parseInt(sCols[5]);
-		m_sSiteUuid = sCols[6];
-		m_nDeviceId = Integer.parseInt(sCols[7]);
-		m_sDeviceUuid = sCols[8];
-		m_tElev = (short)Double.parseDouble(((NED)Directory.getInstance().lookup("NED")).getAlt(m_nLat, m_nLon));
-		m_oLastObs = new Obs(m_nObsType, Integer.valueOf("stormw", 36), Integer.MIN_VALUE, 0, 0, 0, m_nLat, m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, m_tElev, Double.NaN, Short.MIN_VALUE, m_sDeviceUuid);
+		m_nObsType = Integer.valueOf(oIn.parseString(0), 36);
+		m_oLocation = g_oSTORMWATCHLOCATIONS.getStormwatchLocation(oIn.parseInt(1), oIn.parseString(2));
+		m_nDeviceId = oIn.parseInt(3);
+		m_sDeviceUuid = oIn.parseString(4);
+		m_oLastObs = new Obs(m_nObsType, Integer.valueOf("stormw", 36), m_oLocation.m_nImrcpId, 0, 0, 0, m_oLocation.m_nLat, m_oLocation.m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, m_oLocation.m_tElev, Double.NaN, Short.MIN_VALUE, m_sDeviceUuid);
 	}
 
 
@@ -133,6 +76,11 @@ public class StormWatchDevice
 	 */
 	public String getUrl(String sUrlPattern, long lTimestamp)
 	{
-		return String.format(sUrlPattern, m_nSiteId, m_sSiteUuid, m_nDeviceId, m_sDeviceUuid, m_oFormat.format(lTimestamp), m_oFormat.format(lTimestamp + 86400000));
+		return String.format(sUrlPattern, m_oLocation.m_nSiteId, m_oLocation.m_sSiteUUID, m_nDeviceId, m_sDeviceUuid, m_oFormat.format(lTimestamp), m_oFormat.format(lTimestamp + 86400000));
+	}
+	
+	public String getSiteUuid()
+	{
+		return m_oLocation.m_sSiteUUID;
 	}
 }

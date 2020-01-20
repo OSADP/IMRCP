@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2017 Federal Highway Administration.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@ package imrcp.web.layers;
 
 import java.io.IOException;
 import java.util.Enumeration;
+import java.util.regex.Pattern;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -34,6 +35,7 @@ import javax.servlet.http.HttpSession;
 })
 public class SessionResetServlet extends HttpServlet
 {
+  private Pattern servletRequestAttribute = Pattern.compile("^.*LastRequestBounds/[\\-_a-zA-Z0-9]{1,20}$");
 
 	/**
 	 * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
@@ -56,7 +58,7 @@ public class SessionResetServlet extends HttpServlet
 		while (oSessionAttributes.hasMoreElements())
 		{
 			String sAttributeName = oSessionAttributes.nextElement();
-			if (sAttributeName.endsWith("LastRequestBounds"))
+			if (servletRequestAttribute.matcher(sAttributeName).matches())
 				oSession.removeAttribute(sAttributeName);
 		}
 	}

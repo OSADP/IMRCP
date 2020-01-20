@@ -1,31 +1,17 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.store;
 
+import imrcp.FileCache;
+import imrcp.FilenameFormatter;
 import imrcp.collect.KCScoutDetectors;
 import imrcp.system.Config;
+import imrcp.system.CsvReader;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -40,14 +26,28 @@ import java.util.zip.GZIPOutputStream;
 public class KCScoutDetectorCsv extends CsvWrapper
 {
 
-	private ArrayList<KCScoutDetector> m_oDets = new ArrayList();
-	private static String m_sFILEFORMAT;
+	ArrayList<KCScoutDetector> m_oDets = new ArrayList();
+	private static final String m_sFILEFORMAT;
 	
 	static
 	{
-		m_sFILEFORMAT = Config.getInstance().getString("imrcp.store.KCScoutDetectorsStore", "imrcp.store.KCScoutDetectorsStore", "dest", "");
+		String[] sFormat = Config.getInstance().getStringArray("imrcp.store.KCScoutDetectorsStore", "imrcp.store.KCScoutDetectorsStore", "format", "");
+		m_sFILEFORMAT = sFormat[0];
 	}
 
+
+	public KCScoutDetectorCsv(int[] nObsTypes)
+	{
+		super(nObsTypes);
+	}
+
+	@Override
+	public void deleteFile(File oFile)
+	{
+		// do nothing so we don't lose data
+	}
+	
+	
 	/**
 	 *
 	 * @param lStartTime
@@ -56,50 +56,45 @@ public class KCScoutDetectorCsv extends CsvWrapper
 	 * @throws Exception
 	 */
 	@Override
-	public void load(long lStartTime, long lEndTime, String sFilename) throws Exception
+	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception
 	{
-		String sLine;
 		ArrayList<KCScoutDetector> oNewDets = new ArrayList();
 		if (m_oCsvFile == null)
 		{
-			m_lStartTime = lStartTime;
-			m_lEndTime = lEndTime;
+			if (sFilename.endsWith(".gz"))
+				sFilename = sFilename.substring(0, sFilename.lastIndexOf(".gz"));
 			m_sFilename = sFilename;
+			setTimes(lValidTime, lStartTime, lEndTime);
 			File oCsv = new File(sFilename);
 			File oGz = new File(sFilename + ".gz");
 			if (oGz.exists() && oCsv.exists()) // get the correct type of input stream depending on if the .gz file exists
 			{
 				oGz.delete(); // if both exists the zip didn't finish writing
-				m_oCsvFile = new BufferedReader(new InputStreamReader(new FileInputStream(oCsv)));
+				m_oCsvFile = new CsvReader(new FileInputStream(oCsv));
 			}
 			else if (oGz.exists())
-				m_oCsvFile = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(oGz))));
+				m_oCsvFile = new CsvReader(new GZIPInputStream(new FileInputStream(oGz)));
 			else
-				m_oCsvFile = new BufferedReader(new InputStreamReader(new FileInputStream(sFilename)));
-			sLine = m_oCsvFile.readLine(); // skip header
+				m_oCsvFile = new CsvReader(new FileInputStream(oCsv));
+			m_oCsvFile.readLine(); // skip header
 		}
 		
-		if (m_oCsvFile.ready())
+
+		int nCol;
+		while ((nCol = m_oCsvFile.readLine()) > 0)
 		{
-			while ((sLine = m_oCsvFile.readLine()) != null)
-				oNewDets.add(new KCScoutDetector(sLine, true));
+			if (nCol > 1) // skip blank lines
+				oNewDets.add(new KCScoutDetector(m_oCsvFile, true));
 		}
-		
+				
+		m_nContribId = nContribId;
 		synchronized (this)
 		{
-			Obs oObs = null;
-
 			for (KCScoutDetector oDet : oNewDets)
 			{
-				oObs = oDet.createObs(ObsType.SPDLNK);
-				if (oObs != null)
-					m_oObs.add(oObs);
-				oObs = oDet.createObs(ObsType.VOLLNK);
-				if (oObs != null)
-					m_oObs.add(oObs);
-				oObs = oDet.createObs(ObsType.DNTLNK);
-				if (oObs != null)
-					m_oObs.add(oObs);
+				m_oObs.add(new Obs(ObsType.SPDLNK, m_nContribId, oDet.m_oLocation.m_nImrcpId, oDet.m_lTimestamp, oDet.m_lTimestamp + KCScoutDetector.m_nObsLength, oDet.m_lTimestamp + 120000, oDet.m_oLocation.m_nLat, oDet.m_oLocation.m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, oDet.m_oLocation.m_tElev, oDet.m_dAverageSpeed, Short.MIN_VALUE, oDet.m_oLocation.m_sDetectorName));
+				m_oObs.add(new Obs(ObsType.VOLLNK, m_nContribId, oDet.m_oLocation.m_nImrcpId, oDet.m_lTimestamp, oDet.m_lTimestamp + KCScoutDetector.m_nObsLength, oDet.m_lTimestamp + 120000, oDet.m_oLocation.m_nLat, oDet.m_oLocation.m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, oDet.m_oLocation.m_tElev, oDet.m_nTotalVolume, Short.MIN_VALUE, oDet.m_oLocation.m_sDetectorName));
+				m_oObs.add(new Obs(ObsType.DNTLNK, m_nContribId, oDet.m_oLocation.m_nImrcpId, oDet.m_lTimestamp, oDet.m_lTimestamp + KCScoutDetector.m_nObsLength, oDet.m_lTimestamp + 120000, oDet.m_oLocation.m_nLat, oDet.m_oLocation.m_nLon, Integer.MIN_VALUE, Integer.MIN_VALUE, oDet.m_oLocation.m_tElev, oDet.m_dAverageOcc, Short.MIN_VALUE, oDet.m_oLocation.m_sDetectorName));
 			}
 			m_oDets.addAll(oNewDets);
 			Introsort.usort(m_oObs, Obs.g_oCompObsByTime);
@@ -111,7 +106,7 @@ public class KCScoutDetectorCsv extends CsvWrapper
 	 *
 	 */
 	@Override
-	public void cleanup()
+	public void cleanup(boolean bDelete)
 	{
 		try
 		{
@@ -123,8 +118,10 @@ public class KCScoutDetectorCsv extends CsvWrapper
 			{
 				long lNow = System.currentTimeMillis();
 				lNow = (lNow / 86400000) * 86400000;
-				SimpleDateFormat oParser = new SimpleDateFormat(m_sFILEFORMAT);
-				long lFileTime = oParser.parse(m_sFilename).getTime();
+				FilenameFormatter oFormatter = new FilenameFormatter(m_sFILEFORMAT);
+				long[] lTimes = new long[3];
+				oFormatter.parse(m_sFilename, lTimes);
+				long lFileTime = lTimes[FileCache.START];
 				lFileTime = (lFileTime / 86400000) * 86400000;
 				
 				if (Long.compare(lNow, lFileTime) != 0) // only write the gzip file if the date right now is not the date of the csv file

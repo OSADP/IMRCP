@@ -1,21 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.subs;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
 import imrcp.geosrv.Segment;
 import imrcp.geosrv.SegmentShps;
 import imrcp.geosrv.SensorLocation;
@@ -24,6 +9,7 @@ import imrcp.store.Obs;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import imrcp.system.Scheduling;
+import imrcp.system.Units;
 import imrcp.web.LatLng;
 import java.io.File;
 import java.io.PrintWriter;
@@ -49,12 +35,12 @@ import javax.sql.DataSource;
  * Provides an interface and control class that gathers and processes
  * subscription data on a scheduled basis.
  */
-public class Subscriptions extends ImrcpBlock
+public class Subscriptions extends BaseBlock
 {
 
 	/**
-	 * Reference to the SegmentShps ImrcpBlock that allows access to segment
-	 * definitions
+	 * Reference to the SegmentShps BaseBlock that allows access to segment
+ definitions
 	 */
 	private final SegmentShps m_oRoads = (SegmentShps)Directory.getInstance().lookup("SegmentShps");
 
@@ -64,12 +50,12 @@ public class Subscriptions extends ImrcpBlock
 	private static final long NUM_OF_MILLI_SECONDS_IN_A_DAY = 1000L * 60 * 60 * 24;
 
 	/**
-	 * List of strings that represent the instance names of ImrcpBlock that are
-	 * SensorLocations
+	 * List of strings that represent the instance names of BaseBlock that are
+ SensorLocations
 	 */
 	private static final String[] g_sSENSORBLOCKS = new String[]
 	{
-		"KCScoutDetectorMappings"
+		"KCScoutDetectorLocations", "StormwatchLocations", "AHPSLocations"
 	};
 
 	/**
@@ -137,7 +123,7 @@ public class Subscriptions extends ImrcpBlock
 	 * Reference to ObsView which is the "one-stop shop" for get data from the
 	 * data stores
 	 */
-	private ImrcpBlock m_oObsView = Directory.getInstance().lookup("ObsView");
+	private BaseBlock m_oObsView = (BaseBlock)Directory.getInstance().lookup("ObsView");
 
 	/**
 	 * Configured subscriptions data source.
@@ -244,6 +230,7 @@ public class Subscriptions extends ImrcpBlock
 			List<ReportSubscription> oSubscriptions = getSubscriptions(oNow.getTimeInMillis(), null, iSubsConnection);
 			m_oLogger.debug("Processing " + oSubscriptions.size() + " subscriptions");
 			List<Obs> oObsList = new ArrayList<>(1000);
+			Units oUnits = Units.getInstance();
 			for (ReportSubscription oSub : oSubscriptions)
 			{
 
@@ -259,6 +246,7 @@ public class Subscriptions extends ImrcpBlock
 
 					lStart = oNow.getTimeInMillis() + oSub.getOffset() * 1000 * 60;
 					lEnd = lStart + oSub.getDuration() * 1000 * 60;
+					lRefTime = oNow.getTimeInMillis();
 				}
 				else // report
 				{
@@ -323,12 +311,15 @@ public class Subscriptions extends ImrcpBlock
 					dMin = -Double.MAX_VALUE;
 				for (int nObstype : nSubObstypes)
 				{
+					String sEnglishUnits = ObsType.getUnits(nObstype, false);
 					try (ResultSet oData = m_oObsView.getData(nObstype, lStart, lEnd, oSub.getLat1(), oSub.getLat2(), oSub.getLon1(), oSub.getLon2(), lRefTime))
 					{
 						while (oData.next())
 						{
 							Obs oObs = new Obs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), (short)oData.getInt(11), oData.getDouble(12));
-
+							
+							String sSourceUnits = oUnits.getSourceUnits(nObstype, oObs.m_nContribId);
+							oObs.m_dValue = oUnits.convert(sSourceUnits, sEnglishUnits, oObs.m_dValue);
 							if ((oObs.m_dValue < dMin || oObs.m_dValue > dMax))
 								continue;
 

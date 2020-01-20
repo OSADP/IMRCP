@@ -1,24 +1,14 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.system;
 
-import imrcp.ImrcpBlock;
+import imrcp.BaseBlock;
+import imrcp.FileCache;
 import java.sql.Connection;
+import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.SimpleTimeZone;
 import java.util.TimeZone;
@@ -30,14 +20,15 @@ import javax.servlet.http.HttpServlet;
 import javax.sql.DataSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import imrcp.ImrcpBlock;
 
 /**
  * This singleton class acts as a Directory for the system. ImrcpBlocks that are
- * using in the system register to the Directory. When an ImrcpBlock is no
- * longer in use, the block will unregister from the Directory. It extends
- * HttpServlet and initializes the system.
+ using in the system register to the Directory. When an BaseBlock is no
+ longer in use, the block will unregister from the Directory. It extends
+ HttpServlet and initializes the system.
  */
-public class Directory extends HttpServlet
+public class Directory extends HttpServlet implements Runnable, Comparator<ImrcpBlock>
 {
 
 	/**
@@ -53,12 +44,8 @@ public class Directory extends HttpServlet
 	/**
 	 * List of all of the Registered Blocks
 	 */
-	private final ArrayList<BlockFilter> m_oRegistered = new ArrayList();
+	private final ArrayList<RegisteredBlock> m_oRegistered = new ArrayList();
 
-	/**
-	 * List of all of the components that Directory starts
-	 */
-	private ArrayList<Object> m_oComponents = new ArrayList();
 
 	/**
 	 * Logger
@@ -79,6 +66,14 @@ public class Directory extends HttpServlet
 	 * DataSource for the database
 	 */
 	private DataSource m_iDatasource;
+	
+	private int m_nMonitorLimit = 120;
+	
+	private RegisteredBlock m_oSearch = new RegisteredBlock(-1, new SearchBlock(-1), 0L);
+	
+	private HashMap<Integer, Integer> m_oContribPrefMap;
+	
+	private ArrayDeque<Startup> m_oStartups = new ArrayDeque();
 
 
 	/**
@@ -122,56 +117,42 @@ public class Directory extends HttpServlet
 			m_oLogger.info("Starting init()");
 			ServletConfig oServletConfig = getServletConfig();
 			Config oConfig = new Config(oServletConfig.getInitParameter("config-file"));
-			Scheduling oSched = Scheduling.getInstance();
+			Scheduling.getInstance(); // create the Scheduling singleton
 			oConfig.setSchedule();
+			m_oContribPrefMap = new HashMap();
+			String[] sContribPreferences = oConfig.getStringArray(getClass().getName(), "Directory", "prefer", null);
+			for (String sContrib : sContribPreferences)
+				m_oContribPrefMap.put(Integer.valueOf(sContrib, 36), oConfig.getInt(getClass().getName(), "Directory", sContrib, 0));
 			String[] sClasses = oConfig.getStringArray(getClass().getName(), "Directory", "classes", null); //get the array of classes that need to be initialized upon system startup
+			m_nMonitorLimit = oConfig.getInt(getClass().getName(), "Directory", "monlim", 120);
 			for (int i = 0; i < sClasses.length; i++) //iterate through the strings
 			{
 				String sClassName = sClasses[i++]; // increment here because the classes configuration contains pairs: java class name, instance name
 				if (sClassName.startsWith("#")) // allows for "comments" in the json array
 					continue;
-				Object oBlock = null;
+				BaseBlock oBlock = null;
 				try
 				{
-					m_oLogger.info("Adding " + sClassName + " to components");
-					oBlock = Class.forName(sClassName).newInstance();
-					m_oComponents.add(oBlock); //add a new instance of the class into the components list
-					((ImrcpBlock) oBlock).setInstanceName(sClasses[i]);
-					((ImrcpBlock) oBlock).setLogger();
-					String[] sFilter = oConfig.getStringArray(oBlock.getClass().getName(), ((ImrcpBlock) oBlock).getInstanceName(), "attach", null); //read in the filters for this block's instance name
-					((ImrcpBlock) oBlock).m_nRegId = register((ImrcpBlock) oBlock, sFilter); //register the block to the Directory
+					oBlock = (BaseBlock)Class.forName(sClassName).newInstance();
+					oBlock.setName(sClasses[i]);
+					oBlock.init();
+					oBlock.register();
 				}
 				catch (Exception oException)
 				{
 					m_oLogger.error(oException, oException);
 				}
 			}
-
-			// create all of the subscriptions for the registered blocks, then
-			// start each block's service
-			int nSize = m_oRegistered.size();
-			int[] nBlank = new int[0];
+			
 			synchronized (m_oRegistered)
 			{
+				int nSize = m_oRegistered.size();
 				for (int i = 0; i < nSize; i++)
 				{
-					ImrcpBlock oBlock = m_oRegistered.get(i).m_oBlock;
-					String[] sSubscribeTo = Config.getInstance().getStringArray(oBlock.getClass().getName(), oBlock.getInstanceName(), "subscribe", null); //read in the filters for this block's instance name
-					String[] sObsTypes = oConfig.getStringArray(oBlock.getClass().getName(), oBlock.getInstanceName(), "subobs", null); //get the obstypes this block subscribes for
-					oBlock.m_nSubObsTypes = new int[sObsTypes.length]; //convert String[] to int[]
-					for (int j = 0; j < sObsTypes.length; j++)
-						oBlock.m_nSubObsTypes[j] = Integer.valueOf(sObsTypes[j], 36);
-					if (sSubscribeTo.length > 0)
-					{
-						for (String sSubscribe : sSubscribeTo) //subscribe to each block
-							oBlock.subscribe(oBlock.m_nSubObsTypes, 0, Long.MAX_VALUE, -90000000, 90000000, -180000000, 179999999, sSubscribe);
-					}
-					if (oBlock.m_nSubObsTypes == null)
-						oBlock.m_nSubObsTypes = nBlank;
+					RegisteredBlock oRegBlock = m_oRegistered.get(i);					
+					if (oRegBlock.m_oDependencies.isEmpty())
+						queueStartup(new Startup(m_oRegistered.get(i)));
 				}
-
-				for (int i = 0; i < nSize; i++) // call each blocks start function with a different thread
-					oSched.execute(new Startup(m_oRegistered.get(i).m_oBlock));
 			}
 		}
 		catch (Exception oException)
@@ -180,137 +161,125 @@ public class Directory extends HttpServlet
 		}
 	}
 
-
+	@Override
+	public void run()
+	{
+		synchronized (m_oStartups)
+		{
+			if (m_oStartups.isEmpty()) // ensure there is work to be done
+			{
+				return;
+			}
+			Startup oStartup = m_oStartups.pollLast();
+			Scheduling.getInstance().execute(oStartup);
+		}
+	}
+	
+	private void queueStartup(Startup oStartup)
+	{
+		synchronized (m_oStartups)
+		{
+			m_oStartups.addFirst(oStartup);
+			Scheduling.getInstance().execute(this);
+		}	
+		
+	}
+	
+	
 	/**
-	 * This method allows an ImrcpBlock to register with the system. Part of
-	 * registering is attaching to already registered ImrcpBlocks that have an
-	 * interface that is an instance of the registering block. Already
-	 * registered ImrcpBlocks also will attach to the registering block if the
-	 * registering block has an interface that is an instance of the registered
-	 * block. The term instance refers to the name an ImrcpBlock wants to attach
-	 * to. The term interface refers to the name an ImrcpBlock has that other
-	 * ImrcpBlocks are looking for.
+	 * This method allows an BaseBlock to register with the system. Part of
+ registering is attaching to already registered ImrcpBlocks that have an
+ interface that is an instance of the registering block. Already
+ registered ImrcpBlocks also will attach to the registering block if the
+ registering block has an interface that is an instance of the registered
+ block. The term instance refers to the name an BaseBlock wants to attach
+ to. The term interface refers to the name an BaseBlock has that other
+ ImrcpBlocks are looking for.
 	 *
-	 * @param oBlock the ImrcpBlock that is being registered
+	 * @param oBlock the BaseBlock that is being registered
 	 * @param sInstances a list of all the instance names it needs to attach to
 	 * @return the registration Id
 	 */
-	public int register(ImrcpBlock oBlock, String[] sInstances)
+	public synchronized int register(ImrcpBlock oBlock, String[] sDependencies)
 	{
-		synchronized (m_oRegistered)
+		try
 		{
-			try
+			m_oSearch.m_oBlock.setName(oBlock.getName());
+			int nIndex = Collections.binarySearch(m_oRegistered, m_oSearch);
+			if (nIndex >= 0) // a block with the same name has already been registered
+				return -1;
+
+			RegisteredBlock oNew = new RegisteredBlock(m_nIdCount.incrementAndGet(), oBlock, System.currentTimeMillis());
+			m_oLogger.info("Registering " + oNew.m_oBlock.getName() + " to Directory");
+			for (RegisteredBlock oRegistered : m_oRegistered) //see if this block needs to be attached to each registered block or if each registered block needs to attach to it based off of the two block's interfaces and instances
 			{
-				for (BlockFilter oTemp : m_oRegistered) //check if that block has already been registered
+				for (String sDependsOn : sDependencies)
 				{
-					if (oTemp.m_oBlock == oBlock)
-						return -1;
-				}
-				Class[] oInterfaces = oBlock.getClass().getInterfaces(); //get the names of all the interfaces implemented by the block
-				String[] sInterfaces;
-				if (oInterfaces.length == 0)
-				{
-					sInterfaces = new String[1];
-				}
-				else
-				{
-					sInterfaces = new String[oInterfaces.length + 1];
-					for (int i = 1; i < sInterfaces.length; i++)
-						sInterfaces[i] = oInterfaces[i - 1].getName();
-				}
-				sInterfaces[0] = oBlock.getInstanceName(); //include the instance name in the list of interfaces
-
-				BlockFilter oFilter = new BlockFilter(m_nIdCount.incrementAndGet(), oBlock, sInstances);
-				for (BlockFilter oSearch : m_oRegistered) //see if this block needs to be attached to each registered block or if each registered block needs to attach to it based off of the two block's interfaces and instances
-				{
-					Class[] oRegInterfaces = oSearch.m_oBlock.getClass().getInterfaces(); //get the names of all the interfaces implemented by the registered block
-					String[] sRegInterfaces;
-					if (oRegInterfaces.length == 0)
+					if (oRegistered.m_oBlock.getName().compareTo(sDependsOn) == 0)
 					{
-						sRegInterfaces = new String[1];
-					}
-					else
-					{
-						sRegInterfaces = new String[oRegInterfaces.length + 1];
-						for (int i = 1; i < sRegInterfaces.length; i++)
-							sRegInterfaces[i] = oRegInterfaces[i - 1].getName();
-					}
-					sRegInterfaces[0] = oSearch.m_oBlock.getInstanceName(); //add the instance name to the list of interfaces
-
-					for (String sInstance : sInstances) //compare each instance("what I want") of the registering block with the interfaces("what I have") of the registered block
-					{
-						for (String sSearch : sRegInterfaces)
-						{
-							if (sInstance.compareTo(sSearch) == 0) //if the registered block has an interface which is an instance of the registering block
-								oBlock.attach(oSearch.m_oBlock, sInstance);  //attach the registering block to the registered block
-						}
-					}
-
-					for (String sInterface : sInterfaces) //compare each interface("what I have") of the registering block with the instances("what I want") of the registered block
-					{
-						for (String sInstance : oSearch.m_sInstances)
-						{
-							if (sInstance.compareTo(sInterface) == 0) //if the registering block has an interface which is an instance of the registered block
-								oSearch.m_oBlock.attach(oBlock, sInterface); //atach the registered block to the registering block.
-						}
+						oRegistered.m_oSubscribers.add(oNew);
+						oNew.m_oDependencies.add(oRegistered);
 					}
 				}
 
-				m_oRegistered.add(oFilter); //add the Block to the list of registered blocks
-				m_oLogger.info(oFilter.m_oBlock.getInstanceName() + " registered");
+				for (String sDependsOn : oRegistered.m_oBlock.getConfig().getStringArray("subscribe", null))
+				{
+					if (oNew.m_oBlock.getName().compareTo(sDependsOn) == 0)
+					{
+						oNew.m_oSubscribers.add(oRegistered);
+						oRegistered.m_oDependencies.add(oNew);
+					}
+				}
 			}
-			catch (Exception oException)
-			{
-				m_oLogger.error(oException, oException);
-			}
-			return m_nIdCount.get();
+
+			m_oRegistered.add(~nIndex, oNew); //add the Block to the list of registered blocks sorted by name
+			m_oLogger.info(oNew.m_oBlock.getName() + " registered");
 		}
+		catch (Exception oException)
+		{
+			m_oLogger.error(oException, oException);
+		}
+		return m_nIdCount.get();
 	}
 
-
-	/**
-	 * This method allows the Directory to unregister an ImrcpBlock.
-	 *
-	 * @param oBlock the ImrcpBlock to be unregistered
-	 * @param nRegId the Registration Id of the ImrcpBlock
-	 * @return
-	 */
-	public boolean unregister(ImrcpBlock oBlock, int nRegId)
+	
+	public void notifyBlocks(String[] sMessage)
 	{
-		boolean bReturn = false;
-		BlockFilter oTemp = null;
-		for (BlockFilter oFilter : m_oRegistered) //check if the block is registered 
+		if (sMessage[ImrcpBlock.MESSAGE].compareTo("service started") == 0)
 		{
-			if (oBlock == oFilter.m_oBlock && oFilter.m_nRegId == nRegId) //if it is registered make a copy of that BlockFilter
-			{
-				oTemp = oFilter;
-				break;
-			}
+			notifyStart(sMessage);
+			return;
 		}
-
-		if (oTemp != null) //if the block is registered
+		
+		synchronized (this)
 		{
-			int nIndex = m_oRegistered.size();
-			while (nIndex-- > 0) //iterate through all blocks registered
+			for (RegisteredBlock oBlock : m_oRegistered)
 			{
-				if (m_oRegistered.get(nIndex).compareTo(oTemp) == 0) //if it is the block to be unregistered remove it
+				if (oBlock.m_oBlock.getName().compareTo(sMessage[ImrcpBlock.FROM]) == 0)
 				{
-					m_oLogger.info(m_oRegistered.get(nIndex).m_oBlock.getInstanceName() + " unregistered");
-					m_oRegistered.remove(nIndex);
-				}
-				else //if it is not the block to be unregistered 
-				{
-					oBlock.detach(m_oRegistered.get(nIndex).m_oBlock); //detach it from the registered block
+					for (RegisteredBlock oSubscriber : oBlock.m_oSubscribers)
+					{
+						m_oLogger.info(sMessage[ImrcpBlock.FROM] + " notified " + oSubscriber.m_oBlock.getName() + " with message " + sMessage[ImrcpBlock.MESSAGE]);
+						oSubscriber.m_oBlock.receive(sMessage);
+					}
 				}
 			}
-			bReturn = true;
 		}
-		for (ImrcpBlock.BlockRef oRef : oBlock.m_oAttached)
+	}
+	
+	
+	public synchronized void notifyStart(String[] sMessage)
+	{
+		for (RegisteredBlock oBlock : m_oRegistered)
 		{
-			m_oLogger.info(findBlockById(oRef.m_nId).getInstanceName() + " detached from " + oBlock.getInstanceName());
+			if (oBlock.m_oBlock.getName().compareTo(sMessage[ImrcpBlock.FROM]) == 0)
+			{
+				for (RegisteredBlock oSubscriber : oBlock.m_oSubscribers)
+				{
+					queueStartup(new Startup(oSubscriber));
+				}
+			}
 		}
-		oBlock.m_oAttached.clear(); //remove all the blocks attached to the block that is unregistered
-		return bReturn;
 	}
 
 
@@ -321,59 +290,78 @@ public class Directory extends HttpServlet
 	@Override
 	public void destroy()
 	{
-		for (Object oClass : m_oComponents)
+		synchronized (m_oRegistered)
 		{
-			((ImrcpBlock) oClass).stopService();
-		}
+			int nIndex = m_oRegistered.size();
+			while (nIndex-- > 0)
+			{
+				try
+				{
+					m_oRegistered.get(nIndex).m_oBlock.destroy();
+				}
+				catch (Exception oEx)
+				{
+					m_oLogger.error(oEx, oEx);
+				}
+			}
 
-		int nIndex = m_oRegistered.size();
-		while (nIndex-- > 0)
-		{
-			m_oRegistered.get(nIndex).m_oBlock.stopService();
+			m_oRegistered.clear();
+			Scheduling.getInstance().stop();
 		}
-
-		m_oComponents.clear(); //clear the list of componen
-		m_oRegistered.clear();
-		Scheduling.getInstance().stop();
 	}
 
-
-	/**
-	 * Searches through the registered ImrcpBlocks to find the one with the
-	 * given Id
-	 *
-	 * @param nId Id of the block to be found
-	 * @return reference to the ImrcpBlock with the given Id if found. If the
-	 * block is not found null is returned.
-	 */
-	public synchronized ImrcpBlock findBlockById(int nId)
+	
+//	public synchronized void registerStateChange(String sName, int nState, long lTime)
+//	{
+//		m_oSearch.m_oBlock.setName(sName);
+//		int nIndex = Collections.binarySearch(m_oRegistered, m_oSearch);
+//		if (nIndex >= 0)
+//		{
+//			RegisteredBlock oTemp = m_oRegistered.get(nIndex);
+//			if (oTemp.m_oMonitor.size() == m_nMonitorLimit)
+//				oTemp.m_oMonitor.removeLast();
+//				
+//			oTemp.m_oMonitor.addFirst(new SimpleEntry(lTime, nState));
+//		}
+//	}
+//	
+//	public synchronized void getMonitoring(ArrayList<ArrayDeque<SimpleEntry<Long, Integer>>> oMonitorDeques, ArrayList<String> oBlockNames)
+//	{
+//		for (RegisteredBlock oBlock : m_oRegistered)
+//		{
+//			oMonitorDeques.add(oBlock.m_oMonitor);
+//			oBlockNames.add(oBlock.m_oBlock.getName());
+//		}
+//	}
+	
+	
+	public int getContribPreference(int nContribId)
 	{
-		Collections.sort(m_oRegistered); //sort the list so binary search can be done
-		int nIndex = Collections.binarySearch(m_oRegistered, new BlockFilter(0, new SearchBlock(nId), null)); //the compareTo only check the nId so create a SearchBlock to find the block by id
-		if (nIndex >= 0)
-			return m_oRegistered.get(nIndex).m_oBlock;
-		else
-			return null;
+		Integer nPref = m_oContribPrefMap.get(nContribId);
+		if (nPref == null)
+			return Integer.MAX_VALUE - 1;
+		
+		return nPref;
 	}
 
 
 	/**
-	 * Finds and returns a reference to the registered ImrcpBlock with the given
-	 * instance name.
+	 * Finds and returns a reference to the registered BaseBlock with the given
+ instance name.
 	 *
 	 * @param sName name of the desired block
-	 * @return reference to the desired ImrcpBlock or null if it couldn't be
-	 * found
+	 * @return reference to the desired BaseBlock or null if it couldn't be
+ found
 	 */
 	public synchronized ImrcpBlock lookup(String sName)
 	{
 		try
 		{
-			for (BlockFilter oBlock : m_oRegistered)
-			{
-				if (oBlock.m_oBlock.getInstanceName().compareTo(sName) == 0)
-					return oBlock.m_oBlock;
-			}
+			m_oSearch.m_oBlock.setName(sName);
+			int nIndex = Collections.binarySearch(m_oRegistered, m_oSearch);
+			if (nIndex >= 0)
+				return m_oRegistered.get(nIndex).m_oBlock;
+
 			return null; //couldn't find the given Block 
 		}
 		catch (Exception oException)
@@ -385,22 +373,6 @@ public class Directory extends HttpServlet
 
 
 	/**
-	 * Restarts the service for the given ImrcpBlock's instance name
-	 *
-	 * @param sBlock instance name of the ImrcpBlock that is going to be
-	 * restarted
-	 */
-	public void restartService(String sBlock)
-	{
-		ImrcpBlock oBlock = lookup(sBlock);
-		oBlock.stopService();
-		String[] sFilter = Config.getInstance().getStringArray(oBlock.getClass().getName(), ((ImrcpBlock) oBlock).getInstanceName(), "attach", null); //read in the filters for this block's instance name
-		oBlock.m_nRegId = register(oBlock, sFilter); //register the block to the Directory
-		oBlock.startService();
-	}
-
-
-	/**
 	 * Searches through the registered ImrcpBlocks to return a List filled with
 	 * the Stores that contain Obs of the given obs type id.
 	 *
@@ -408,16 +380,21 @@ public class Directory extends HttpServlet
 	 * @return a List filled with the Stores that contain Obs of the given obs
 	 * type id
 	 */
-	public synchronized List<ImrcpBlock> getStoresByObs(int nType)
+	public synchronized List<BaseBlock> getStoresByObs(int nType)
 	{
-		List<ImrcpBlock> oReturn = new ArrayList();
-		for (BlockFilter oBlock : m_oRegistered)
+		List<BaseBlock> oReturn = new ArrayList();
+		for (RegisteredBlock oBlock : m_oRegistered)
 		{
-			for (int nSubObsType : oBlock.m_oBlock.m_nSubObsTypes)
+			if (!(oBlock.m_oBlock instanceof FileCache))
+				continue;
+			int[] nObs = ((FileCache)oBlock.m_oBlock).m_nSubObsTypes;
+			if (nObs == null)
+				continue;
+			for (int nSubObsType : ((FileCache)oBlock.m_oBlock).m_nSubObsTypes)
 			{
 				if (nSubObsType == nType)
 				{
-					oReturn.add(oBlock.m_oBlock);
+					oReturn.add((BaseBlock)oBlock.m_oBlock);
 					break;
 				}
 			}
@@ -437,34 +414,39 @@ public class Directory extends HttpServlet
 		return m_iDatasource.getConnection();
 	}
 
+
+	@Override
+	public int compare(ImrcpBlock o1, ImrcpBlock o2)
+	{
+		return o1.getName().compareTo(o2.getName());
+	}
+
 	/**
 	 * Inner class used to keep track of ImrcpBlocks that are registered along
-	 * with their instances so the ImrcpBlock can easily attach to other
-	 * ImrcpBlocks
+ with their instances so the BaseBlock can easily attach to other
+ ImrcpBlocks
 	 */
-	public class BlockFilter implements Comparable<BlockFilter>
+	public class RegisteredBlock implements Comparable<RegisteredBlock>
 	{
-
 		/**
 		 * Registration Id
 		 */
 		private int m_nRegId;
 
 		/**
-		 * The registered ImrcpBlock
+		 * The registered BaseBlock
 		 */
 		private ImrcpBlock m_oBlock;
-
-		/**
-		 * Instance names that this block wants to attach to
-		 */
-		private String[] m_sInstances;
+		
+		private ArrayList<RegisteredBlock> m_oSubscribers = new ArrayList();
+		
+		private ArrayList<RegisteredBlock> m_oDependencies = new ArrayList();
 
 
 		/**
 		 * Default constructor.
 		 */
-		BlockFilter()
+		RegisteredBlock()
 		{
 		}
 
@@ -473,14 +455,13 @@ public class Directory extends HttpServlet
 		 * Custom constructor. Sets all member variables.
 		 *
 		 * @param nRegId registration Id
-		 * @param oBlock ImrcpBlock that is registered
-		 * @param sInstances the ImrcpBlock's instance filters
+		 * @param oBlock BaseBlock that is registered
+		 * @param sInstances the BaseBlock's instance filters
 		 */
-		BlockFilter(int nRegId, ImrcpBlock oBlock, String[] sInstances)
+		RegisteredBlock(int nRegId, ImrcpBlock oBlock, long lStartTime)
 		{
 			m_nRegId = nRegId;
 			m_oBlock = oBlock;
-			m_sInstances = sInstances;
 		}
 
 
@@ -492,9 +473,9 @@ public class Directory extends HttpServlet
 		 * equal
 		 */
 		@Override
-		public int compareTo(BlockFilter oFilter)
+		public int compareTo(RegisteredBlock oBlock)
 		{
-			return m_oBlock.m_nId - oFilter.m_oBlock.m_nId;
+			return m_oBlock.getName().compareTo(oBlock.m_oBlock.getName());
 		}
 	}
 
@@ -504,13 +485,12 @@ public class Directory extends HttpServlet
 	 */
 	private class Startup implements Runnable
 	{
+		RegisteredBlock m_oRegisteredBlock;
 
-		ImrcpBlock m_oBlock;
 
-
-		Startup(ImrcpBlock oBlock)
+		Startup(RegisteredBlock oBlock)
 		{
-			m_oBlock = oBlock;
+			m_oRegisteredBlock = oBlock;
 		}
 
 
@@ -520,16 +500,28 @@ public class Directory extends HttpServlet
 		@Override
 		public void run()
 		{
-			m_oBlock.startService();
+			int nStatus = (int)m_oRegisteredBlock.m_oBlock.status()[0];
+			if (nStatus != ImrcpBlock.INIT) // blocks should only start if their status is init
+				return;
+			
+			boolean bStart = true;
+			for (RegisteredBlock oDependency : m_oRegisteredBlock.m_oDependencies) // and if all of their dependencies have finished their start methods
+			{
+				nStatus = (int)oDependency.m_oBlock.status()[0];
+				if (nStatus == ImrcpBlock.INIT || nStatus == ImrcpBlock.STARTING)
+					bStart = false;
+			}
+
+			if (bStart)
+				((BaseBlock)m_oRegisteredBlock.m_oBlock).startService();
 		}
 	}
 
 	/**
 	 * Inner class used to search for ImrcpBlocks by Id
 	 */
-	private class SearchBlock extends ImrcpBlock
+	private class SearchBlock extends BaseBlock
 	{
-
 		SearchBlock(int nId)
 		{
 			m_nId = nId;

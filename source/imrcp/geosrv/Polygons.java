@@ -1,24 +1,9 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.geosrv;
 
-import imrcp.ImrcpBlock;
-import java.io.BufferedReader;
+import imrcp.BaseBlock;
+import imrcp.system.CsvReader;
 import java.io.BufferedWriter;
-import java.io.FileReader;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +13,7 @@ import java.util.Comparator;
  * This class handles loading and looking up the Polygons used by the system.
  * Polygons are generated from CAP alerts and FIPS and UGC definitions.
  */
-public class Polygons extends ImrcpBlock
+public class Polygons extends BaseBlock
 {
 
 	/**
@@ -105,23 +90,21 @@ public class Polygons extends ImrcpBlock
 	@Override
 	public boolean start() throws Exception
 	{
-		try (BufferedReader oIn = new BufferedReader(new FileReader(m_sFilename)))
+		try (CsvReader oIn = new CsvReader(new FileInputStream(m_sFilename)))
 		{
-			String sLine = null;
 			synchronized (this)
 			{
-				while ((sLine = oIn.readLine()) != null) // read in the always defined polygons (from county lines and previous runs)
+				while (oIn.readLine() > 0) // read in the always defined polygons (from county lines and previous runs)
 				{
-					String[] sCols = sLine.split(","); // file is csv
-					String[] sIds = sCols[0].split(" "); // ids are space delimited, there can be multiple geo codes for the same county
+					String[] sIds = oIn.parseString(0).split(" "); // ids are space delimited, there can be multiple geo codes for the same county
 					for (int i = 0; i < sIds.length; i++) // for each id
 					{
-						sCols[0] = sIds[i]; // update the id
-						int[] nPoints = new int[Integer.parseInt(sCols[5])]; // read the number of point in the polygon definition
+						String sId = sIds[i]; // update the id
+						int[] nPoints = new int[oIn.parseInt(5)]; // read the number of point in the polygon definition
 						for (int j = 0; j < nPoints.length; j++)
-							nPoints[j] = Integer.parseInt(sCols[j + 6]); // read in the coordinates of the points
-						m_oPolygons.add(new Polygon(sCols, nPoints));
-						PolyBox oTemp = new PolyBox(sCols);
+							nPoints[j] = oIn.parseInt(j + 6); // read in the coordinates of the points
+						m_oPolygons.add(new Polygon(oIn, nPoints));
+						PolyBox oTemp = new PolyBox(oIn, sId);
 						if (oTemp.m_sId.charAt(0) == '-') // manual polygons have negative numbers for ids
 						{
 							m_oManualById.add(oTemp);
@@ -142,11 +125,11 @@ public class Polygons extends ImrcpBlock
 				Collections.sort(m_oManualByBox, m_oBoxComp);
 			}
 			int nSize = m_oGeoCodeById.size(); // compile a list of all the Geo codes used
-			String sFips = m_oGeoCodeById.get(0).m_sId;
-			for (int i = 1; i < nSize; i++)
-				sFips += "," + m_oGeoCodeById.get(i).m_sId;
-			for (int nSub : m_oSubscribers)
-				notify(this, nSub, "polygons ready", sFips);
+			String[] sGeoCodes = new String[nSize];
+			int nCount = 0;
+			for (PolyBox oPoly : m_oGeoCodeById)
+				sGeoCodes[nCount++] = oPoly.m_sId;
+			notify("polygons ready", sGeoCodes);
 		}
 		catch (Exception oException)
 		{
@@ -357,13 +340,13 @@ public class Polygons extends ImrcpBlock
 		 *
 		 * @param sCols
 		 */
-		PolyBox(String[] sCols)
+		PolyBox(CsvReader oIn, String sId)
 		{
-			m_sId = sCols[0];
-			m_nBot = Integer.parseInt(sCols[1]);
-			m_nTop = Integer.parseInt(sCols[2]);
-			m_nLeft = Integer.parseInt(sCols[3]);
-			m_nRight = Integer.parseInt(sCols[4]);
+			m_sId = sId;
+			m_nBot = oIn.parseInt(1);
+			m_nTop = oIn.parseInt(2);
+			m_nLeft = oIn.parseInt(3);
+			m_nRight = oIn.parseInt(4);
 		}
 
 

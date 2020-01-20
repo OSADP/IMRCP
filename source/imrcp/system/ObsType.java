@@ -1,20 +1,6 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.system;
 
+import imrcp.geosrv.RangeRules;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
@@ -35,50 +21,50 @@ public class ObsType
 	 */
 	private static final String OBS_TYPES[][] = new String[][]
 	{
-		{"obstype", "english", "metric", "description"}, // reserved for unknown observation type
-		{"TAIR", "F", "C", "air temperature"},
-		{"TDEW", "F", "C", "dew point temperature"},
-		{"TPVT", "F", "C", "pavement temperature"},
-		{"PRBAR", "psi", "mbar", "barometric pressure"},
-		{"PRSUR", "psi", "mbar", "surface pressure"},
-		{"RH", "%", "%", "relative humidity"},
-		{"VIS", "mi", "km", "surface visibility"},
-		{"CONPVT", "V", "V", "pavement conductivity"},
-		{"STPVT", "", "", "pavement state"},
-		{"DIRWND", "º", "º", "wind direction from which blowing height above ground"},
-		{"GSTWND", "mph", "m/s", "wind speed gust height above ground"},
-		{"SPDWND", "mph", "m/s", "wind speed height above ground"},
-		{"COVCLD", "%", "%", "total cloud cover entire atmosphere single layer"},
-		{"RTEPC", "in/hr", "mm/hr", "precipitation rate surface"},
-		{"TYPPC", "", "", "precipitation type"},
-		{"STG", "ft", "m", "flood stage"},
-		{"EVT", "", "", "event"},
-		{"VOLLNK", "veh/min", "veh/min", "link volume"},
-		{"GENLNK", "veh", "veh", "vehicles generated on each generation link"},
-		{"VEHLNK", "veh", "veh", "number of vehicles on each link"},
-		{"QUELNK", "veh", "veh", "number of queued vehicles on each link"},
-		{"SPDLNK", "mph", "kph", "average speed of vehicles on each link"},
-		{"DNTLNK", "%", "%", "average density of vehicles on each link"},
-		{"SPFLNK", "mph", "kph", "average speed of moving vehicles on each link"},
-		{"DNFLNK", "%", "%", "average density of moving vehicles on each link"},
-		{"CTLEFT", "veh", "veh", "number of left-turning vehicles on each link"},
-		{"DURGRN", "s", "s", "average green time for each approach"},
-		{"CTTHRU", "veh", "veh", "number of vehicles that pass through the link"},
-		{"CTMID", "veh", "veh", "cumulative number of vehicles that pass the mid point of links"},
-		{"TSSRF", "F", "C", "subsurface temperature"},
-		{"DPHLIQ", "in", "mm", "liquid inundation depth"},
-		{"DPHSN", "in", "cm", "snow inundation depth"},
-		{"FLWCAT", "", "", "predicted flow category"},
-		{"SPDCAT", "", "", "predicted speed category"},
-		{"OCCCAT", "", "", "predicted occupancy category"},
-		{"QPRLNK", "%", "%", "queue percentage on link"},
-		{"DPHLNK", "in", "mm", "link depth"},
-		{"PCCAT", "", "", "precipitation category"},
-		{"TRFLNK", "%", "%", "traffic"},
-		{"TDNLNK", "", "", "traffic density"},
-		{"TIMERT", "min", "min", "route time"},
-		{"RDR0", "dBZ", "dBZ", "merged base reflectivity"},
-		{"NOTIFY", "", "", "Notification"}
+		{"obstype", "english", "metric", "description", "in use(y/n)"}, // reserved for unknown observation type
+		{"TAIR", "F", "C", "air temperature", "y"},
+		{"TDEW", "F", "C", "dew point temperature", "y"},
+		{"TPVT", "F", "C", "pavement temperature", "y"},
+		{"PRBAR", "psi", "mbar", "barometric pressure", "y"},
+		{"PRSUR", "psi", "mbar", "surface pressure", "y"},
+		{"RH", "%", "%", "relative humidity", "y"},
+		{"VIS", "mi", "km", "surface visibility", "y"},
+		{"CONPVT", "V", "V", "pavement conductivity", "y"},
+		{"STPVT", "", "", "pavement state", "y"},
+		{"DIRWND", "º", "º", "wind direction from which blowing height above ground", "y"},
+		{"GSTWND", "mph", "m/s", "wind speed gust height above ground", "y"},
+		{"SPDWND", "mph", "m/s", "wind speed height above ground", "y"},
+		{"COVCLD", "%", "%", "total cloud cover entire atmosphere single layer", "y"},
+		{"RTEPC", "in/hr", "mm/hr", "precipitation rate surface", "y"},
+		{"TYPPC", "", "", "precipitation type", "y"},
+		{"STG", "", "", "flood stage", "y"},
+		{"EVT", "", "", "event", "y"},
+		{"VOLLNK", "veh/min", "veh/min", "link volume", "y"},
+		{"GENLNK", "veh", "veh", "vehicles generated on each generation link", "n"},
+		{"VEHLNK", "veh", "veh", "number of vehicles on each link", "n"},
+		{"QUELNK", "veh", "veh", "number of queued vehicles on each link", "n"},
+		{"SPDLNK", "mph", "kph", "average speed of vehicles on each link", "y"},
+		{"DNTLNK", "%", "%", "average density of vehicles on each link", "y"},
+		{"SPFLNK", "mph", "kph", "average speed of moving vehicles on each link", "n"},
+		{"DNFLNK", "%", "%", "average density of moving vehicles on each link", "n"},
+		{"CTLEFT", "veh", "veh", "number of left-turning vehicles on each link", "n"},
+		{"DURGRN", "s", "s", "average green time for each approach", "n"},
+		{"CTTHRU", "veh", "veh", "number of vehicles that pass through the link", "n"},
+		{"CTMID", "veh", "veh", "cumulative number of vehicles that pass the mid point of links", "n"},
+		{"TSSRF", "F", "C", "subsurface temperature", "y"},
+		{"DPHLIQ", "in", "mm", "liquid inundation depth", "y"},
+		{"DPHSN", "in", "cm", "snow inundation depth", "y"},
+		{"FLWCAT", "", "", "predicted flow category", "n"},
+		{"SPDCAT", "", "", "predicted speed category", "n"},
+		{"OCCCAT", "", "", "predicted occupancy category", "n"},
+		{"QPRLNK", "%", "%", "queue percentage on link", "n"},
+		{"DPHLNK", "in", "mm", "link depth", "y"},
+		{"PCCAT", "", "", "precipitation category", "y"},
+		{"TRFLNK", "%", "%", "traffic", "y"},
+		{"TDNLNK", "", "", "traffic density", "y"},
+		{"TIMERT", "min", "min", "route time", "y"},
+		{"RDR0", "dBZ", "dBZ", "merged base reflectivity", "y"},
+		{"NOTIFY", "", "", "Notification", "y"}
 	};
 
 	/**
@@ -318,14 +304,83 @@ public class ObsType
 
 	private static final TreeMap<String, TreeMap<Integer, String>> LOOKUP
 	   = new TreeMap();
+	
+	private static final RangeRules[] RANGERULES;
 
+	/**
+	 * Threshold for light rain
+	 */
 
+	public static final double m_dLIGHTRAIN;
+
+	/**
+	 * Threshold for medium rain
+	 */
+	public static final double m_dMEDIUMRAIN;
+
+	/**
+	 * Threshold for light snow
+	 */
+	public static final double m_dLIGHTSNOW;
+
+	/**
+	 * Threshold for medium snow
+	 */
+	public static final double m_dMEDIUMSNOW;
+	
+		/**
+	 * Threshold for temperature to infer precip type as rain
+	 */
+	public static final double m_dRAINTEMP;
+
+	/**
+	 * Threshold for temperature to infer precip type as snow
+	 */
+	public static final double m_dSNOWTEMP;
+
+	/**
+	 * Threshold for light rain
+	 */
+	public static final double m_dLIGHTRAINMMPERHR;
+
+	/**
+	 * Threshold for medium rain
+	 */
+	public static final double m_dMEDIUMRAINMMPERHR;
+
+	/**
+	 * Threshold for light snow
+	 */
+	public static final double m_dLIGHTSNOWMMPERHR;
+
+	/**
+	 * Threshold for medium snow
+	 */
+	public static final double m_dMEDIUMSNOWMMPERHR;
 	/**
 	 * Creates the Lookup Maps that contain mappings from integer ids to Strings
 	 * for the different Obs Types
 	 */
 	static
 	{
+		Config oConfig = Config.getInstance();
+		
+		m_dLIGHTRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lrain", "0.0007055556"));
+		m_dMEDIUMRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "mrain", "0.0021166667"));
+		m_dLIGHTSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lsnow", "0.0000705556"));
+		m_dMEDIUMSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "msnow", "0.0007055556"));
+		m_dRAINTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "raintemp", "275.15")); // in K
+		m_dSNOWTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "snowtemp", "271.15")); // in K
+		m_dLIGHTRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightrainmm", "2.6")); // mm/hr
+		m_dMEDIUMRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medrainmm", "7.6")); // mm/hr
+		m_dLIGHTSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightsnowmm", "0.26")); // mm/hr
+		m_dMEDIUMSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medsnowmm", "0.76")); // mm/hr
+		
+		String[] sRangeRuleObs = oConfig.getStringArray(ObsType.class.getName(), "ObsType", "rules", "");
+		RANGERULES = new RangeRules[sRangeRuleObs.length];
+		for (int i = 0; i < sRangeRuleObs.length; i++)
+			RANGERULES[i] = new RangeRules(sRangeRuleObs[i]);
+		
 		TreeMap<Integer, String> oTemp = new TreeMap(); // NTCIP 1204 surface condition
 		oTemp.put(1, "other");
 		oTemp.put(2, "error");
@@ -350,16 +405,16 @@ public class ObsType
 		oTemp = new TreeMap();
 		oTemp.put(0, "no-precipitation");
 		oTemp.put(1, "light-rain");
-		oTemp.put(2, "medium-rain");
+		oTemp.put(2, "moderate-rain");
 		oTemp.put(3, "heavy-rain");
 		oTemp.put(4, "light-freezing-rain");
-		oTemp.put(5, "medium-freezing-rain");
+		oTemp.put(5, "moderate-freezing-rain");
 		oTemp.put(6, "heavy-freezing-rain");
 		oTemp.put(7, "light-snow");
-		oTemp.put(8, "medium-snow");
+		oTemp.put(8, "moderate-snow");
 		oTemp.put(9, "heavy-snow");
 		oTemp.put(10, "light-ice");
-		oTemp.put(11, "medium-ice");
+		oTemp.put(11, "moderate-ice");
 		oTemp.put(12, "heavy-ice");
 		LOOKUP.put("PCCAT", oTemp);
 
@@ -392,15 +447,25 @@ public class ObsType
 		oTemp.put(3, "high");
 		oTemp.put(4, "very-high");
 		LOOKUP.put("OCCCAT", oTemp);
+		
+		oTemp = new TreeMap();
+		oTemp.put(1, "no-action");
+		oTemp.put(2, "action");
+		oTemp.put(3, "flood");
+		oTemp.put(4, "moderate");
+		oTemp.put(5, "major");
+		LOOKUP.put("STG", oTemp);
 
 		oTemp = new TreeMap(); // notifications (match corresponding alerts)
 		oTemp.put(101, "light-winter-precip"); // imrcp alert types 100s - areal weather, 200s - road weather, 300s - traffic
-		oTemp.put(102, "medium-winter-precip");
+		oTemp.put(102, "moderate-winter-precip");
 		oTemp.put(103, "heavy-winter-precip");
 		oTemp.put(104, "light-precip");
-		oTemp.put(105, "medium-precip");
+		oTemp.put(105, "moderate-precip");
 		oTemp.put(106, "heavy-precip");
 		oTemp.put(107, "low-visibility");
+		oTemp.put(108, "flood-stage-action");
+		oTemp.put(109, "flood-stage-flood");
 		oTemp.put(201, "dew-on-roadway");
 		oTemp.put(202, "frost-on-roadway");
 		oTemp.put(203, "blowing-snow");
@@ -526,12 +591,14 @@ public class ObsType
 		oTemp.put(563, "incident-cleared");
 
 		oTemp.put(101, "light-winter-precip"); // imrcp alert types 100s - areal weather, 200s - road weather, 300s - traffic
-		oTemp.put(102, "medium-winter-precip");
+		oTemp.put(102, "moderate-winter-precip");
 		oTemp.put(103, "heavy-winter-precip");
 		oTemp.put(104, "light-precip");
-		oTemp.put(105, "medium-precip");
+		oTemp.put(105, "moderate-precip");
 		oTemp.put(106, "heavy-precip");
 		oTemp.put(107, "low-visibility");
+		oTemp.put(108, "flood-stage-action");
+		oTemp.put(109, "flood-stage-flood");
 		oTemp.put(201, "dew-on-roadway");
 		oTemp.put(202, "frost-on-roadway");
 		oTemp.put(203, "blowing-snow");
@@ -810,5 +877,23 @@ public class ObsType
 			}
 		}
 		return Integer.MIN_VALUE;
+	}
+	
+	
+	public static boolean isInUse(int nObsTypeId)
+	{
+		return OBS_TYPES[getIndex(nObsTypeId)][4].compareTo("y") == 0;
+	}
+	
+	
+	public static RangeRules getRangeRules(int nObsType)
+	{
+		for (int i = 0; i < RANGERULES.length; i++)
+		{
+			if (RANGERULES[i].m_nObsType == nObsType)
+				return RANGERULES[i];
+		}
+		
+		return null;
 	}
 }

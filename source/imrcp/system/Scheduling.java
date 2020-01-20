@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.system;
 
 import java.util.ArrayList;
@@ -108,6 +93,28 @@ public class Scheduling implements Executor
 		iCalendar.setTimeInMillis(lOffsetTime + lPeriods * nPeriod);
 		return iCalendar;
 	}
+	
+	
+	public static Calendar getLastPeriod(int nOffset, int nPeriod)
+	{
+		Calendar iCalendar = new GregorianCalendar(Directory.m_oUTC);
+
+		// set the current time to midnight UTC and add the schedule offset
+		iCalendar.set(Calendar.HOUR_OF_DAY, 0);
+		iCalendar.set(Calendar.MINUTE, 0);
+		iCalendar.set(Calendar.SECOND, nOffset);
+		iCalendar.set(Calendar.MILLISECOND, 0);
+
+		// adjust the period from seconds to milliseconds
+		nPeriod *= 1000;
+		// determine the timestamp of the last period
+		long lOffsetTime = iCalendar.getTimeInMillis();
+		long lDeltaTime = System.currentTimeMillis() - lOffsetTime;
+		long lPeriods = lDeltaTime / nPeriod;
+
+		iCalendar.setTimeInMillis(lOffsetTime + lPeriods * nPeriod);
+		return iCalendar;
+	}
 
 
 	/**
@@ -138,7 +145,7 @@ public class Scheduling implements Executor
 	 * intervals separated by the given period.
 	 * @param iRunnable the Runnable to execute
 	 * @param oTime Date object representing the first time to execute the Runnable
-	 * @param nPeriod period of execution in seconds
+	 * @param nPeriod period of execution in milliseconds
 	 * @return 
 	 */
 	public synchronized int createSched(Runnable iRunnable, Date oTime, int nPeriod)
@@ -180,7 +187,7 @@ public class Scheduling implements Executor
 	 */
 	public void stop()
 	{
-		m_iExecutor.shutdown();
+		m_iExecutor.shutdownNow();
 	}
 
 

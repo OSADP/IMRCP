@@ -1,18 +1,3 @@
-/* 
- * Copyright 2017 Federal Highway Administration.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package imrcp.forecast.mdss;
 
 import imrcp.collect.SubSurfaceTemp;
@@ -21,18 +6,15 @@ import imrcp.geosrv.Segment;
 import imrcp.store.FileWrapper;
 import imrcp.store.ImrcpObsResultSet;
 import imrcp.store.MetroStore;
-import imrcp.store.NDFDStore;
 import imrcp.store.Obs;
 import imrcp.store.RAPStore;
-import imrcp.store.RTMAStore;
-import imrcp.store.RadarStore;
+import imrcp.store.WeatherStore;
+import imrcp.store.GribStore;
 import imrcp.system.Config;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import java.io.BufferedWriter;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.io.OutputStreamWriter;
 import java.util.Calendar;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,7 +27,6 @@ import org.apache.logging.log4j.Logger;
  */
 public class DoMetroWrapper implements Runnable
 {
-
 	/**
 	 * Flag to tell if the Metro library was loaded correctly
 	 */
@@ -220,14 +201,14 @@ public class DoMetroWrapper implements Runnable
 	 * Array that contains the forecasted precipitation type values 0 = none 1 =
 	 * rain 2 = snow
 	 */
-	private final double[] m_dPrecipType;
+	private final long[] m_lPrecipType;
 
 	/**
 	 * Array that contains the forecasted road condition. Uses METRo values: 1 =
 	 * dry road, 2 = wet road, 3 = ice/snow on the road, 4 = mix water/snow on
 	 * the road, 5 = dew, 6 = melting snow, 7 = frost, 8 = icing rain
 	 */
-	private final double[] m_dRoadCond;
+	private final long[] m_lRoadCond;
 
 	/**
 	 * Array that contains the observed air temperature values in C
@@ -286,16 +267,15 @@ public class DoMetroWrapper implements Runnable
 	 * Number of observation hours
 	 */
 	private final int m_nObsHrs;
-
-	/**
-	 * Base directory to write temporary data files
-	 */
-	private static String m_sBaseDir;
+	
+	private final int m_nOutputs;
 
 	/**
 	 * Static logger for the class
 	 */
 	private static final Logger m_oLogger = LogManager.getLogger(DoMetroWrapper.class);
+	
+	public RoadcastData m_oOutput;
 
 
 	/**
@@ -316,7 +296,6 @@ public class DoMetroWrapper implements Runnable
 		m_dPRESSUREDEFAULT = oConfig.getInt("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "prdef", 101325);
 		m_dPRESSUREMAX = oConfig.getInt("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "prmax", 110000);
 		m_nPASTPRECIP = oConfig.getInt("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "precip", 1200000);
-		m_sBaseDir = oConfig.getString("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "dir", "/dev/shm/");
 		m_sInitRoadCond = oConfig.getStringArray("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "initrc", null);
 		m_sInitRoadTemp = oConfig.getStringArray("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "initrt", null);
 		m_dRAINCUTOFF = Double.parseDouble(oConfig.getString("imrcp.forecast.mdss.DoMetroWrapper", "DoMetroWrapper", "raincut", "0.2"));
@@ -343,12 +322,13 @@ public class DoMetroWrapper implements Runnable
 	 */
 	public DoMetroWrapper(int nObsHrs, int nForecastHrs) throws Exception
 	{
-		int nOutputs = (nForecastHrs - 1) * 120;
-		m_lOutRoadCond = new long[nOutputs];
-		m_dOutRoadTemp = new double[nOutputs];
-		m_dOutSubSurfTemp = new double[nOutputs];
-		m_dOutSnowIceAcc = new double[nOutputs];
-		m_dOutLiquidAcc = new double[nOutputs];
+		m_nOutputs = (nForecastHrs - 1) * 120;
+//		m_dProfile = new double[3 + (6 * nObsHrs) + (7 * nForecastHrs)];
+		m_lOutRoadCond = new long[m_nOutputs];
+		m_dOutRoadTemp = new double[m_nOutputs];
+		m_dOutSubSurfTemp = new double[m_nOutputs];
+		m_dOutSnowIceAcc = new double[m_nOutputs];
+		m_dOutLiquidAcc = new double[m_nOutputs];
 		m_dFTime = new double[nForecastHrs];
 		m_dFTimeSeconds = new double[nForecastHrs];
 		m_dDewPoint = new double[nForecastHrs];
@@ -356,8 +336,8 @@ public class DoMetroWrapper implements Runnable
 		m_dPrecipAmt = new double[nForecastHrs];
 		m_dWindSpeed = new double[nForecastHrs];
 		m_dSfcPres = new double[nForecastHrs];
-		m_dPrecipType = new double[nForecastHrs];
-		m_dRoadCond = new double[nObsHrs];
+		m_lPrecipType = new long[nForecastHrs];
+		m_lRoadCond = new long[nObsHrs];
 		m_dObsAirTemp = new double[nObsHrs];
 		m_dObsRoadTemp = new double[nObsHrs];
 		m_dObsSubSurfTemp = new double[nObsHrs];
@@ -401,9 +381,9 @@ public class DoMetroWrapper implements Runnable
 	 * Pa)
 	 * @param dPrecipAmt array containing the forecasted precipitation amounts
 	 * (m/s)
-	 * @param dPrecipType array containing the forecasted precipitation types (0
+	 * @param lPrecipType array containing the forecasted precipitation types (0
 	 * = none, 1 = rain, 2 = snow)
-	 * @param dRoadCond	array containing the observed road condition (values are
+	 * @param lRoadCond	array containing the observed road condition (values are
 	 * the same as the lOutRoadCond listed below)
 	 * @param dCloudCover array containing the forecasted cloud covers (the
 	 * value is "octal" being from 0-8, 0 = 0% and 8 = 100% coverage)
@@ -432,7 +412,7 @@ public class DoMetroWrapper implements Runnable
 	private native void doMetroWrapper(int bBridge, double dLat, double dLon, int nObservationHrs, int nForecastHrs,
 	   double[] dObsRoadTemp, double[] dObsSubSurfTemp, double[] dObsAirTemp, double[] dObsDewPoint, double[] dObsWindSpeed,
 	   double[] dObsTime, double[] dFTime, double[] dFTimeSeconds, double[] dAirTemp, double[] dDewPoint,
-	   double[] dWindSpeed, double[] dSfcPres, double[] dPrecipAmt, double[] dPrecipType, double[] dRoadCond,
+	   double[] dWindSpeed, double[] dSfcPres, double[] dPrecipAmt, long[] lPrecipType, long[] lRoadCond,
 	   double[] dCloudCover, long[] lOutRoadCond, double[] dOutRoadTemp, double[] dOutSubSurfTemp, double[] dOutSnowIceAcc,
 	   double[] dOutLiquidAcc, int nTmtType, double dRainReservoir, double dSnowReservoir, double dRainCutoff, double dSnowCutoff);
 
@@ -444,8 +424,8 @@ public class DoMetroWrapper implements Runnable
 	public void run()
 	{
 		doMetroWrapper(m_bBridge, m_dLat, m_dLon, m_nObsHrs, m_nForecastHrs, m_dObsRoadTemp, m_dObsSubSurfTemp,
-		   m_dObsAirTemp, m_dObsDewPoint, m_dObsWindSpeed, m_dObsTime, m_dFTime, m_dFTimeSeconds, m_dAirTemp, m_dDewPoint, m_dWindSpeed, m_dSfcPres, m_dPrecipAmt, m_dPrecipType,
-		   m_dRoadCond, m_dCloudCover, m_lOutRoadCond, m_dOutRoadTemp, m_dOutSubSurfTemp, m_dOutSnowIceAcc, m_dOutLiquidAcc, m_nTmtType, m_dRainReservoir, m_dSnowReservoir,
+		   m_dObsAirTemp, m_dObsDewPoint, m_dObsWindSpeed, m_dObsTime, m_dFTime, m_dFTimeSeconds, m_dAirTemp, m_dDewPoint, m_dWindSpeed, m_dSfcPres, m_dPrecipAmt, m_lPrecipType,
+		   m_lRoadCond, m_dCloudCover, m_lOutRoadCond, m_dOutRoadTemp, m_dOutSubSurfTemp, m_dOutSnowIceAcc, m_dOutLiquidAcc, m_nTmtType, m_dRainReservoir, m_dSnowReservoir,
 		   m_dRAINCUTOFF, m_dSNOWCUTOFF);
 	}
 
@@ -464,12 +444,15 @@ public class DoMetroWrapper implements Runnable
 		long lObservation = lStartTime - (3600000 * m_nObsHrs);
 		long lForecast = lStartTime - 3600000; // the first "forecast" actually uses observed values
 		Directory oDir = Directory.getInstance();
-		NDFDStore oNDFD = (NDFDStore)oDir.lookup("NDFDStore");
+		WeatherStore oNDFDTempStore = (WeatherStore)oDir.lookup("NDFDTempStore");
+		WeatherStore oNDFDTdStore = (WeatherStore)oDir.lookup("NDFDTdStore");
+		WeatherStore oNDFDSkyStore = (WeatherStore)oDir.lookup("NDFDSkyStore");
+		WeatherStore oNDFDWspdStore = (WeatherStore)oDir.lookup("NDFDWspdStore");
 		RAPStore oRAP = (RAPStore)oDir.lookup("RAPStore");
-		RTMAStore oRTMA = (RTMAStore)oDir.lookup("RTMAStore");
+		WeatherStore oRTMA = (WeatherStore)oDir.lookup("RTMAStore");
 		MetroStore oMetro = (MetroStore)oDir.lookup("MetroStore");
 		SubSurfaceTemp oSub = (SubSurfaceTemp) oDir.lookup("SubSurfaceTemp");
-		RadarStore oRadarPrecip = (RadarStore) oDir.lookup("RadarPrecipStore");
+		GribStore oRadarPrecip = (GribStore) oDir.lookup("RadarPrecipStore");
 		int nIntLat = oSeg.m_nYmid;
 		int nIntLon = oSeg.m_nXmid;
 		Calendar oCal = Calendar.getInstance();
@@ -478,39 +461,42 @@ public class DoMetroWrapper implements Runnable
 		for (int i = 0; i < m_nObsHrs; i++)
 		{
 			long lTimestamp = lObservation + (i * 3600000);
-			FileWrapper oRtmaFile = oRTMA.getFileFromDeque(lTimestamp, lStartTime);
-			FileWrapper oMetroFile = oMetro.getFileFromDeque(lTimestamp, lStartTime);
+			FileWrapper oRtmaFile = oRTMA.getFile(lTimestamp, lStartTime);
+			
 			if (oRtmaFile == null)
 				return false;
+			
+			FileWrapper oMetroFile = oMetro.getFile(lTimestamp, lStartTime);
+			
 			m_dObsAirTemp[i] = oRtmaFile.getReading(ObsType.TAIR, lTimestamp, nIntLat, nIntLon, null) - 273.15;
 			m_dObsDewPoint[i] = oRtmaFile.getReading(ObsType.TDEW, lTimestamp, nIntLat, nIntLon, null) - 273.15;
 			m_dObsWindSpeed[i] = oRtmaFile.getReading(ObsType.SPDWND, lTimestamp, nIntLat, nIntLon, null);
 
 			if (oMetroFile == null)
 			{
-				m_dRoadCond[i] = Double.parseDouble(m_sInitRoadCond[i]);
+				m_lRoadCond[i] = Long.parseLong(m_sInitRoadCond[i]);
 				m_dObsRoadTemp[i] = Double.parseDouble(m_sInitRoadTemp[i]);
 				m_dObsSubSurfTemp[i] = oSub.getValue();
 			}
 			else
 			{
-				m_dRoadCond[i] = oMetroFile.getReading(ObsType.STPVT, lTimestamp, nIntLat, nIntLon, null);
-				if (Double.isNaN(m_dRoadCond[i]))  //if there is no MetroResults initialize road condition based off of presence of precipitation and air temp
-					m_dRoadCond[i] = Double.parseDouble(m_sInitRoadCond[i]);
+				m_lRoadCond[i] = imrcpToMetroRoadCond((int)oMetroFile.getReading(ObsType.STPVT, lTimestamp, nIntLat, nIntLon, null));
+				if (Double.isNaN(m_lRoadCond[i]))
+					m_lRoadCond[i] = Long.parseLong(m_sInitRoadCond[i]);
 
 				m_dObsRoadTemp[i] = oMetroFile.getReading(ObsType.TPVT, lTimestamp, nIntLat, nIntLon, null);
-				if (Double.isNaN(m_dObsRoadTemp[i]) || m_dObsRoadTemp[i] < m_dROADTEMPMIN || m_dObsRoadTemp[i] > m_dROADTEMPMAX)  //if there is no MetroResults or ObsRoadTemp is out of range initialize surface temp using RTMA air temp
+				if (Double.isNaN(m_dObsRoadTemp[i]) || m_dObsRoadTemp[i] < m_dROADTEMPMIN || m_dObsRoadTemp[i] > m_dROADTEMPMAX)
 					m_dObsRoadTemp[i] = Double.parseDouble(m_sInitRoadTemp[i]);
 
 				m_dObsSubSurfTemp[i] = oMetroFile.getReading(ObsType.TSSRF, lTimestamp, nIntLat, nIntLon, null);
-				if (Double.isNaN(m_dObsSubSurfTemp[i]) || m_dObsSubSurfTemp[i] < m_dSUBSURTEMPMIN || m_dObsSubSurfTemp[i] > m_dSUBSURTEMPMAX)  //if there is no MetroResults or ObsSubSurfTemp is out of range initialize subsurface temp using RTMA air temp
+				if (Double.isNaN(m_dObsSubSurfTemp[i]) || m_dObsSubSurfTemp[i] < m_dSUBSURTEMPMIN || m_dObsSubSurfTemp[i] > m_dSUBSURTEMPMAX)
 					m_dObsSubSurfTemp[i] = oSub.getValue();
 			}
 
 			oCal.setTimeInMillis(lTimestamp);
 			m_dObsTime[i] = oCal.get(Calendar.HOUR_OF_DAY) + (double)oCal.get(Calendar.MINUTE) / 60.0;
 
-			//check that values fall within the correct range, if not exit the function and set that it failed so METRo isn't ran for the MapCell
+			//check that values fall within the correct range, if not exit the function and set that it failed so METRo isn't ran for the segmen
 			if (Double.isNaN(m_dObsRoadTemp[i]) || m_dObsRoadTemp[i] < m_dROADTEMPMIN || m_dObsRoadTemp[i] > m_dROADTEMPMAX)
 			{
 				m_oLogger.debug("Observation Road Temp out of range: " + " " + m_dObsRoadTemp[i] + " at " + nIntLat + " " + nIntLon + " for hour " + i);
@@ -525,17 +511,15 @@ public class DoMetroWrapper implements Runnable
 
 			if (Double.isNaN(m_dObsAirTemp[i]) || m_dObsAirTemp[i] < m_dAIRTEMPMIN || m_dObsAirTemp[i] > m_dAIRTEMPMAX)
 			{
-				if (oRAP.loadFilesToLru(lTimestamp, lStartTime))
+				FileWrapper oRapFile = oRAP.getFile(lTimestamp, lStartTime);
+				if (oRapFile == null)
+					return false;
+				
+				m_dObsAirTemp[i] = oRapFile.getReading(ObsType.TAIR, lTimestamp, nIntLat, nIntLon, null) - 273.15;
+				if (Double.isNaN(m_dObsAirTemp[i]) || m_dObsAirTemp[i] < m_dAIRTEMPMIN || m_dObsAirTemp[i] > m_dAIRTEMPMAX)
 				{
-					FileWrapper oRapFile = oRAP.getFileFromLru(lTimestamp, lStartTime);
-					if (oRapFile == null)
-						return false;
-					m_dObsAirTemp[i] = oRapFile.getReading(ObsType.TAIR, lTimestamp, nIntLat, nIntLon, null) - 273.15;
-					if (Double.isNaN(m_dObsAirTemp[i]) || m_dObsAirTemp[i] < m_dAIRTEMPMIN || m_dObsAirTemp[i] > m_dAIRTEMPMAX)
-					{
-						m_oLogger.debug("Observation Air Temperature out of range: " + " " + m_dObsAirTemp[i] + " at " + nIntLat + " " + nIntLon + " for hour " + i);
-						return false;
-					}
+					m_oLogger.debug("Observation Air Temperature out of range: " + " " + m_dObsAirTemp[i] + " at " + nIntLat + " " + nIntLon + " for hour " + i);
+					return false;
 				}
 			}
 
@@ -561,9 +545,11 @@ public class DoMetroWrapper implements Runnable
 			// the first hour of "forecast" is an hour in the past
 			if (i == 0)
 			{
-				FileWrapper oRtmaFile = oRTMA.getFileFromDeque(lTimestamp, lStartTime);
+				FileWrapper oRtmaFile = oRTMA.getFile(lTimestamp, lStartTime);
+				
 				if (oRtmaFile == null)
 					return false;
+
 				m_dAirTemp[i] = oRtmaFile.getReading(ObsType.TAIR, lTimestamp, nIntLat, nIntLon, null) - 273.15; // convert K to C
 				m_dDewPoint[i] = oRtmaFile.getReading(ObsType.TDEW, lTimestamp, nIntLat, nIntLon, null) - 273.15;
 				m_dWindSpeed[i] = oRtmaFile.getReading(ObsType.SPDWND, lTimestamp, nIntLat, nIntLon, null);
@@ -571,13 +557,17 @@ public class DoMetroWrapper implements Runnable
 				m_dSfcPres[i] = oRtmaFile.getReading(ObsType.PRSUR, lTimestamp, nIntLat, nIntLon, null);
 
 				double dInitPrecip = 0;
-				FileWrapper oMetroFile = oMetro.getFileFromDeque(lTimestamp, lStartTime);
+				FileWrapper oMetroFile = oMetro.getFile(lTimestamp, lStartTime);
 				if (oMetroFile == null)
 					m_dRainReservoir = m_dSnowReservoir = 0;
 				else
 				{
 					m_dRainReservoir = oMetroFile.getReading(ObsType.DPHLIQ, lTimestamp, nIntLat, nIntLon, null);
 					m_dSnowReservoir = oMetroFile.getReading(ObsType.DPHSN, lTimestamp, nIntLat, nIntLon, null);
+					if (Double.isNaN(m_dRainReservoir))
+						m_dRainReservoir = 0;
+					if (Double.isNaN(m_dSnowReservoir))
+						m_dSnowReservoir = 0;
 				}
 				ImrcpObsResultSet oData = new ImrcpObsResultSet();
 				oRadarPrecip.getData(oData, ObsType.RTEPC, lTimestamp - m_nPASTPRECIP, lTimestamp, nIntLat, nIntLat, nIntLon, nIntLon, lStartTime);
@@ -586,33 +576,35 @@ public class DoMetroWrapper implements Runnable
 				dInitPrecip = dInitPrecip / (m_nPASTPRECIP / 120000); // PASTPRECIP is in millis, radar comes every 2 minutes so if PASTPRECIP is an hour, there are 30 precip values to take the average of
 				m_dPrecipAmt[i] = dInitPrecip / 3600000; // convert mm/hr to m/s
 				if (m_dPrecipAmt[i] == 0) // no precip amount
-					m_dPrecipType[i] = 0;
+					m_lPrecipType[i] = 0;
 				else if (m_dAirTemp[i] > -2) // if temp > -2C then precip type is rain
-					m_dPrecipType[i] = 1;
+					m_lPrecipType[i] = 1;
 				else // if temp <= -2C then precip type is snow
-					m_dPrecipType[i] = 2;
+					m_lPrecipType[i] = 2;
 			}
 			else
 			{
-				FileWrapper oNdfdTemp = oNDFD.getFileFromDeque(lTimestamp, ObsType.TAIR, lStartTime);
-				FileWrapper oNdfdTd = oNDFD.getFileFromDeque(lTimestamp, ObsType.TDEW, lStartTime);
-				FileWrapper oNdfdSky = oNDFD.getFileFromDeque(lTimestamp, ObsType.COVCLD, lStartTime);
-				FileWrapper oNdfdWspd = oNDFD.getFileFromDeque(lTimestamp, ObsType.SPDWND, lStartTime);
-				FileWrapper oRapFile = oRAP.getFileFromDeque(lTimestamp, lStartTime);
+				FileWrapper oNdfdTemp = oNDFDTempStore.getFile(lTimestamp, lStartTime);
+				FileWrapper oNdfdTd = oNDFDTdStore.getFile(lTimestamp, lStartTime);
+				FileWrapper oNdfdSky = oNDFDSkyStore.getFile(lTimestamp, lStartTime);
+				FileWrapper oNdfdWspd = oNDFDWspdStore.getFile(lTimestamp, lStartTime);
+				FileWrapper oRapFile = oRAP.getFile(lTimestamp, lStartTime);
+
 				if (oRapFile == null || oNdfdTemp == null || oNdfdTd == null || oNdfdSky == null || oNdfdWspd == null)
 					return false;
+
 				m_dAirTemp[i] = oNdfdTemp.getReading(ObsType.TAIR, lTimestamp, nIntLat, nIntLon, null) - 273.15;
 				m_dDewPoint[i] = oNdfdTd.getReading(ObsType.TDEW, lTimestamp, nIntLat, nIntLon, null) - 273.15;
 				m_dWindSpeed[i] = oNdfdWspd.getReading(ObsType.SPDWND, lTimestamp, nIntLat, nIntLon, null);
 				m_dCloudCover[i] = Math.round(oNdfdSky.getReading(ObsType.COVCLD, lTimestamp, nIntLat, nIntLon, null) / 12.5);
 				m_dPrecipAmt[i] = m_dPrecipAmt[i - 1] + ((oRapFile.getReading(ObsType.RTEPC, lTimestamp, nIntLat, nIntLon, null) / 1000)); // convert kg/(m^2*s) to m/s
-				m_dPrecipType[i] = getPrecipType(oRapFile, lTimestamp, nIntLat, nIntLon);
-				if (m_dPrecipAmt[i] > 0 && m_dPrecipType[i] == 0) // if there has been any accumulated precip need to force precip type to not be zero or the reservoir calculations in METRo code will not work correctly
+				m_lPrecipType[i] = getPrecipType(oRapFile, lTimestamp, nIntLat, nIntLon);
+				if (m_dPrecipAmt[i] > 0 && m_lPrecipType[i] == 0) // if there has been any accumulated precip need to force precip type to not be zero or the reservoir calculations in METRo code will not work correctly
 				{
 					if (m_dAirTemp[i] > -2) // if temp > -2C then precip type is rain
-						m_dPrecipType[i] = 1;
+						m_lPrecipType[i] = 1;
 					else // if temp <= -2C then precip type is snow
-						m_dPrecipType[i] = 2;
+						m_lPrecipType[i] = 2;
 				}
 				m_dSfcPres[i] = oRapFile.getReading(ObsType.PRSUR, lTimestamp, nIntLat, nIntLon, null);
 			}
@@ -663,63 +655,39 @@ public class DoMetroWrapper implements Runnable
 	 * for this forecast interval are finished
 	 *
 	 * @param oSeg the Segment METRo is being ran on
-	 * @param lStartTime start time of the current forecast interval
 	 */
-	public void saveRoadcast(Segment oSeg, long lStartTime)
+	public void saveRoadcast(Segment oSeg)
 	{
-		try (BufferedWriter oWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(m_sBaseDir + "metrooutput" + oSeg.m_nId + ".csv"), "utf-8")))
+		RoadcastData oRD = new RoadcastData(m_nOutputs, oSeg.m_nId);
+		int nRoadcastIndex = 0;
+		for (int i = 0; i < m_nForecastHrs - 2; i++)
 		{
-			for (int i = 0; i < m_nForecastHrs - 2; i++)
+			if (i == 0) // for the first hour save values every 2 minutes
 			{
-				int nRoadCond;
-				double dRoadTemp;
-				double dSubSurTemp;
-				double dSnowIce;
-				double dLiquid;
-
-				if (i == 0) // for the first hour
+				for (int j = 0; j < 30; j++) // for the first 20 minutes save values for every 2 minutes
 				{
-					for (int j = 0; j < 10; j++) // for the first 20 minutes save values for every 2 minutes
-					{
-						nRoadCond = convertRoadCondition((int)m_lOutRoadCond[80 + (j * 4)]); // output arrays from metro contains roadcast for every 30 seconds starting 20 minutes after the last observation. so start at 80 for the first hour
-						dRoadTemp = m_dOutRoadTemp[80 + (j * 4)];
-						dSubSurTemp = m_dOutSubSurfTemp[80 + (j * 4)];
-						dSnowIce = m_dOutSnowIceAcc[80 + (j * 4)];
-						dLiquid = m_dOutLiquidAcc[80 + (j * 4)];
-						String sLine = String.format("%d,%f,%f,%f,%f\n", nRoadCond, dRoadTemp, dSubSurTemp, dLiquid, dSnowIce);
-						oWriter.write(sLine);
-					}
-					for (int j = 0; j < 2; j++) // for the last 40 minutes for every 20 minutes
-					{
-						nRoadCond = convertRoadCondition((int)m_lOutRoadCond[120 + (j * 40)]);
-						dRoadTemp = m_dOutRoadTemp[120 + (j * 40)];
-						dSubSurTemp = m_dOutSubSurfTemp[120 + (j * 40)];
-						dSnowIce = m_dOutSnowIceAcc[120 + (j * 40)];
-						dLiquid = m_dOutLiquidAcc[120 + (j * 40)];
-						String sLine = String.format("%d,%f,%f,%f,%f\n", nRoadCond, dRoadTemp, dSubSurTemp, dLiquid, dSnowIce);
-						oWriter.write(sLine);
-					}
+					int nIndex = j * 4;
+					oRD.m_nStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]); // output arrays from metro contains roadcast for every 30 seconds starting 20 minutes after the last observation.
+					oRD.m_fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
+					oRD.m_fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
+					oRD.m_fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+					oRD.m_fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 				}
-				else // for all other forecast hours save values for every 20 minutes
+			}
+			else // for all other forecast hours save values for every 20 minutes
+			{
+				for (int j = 0; j < 3; j++)
 				{
-					for (int j = 0; j < 3; j++)
-					{
-						nRoadCond = convertRoadCondition((int)m_lOutRoadCond[80 + (i * 120) + (j * 40)]);
-						dRoadTemp = m_dOutRoadTemp[80 + (i * 120) + (j * 40)];
-						dSubSurTemp = m_dOutSubSurfTemp[80 + (i * 120) + (j * 40)];
-						dSnowIce = m_dOutSnowIceAcc[80 + (i * 120) + (j * 40)];
-						dLiquid = m_dOutLiquidAcc[80 + (i * 120) + (j * 40)];
-						String sLine = String.format("%d,%f,%f,%f,%f\n", nRoadCond, dRoadTemp, dSubSurTemp, dLiquid, dSnowIce);
-						oWriter.write(sLine);
-					}
+					int nIndex = (i * 120) + (j * 40);
+					oRD.m_nStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]); // output arrays from metro contains roadcast for every 30 seconds starting 20 minutes after the last observation.
+					oRD.m_fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
+					oRD.m_fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
+					oRD.m_fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+					oRD.m_fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 				}
-
 			}
 		}
-		catch (Exception oException)
-		{
-			m_oLogger.error(oException, oException);
-		}
+		m_oOutput = oRD;
 	}
 
 
@@ -884,12 +852,12 @@ public class DoMetroWrapper implements Runnable
 				oOut.write(String.format("%4.2f,", m_dSfcPres[i]));
 			oOut.write("\n");
 			oOut.write("ForecastPrecipType: ");
-			for (int i = 0; i < m_dPrecipType.length; i++)
-				oOut.write(String.format("%4.2f,", m_dPrecipType[i]));
+			for (int i = 0; i < m_lPrecipType.length; i++)
+				oOut.write(String.format("%d,", m_lPrecipType[i]));
 			oOut.write("\n");
 			oOut.write("ForecastRoadCond: ");
-			for (int i = 0; i < m_dRoadCond.length; i++)
-				oOut.write(String.format("%4.2f,", m_dRoadCond[i]));
+			for (int i = 0; i < m_lRoadCond.length; i++)
+				oOut.write(String.format("%d,", m_lRoadCond[i]));
 			oOut.write("\n");
 			oOut.write("ObsAirTemp: ");
 			for (int i = 0; i < m_dObsAirTemp.length; i++)
