@@ -64,14 +64,13 @@ public abstract class FileCache extends BaseBlock
 	@Override
 	public void reset()
 	{
-		m_oCache = new ArrayList();
 		m_oSearch = getNewFileWrapper();
 		m_bFilesAppendable = Boolean.parseBoolean(m_oConfig.getString("append", "False"));
 		m_nPeriod = m_oConfig.getInt("period", 300);
 		m_nOffset = m_oConfig.getInt("offset", 0);
 		m_nMaxForecast = m_oConfig.getInt("maxfcst", 0);
 		m_nFileFrequency = m_oConfig.getInt("freq", 0);
-		m_nTimeout = m_oConfig.getInt("timeout", 300000);
+		m_nTimeout = m_oConfig.getInt("cachetimeout", 7200000);
 		String[] sFormatters = m_oConfig.getStringArray("format", "");
 		m_oFormatters = new FilenameFormatter[sFormatters.length];
 		for (int i = 0; i < sFormatters.length; i++)
@@ -84,6 +83,7 @@ public abstract class FileCache extends BaseBlock
 			m_nSubObsTypes = new int[sObsTypes.length]; //convert String[] to int[]
 		for (int j = 0; j < sObsTypes.length; j++)
 			m_nSubObsTypes[j] = Integer.valueOf(sObsTypes[j], 36);
+		m_oCache = new ArrayList(m_nLimit);
 
 	}
 	
@@ -311,14 +311,17 @@ public abstract class FileCache extends BaseBlock
 					catch (Exception oException)
 					{
 						if (oFile.exists() && oFile.isFile())
-						{
-							m_oLogger.info("Deleting invalid file: " + sFullPath);
 							oFileWrapper.deleteFile(oFile);
-						}
 						throw oException;
 					}
 					if (bNewWrapper)
+					{
+						if (m_oCache.size() > m_nLimit)
+							execute();
+						if (m_oCache.size() > m_nLimit)
+							lruClear();
 						addToCache(oFileWrapper);
+					}
 
 					oFileWrapper.m_lLastUsed = System.currentTimeMillis();
 					m_oLogger.info("Finished loading " + sFullPath);
@@ -334,13 +337,41 @@ public abstract class FileCache extends BaseBlock
 	}
 	
 	
+	public void lruClear()
+	{
+		int nIndex1 = -1;
+		int nIndex2 = -1;
+		long lEarliest = Long.MAX_VALUE;
+		long lNextEarliest = Long.MIN_VALUE;
+		synchronized (m_oCache)
+		{
+			int nIndex = m_oCache.size();
+			while (nIndex-- > 0)
+			{
+				FileWrapper oTemp = m_oCache.get(nIndex);
+				if (oTemp.m_lLastUsed < lEarliest)
+				{
+					nIndex1 = nIndex;
+					lNextEarliest = lEarliest;
+					lEarliest = oTemp.m_lLastUsed;
+				}
+				else if (oTemp.m_lLastUsed < lNextEarliest)
+				{
+					nIndex2 = nIndex;
+					lNextEarliest = oTemp.m_lLastUsed;
+				}
+			}
+			if (nIndex1 >= 0)
+				m_oCache.remove(nIndex1);
+			if (nIndex2 >= 0)
+				m_oCache.remove(nIndex2);
+		}
+	}
+	
+	
 	@Override
 	public void execute()
 	{
-		if (m_oCache.size() < m_nLimit) // do nothing if the cache has not reached its limit
-			return;
-		
-		m_oLogger.info("Clearing cache");
 		long lTimeout = System.currentTimeMillis() - m_nTimeout;
 		ArrayList<FileWrapper> oFilesToCleanup = new ArrayList();
 		synchronized (m_oCache)
@@ -358,7 +389,8 @@ public abstract class FileCache extends BaseBlock
 		}
 		for (FileWrapper oFile : oFilesToCleanup)
 			oFile.cleanup(true);
-		m_oLogger.info(String.format("Removed %d files", oFilesToCleanup.size()));
+		if (!oFilesToCleanup.isEmpty())
+			m_oLogger.info(String.format("Removed %d files", oFilesToCleanup.size()));
 	}
 	
 	

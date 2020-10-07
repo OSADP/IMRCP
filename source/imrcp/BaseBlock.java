@@ -258,7 +258,7 @@ public abstract class BaseBlock extends HttpServlet implements ImrcpBlock, Runna
 
 	/**
 	 * This function should be overriden if the BaseBlock has any configurable
- parameters to set. The function is called when the Block starts its
+	 * parameters to set. The function is called when the Block starts its
 	 * service.
 	 */
 	protected void reset()
@@ -362,6 +362,12 @@ public abstract class BaseBlock extends HttpServlet implements ImrcpBlock, Runna
 	}
 	
 	
+	protected synchronized void setError()
+	{
+		checkAndSetStatus(ERROR, OVERRIDESTATUS);
+	}
+	
+	
 	protected synchronized boolean checkAndSetStatus(int nStatus, int nCheck)
 	{
 		if (nCheck == OVERRIDESTATUS)
@@ -369,6 +375,8 @@ public abstract class BaseBlock extends HttpServlet implements ImrcpBlock, Runna
 			
 			m_nStatus.set(nStatus);
 			m_lStatusChanged.set(System.currentTimeMillis());
+			if (nStatus == ERROR)
+				m_oLogger.error("Status set to ERROR");
 			return true;
 		}
 		else
@@ -376,6 +384,8 @@ public abstract class BaseBlock extends HttpServlet implements ImrcpBlock, Runna
 			if (m_nStatus.compareAndSet(nCheck, nStatus))
 			{
 				m_lStatusChanged.set(System.currentTimeMillis());
+				if (nStatus == ERROR)
+					m_oLogger.error("Status set to ERROR");
 				return true;
 			}
 			return false;

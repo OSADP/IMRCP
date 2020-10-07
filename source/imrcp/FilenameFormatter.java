@@ -1,10 +1,8 @@
 package imrcp;
 
-import java.text.SimpleDateFormat;
+import imrcp.system.Directory;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
-import java.util.SimpleTimeZone;
-import java.util.TimeZone;
 
 
 public class FilenameFormatter extends GregorianCalendar
@@ -20,7 +18,7 @@ public class FilenameFormatter extends GregorianCalendar
 
 	public FilenameFormatter(String sPattern)
 	{
-		setTimeZone(TimeZone.getTimeZone("UTC")); // set UTC time zone
+		setTimeZone(Directory.m_oUTC); // set UTC time zone
 		m_sPattern = sPattern; // save pattern
 		m_sBuf = new StringBuilder(sPattern.length() * 2); // reserve buffer space
 	}
@@ -117,9 +115,6 @@ public class FilenameFormatter extends GregorianCalendar
 				setHH(nParsePos);
 			else if (m_sPattern.indexOf("nn", nPos) == nPos + 2)
 				nOffset = Integer.parseInt(m_sBuf.substring(nParsePos, nParsePos + 2));
-			
-			
-			
 			
 			nPos = m_sPattern.indexOf("%r", nPos + 1);
 		}
@@ -231,29 +226,5 @@ public class FilenameFormatter extends GregorianCalendar
 	public String getExtension()
 	{
 		return m_sPattern.substring(m_sPattern.lastIndexOf("."));
-	}
-	
-	public static void main(String[] sArgs)
-	{
-		FilenameFormatter oFf = new FilenameFormatter("ftp://ftpprd.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.%ryyyyMMdd/rap.t%rHHz.awp130pgrbf%rnn.grib2");
-		long[] lTimes = new long[3];
-		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HHmmss");
-		oSdf.setTimeZone(new SimpleTimeZone(0, ""));
-		int nOffset = oFf.parseRecv("ftp://ftpprd.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.20191125/rap.t02z.awp130pgrbf04.grib2", lTimes);
-		System.out.println(nOffset);
-		System.out.println(oSdf.format(lTimes[0]));
-		
-		oFf = new FilenameFormatter("https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/MRMS_MergedBaseReflectivityQC_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz");
-		lTimes = new long[3];
-		nOffset = oFf.parseRecv("https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/MRMS_MergedBaseReflectivityQC_00.00_20191124-221744.grib2.gz", lTimes);
-		System.out.println(nOffset);
-		System.out.println(oSdf.format(lTimes[0]));
-		
-		oFf = new FilenameFormatter("ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/rtma2p5.%ryyyyMMdd/rtma2p5.t%rHHz.2dvarges_ndfd.grb2_wexp");
-		lTimes = new long[3];
-		nOffset = oFf.parseRecv("ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/rtma2p5.20191124/rtma2p5.t02z.2dvarges_ndfd.grb2_wexp", lTimes);
-		System.out.println(nOffset);
-		System.out.println(oSdf.format(lTimes[0]));
-		
 	}
 }
