@@ -83,6 +83,8 @@ public class AHPS extends Collector implements Comparator<Obs>
 	private ArrayList<FloodStageMetadata> m_oFloodStageMetadata = new ArrayList();
 	
 	private int m_nHourInterval;
+	
+	private int m_nTimeout;
 
 
 	/**
@@ -152,6 +154,7 @@ public class AHPS extends Collector implements Comparator<Obs>
 		m_sDbfField = m_oConfig.getString("field", "Forecast");
 		m_sSearchTag = m_oConfig.getString("search", "(Maximum Forecast 1-Day)");
 		m_nHourInterval = m_oConfig.getInt("hourint", 1);
+		m_nTimeout = m_oConfig.getInt("conntimeout", 90000);
 	}
 
 
@@ -166,6 +169,8 @@ public class AHPS extends Collector implements Comparator<Obs>
 		{
 			URL oUrl = new URL(m_sBaseURL);
 			URLConnection oConn = oUrl.openConnection();
+			oConn.setReadTimeout(m_nTimeout);
+			oConn.setConnectTimeout(m_nTimeout);
 			BufferedInputStream oIn = new BufferedInputStream(oConn.getInputStream()); // last modified/updated is not in the header for the url so much skim the html
 			StringBuilder sBuffer = new StringBuilder();
 			int nByte;
@@ -209,7 +214,8 @@ public class AHPS extends Collector implements Comparator<Obs>
 				return;
 			URL oUrl = new URL(m_sDownloadUrl); // retrieve remote data file
 			URLConnection oConn = oUrl.openConnection();
-			oConn.setConnectTimeout(60000 * 10); // 10 minute timeout
+			oConn.setReadTimeout(m_nTimeout);
+			oConn.setConnectTimeout(m_nTimeout); // 10 minute timeout
 			BufferedInputStream oIn = new BufferedInputStream(oConn.getInputStream());
 			BufferedOutputStream oOut = new BufferedOutputStream(
 			   new FileOutputStream(sFilename));
