@@ -3,6 +3,8 @@ TAIR,0,K
 TDEW,0,K
 TPVT,0,C
 TPVT,stormw,F
+KRTPVT,0,C
+KTSSRF,0,C
 PRBAR,0,mbar
 PRSUR,0,Pa
 RH,0,%
@@ -24,3 +26,14 @@ DPHLIQ,0,mm
 DPHSN,0,mm
 DPHLNK,0,ft
 TRFLNK,0,%
+SPDLNK,ladotd,kph
+DPHLIQ,adcirc,ft
+DPHSN,metro,mmle
+TAIR,wxde,C
+DPHLNK,wxde,mm
+PRSUR,wxde,mbar
+TDEW,wxde,C
+SPDLNK,geotab,kph
+SPDVEH,0,mph
+SPDVEH,geotab,kph
+SSCST,0,m
