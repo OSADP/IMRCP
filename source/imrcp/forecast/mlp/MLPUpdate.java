@@ -15,88 +15,144 @@
  */
 package imrcp.forecast.mlp;
 
-import imrcp.geosrv.KCScoutDetectorLocation;
-import imrcp.store.FileWrapper;
-import imrcp.store.ImrcpEventResultSet;
-import imrcp.store.KCScoutDetector;
+import imrcp.geosrv.Network;
+import imrcp.geosrv.WayNetworks;
+import imrcp.store.GriddedFileWrapper;
+import imrcp.store.ImrcpObsResultSet;
+import imrcp.store.ImrcpResultSet;
+import imrcp.store.Obs;
+import imrcp.store.ObsView;
 import imrcp.system.CsvReader;
 import imrcp.system.Directory;
+import imrcp.system.ExtMapping;
+import imrcp.system.FileUtil;
+import imrcp.system.Id;
+import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.Scheduling;
+import imrcp.system.Units;
 import imrcp.system.Util;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
+import java.util.TimeZone;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import org.rosuda.REngine.Rserve.RConnection;
 
 /**
- *
+ * Manages running the long time series update MLP model for traffic speed 
+ * predictions once a week
  * @author Federal Highway Administration
  */
 public class MLPUpdate extends MLPBlock
 {
-	private long m_lStartOfFile;
-	private boolean m_bScheduled = false;
-	private InrixMap m_oInrixData;
-	private String m_sInrixFile;
-	private final ArrayDeque<Long> m_oQueue = new ArrayDeque();
+	/**
+	 * Queues {@link imrcp.forecast.mlp.MLPUpdate.QueueInfo}s used to rerun the 
+	 * model
+	 */
+	private final ArrayDeque<QueueInfo> m_oQueue = new ArrayDeque();
+
+	
+	/**
+	 * Flag if this instance should process real time data or only run the model
+	 * for queued times
+	 */
 	private boolean m_bRealTime;
-	private long m_lCurrentTime = Long.MIN_VALUE;
+
+	
+	/**
+	 * Instance name of the MLPPredict block this MLPUpdate block is associated
+	 * with
+	 */
 	private String m_sMLPPredictQueue;
+
+	
+	/**
+	 * Number of weeks of historic speed data needed
+	 */
+	public int m_nWeeksBack;
+
+	
+	/**
+	 * {@link imrcp.forecast.mlp.MLPUpdate.QueueInfo} that is currently being 
+	 * processed. {@code null} if nothing is being processed
+	 */
+	private QueueInfo m_oCurrentRun = null;
+	
 	
 	@Override
 	public void reset()
 	{
 		super.reset();
-		m_oInrixData = new InrixMap();
-		m_sInrixFile = m_oConfig.getString("inrixdata", "");
 		m_bRealTime = Boolean.parseBoolean(m_oConfig.getString("realtime", "False"));
 		m_sMLPPredictQueue = m_oConfig.getString("mlppredictqueue", "");
 		m_oQueue.clear();
+		m_nWeeksBack = m_oConfig.getInt("weeks", 2);
 	}
 	
 	
+	/**
+	 * Determine the next Monday and sets a schedule to execute on a fixed 
+	 * interval starting on that Monday and then every Monday after that. Also
+	 * schedules this block to execute once now to ensure the data files are
+	 * available and up to date.
+	 * @return true if no Exceptions are thrown
+	 * @throws Exception
+	 */
 	@Override
 	public boolean start() throws Exception
 	{
-		new File(m_sLocalDir).mkdirs();
-		new File(g_sLongTsTmcLocalDir).mkdirs();
+		Files.createDirectories(Paths.get(m_sLocalDir), FileUtil.DIRPERS);
+		Files.createDirectories(Paths.get(m_sLongTsLocalDir), FileUtil.DIRPERS);
+		
 		if (m_bRealTime)
 		{
-			synchronized (m_oQueue)
-			{
-				m_oQueue.addLast(System.currentTimeMillis());
-			}
-			execute();
+			Calendar oCal = new GregorianCalendar(Directory.m_oUTC); // set the calendar to next Monday
+			oCal.set(Calendar.MILLISECOND, 0);
+			oCal.set(Calendar.SECOND, 0);
+			oCal.set(Calendar.MINUTE, 0);
+			oCal.set(Calendar.HOUR_OF_DAY, 0);
+			if (oCal.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY)
+				oCal.add(Calendar.WEEK_OF_YEAR, 1);
+			else
+				while (oCal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
+					oCal.add(Calendar.DAY_OF_WEEK, 1);
+			m_nSchedId = Scheduling.getInstance().createSched(this, oCal.getTime(), m_nPeriod); // create a schedule to start the next Monday and every Monday after that
+			
+			Scheduling.getInstance().scheduleOnce(this, 10000);
 		}
 		else
-		{
 			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
-		}
-		
 		return true;
 	}
+
 	
-	
+	/**
+	 * Attempts to queue the time parsed from the given date string.
+	 * @param sDate date to queue in "yyyy-MM-dd" format
+	 * @param sBuffer Buffer to append status messages to
+	 * @throws Exception
+	 */
 	public void queue(String sDate, StringBuilder sBuffer) throws Exception
 	{
 		synchronized (m_oQueue)
 		{
-			if (m_oQueue.isEmpty())
+			if (m_oQueue.isEmpty()) // since the process is expensive in terms of time and processing only allow one things to be queued at a time
 			{
 				int nStatus = (int)status()[0];
 				if (nStatus == RUNNING)
@@ -112,9 +168,17 @@ public class MLPUpdate extends MLPBlock
 				}
 				
 				SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd");
+				oSdf.setTimeZone(Directory.m_oUTC);
 				long lTime = oSdf.parse(sDate).getTime();
-				lTime = (lTime / 86400000) * 86400000; // floor to the beginning of the day
-				m_oQueue.addLast(lTime);
+				Calendar oCal = new GregorianCalendar(Directory.m_oUTC); // set the calendar to next Monday
+				oCal.setTimeInMillis(lTime);
+				oCal.set(Calendar.MILLISECOND, 0);
+				oCal.set(Calendar.SECOND, 0);
+				oCal.set(Calendar.MINUTE, 0);
+				oCal.set(Calendar.HOUR_OF_DAY, 0);
+				while (oCal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
+					oCal.add(Calendar.DAY_OF_WEEK, -1);
+				m_oQueue.addLast(new QueueInfo(oCal.getTimeInMillis(), m_sLocalDir, m_sLongTsLocalDir, null));
 				sBuffer.append("Queued ").append(sDate);
 			}
 			else
@@ -125,36 +189,26 @@ public class MLPUpdate extends MLPBlock
 	}
 	
 	
+	/**
+	 * If {@link #m_oQueue} is not empty, gets the first object from it and runs
+	 * the long time series update MLP model.
+	 */
 	@Override
 	public void execute()
 	{
 		try
 		{
-			long lRunTime;
 			synchronized (m_oQueue)
 			{
 				if (m_oQueue.isEmpty())
 				{
+					m_oCurrentRun = null;
 					checkAndSetStatus(2, 1); // if still RUNNING, set back to IDLE
 					return;
 				}
-				lRunTime = m_oQueue.pollFirst();
+				m_oCurrentRun = m_oQueue.pollFirst();
 			}
-			lRunTime = (lRunTime / 3600000) * 3600000; // floor to the nearest hour
-			GregorianCalendar oCal = new GregorianCalendar(Directory.m_oUTC);
-			oCal.setTimeInMillis(lRunTime);
-			GregorianCalendar oLastMonthlyTimestamp = new GregorianCalendar(Directory.m_oUTC); // set this calendar to the previous Sunday at 23:55
-			long lStartOfDay = (lRunTime / 86400000) * 86400000;	
-			m_lCurrentTime = lStartOfDay;
-			GregorianCalendar oMonday4WeeksAgo = new GregorianCalendar(Directory.m_oUTC);
-			oMonday4WeeksAgo.setTimeInMillis(lStartOfDay);
-			while (oMonday4WeeksAgo.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
-				oMonday4WeeksAgo.add(Calendar.DAY_OF_WEEK, -1);
-			oLastMonthlyTimestamp.setTimeInMillis(oMonday4WeeksAgo.getTimeInMillis());
-			long lRTimestamp = oLastMonthlyTimestamp.getTimeInMillis();
-			oLastMonthlyTimestamp.add(Calendar.MINUTE, -5);
-			oMonday4WeeksAgo.add(Calendar.WEEK_OF_YEAR, -4);
-			m_lStartOfFile = oMonday4WeeksAgo.getTimeInMillis();
+			m_oCurrentRun.m_lRunTime = (m_oCurrentRun.m_lRunTime / 3600000) * 3600000; // floor to the nearest hour
 			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 				
 			synchronized (m_oDelegate)
@@ -162,26 +216,33 @@ public class MLPUpdate extends MLPBlock
 				m_oDelegate.m_nCount = 0;
 			}
 			ArrayList<WorkObject> oWorkObjects = new ArrayList();
-			ArrayList<WorkObject> oDetectorWork = new ArrayList();
 			ArrayList<Work> oRWorks = new ArrayList();
 
 			
-			long lEarliestWeeklyTs = createWork(oWorkObjects, oDetectorWork, oRWorks, oLastMonthlyTimestamp, oMonday4WeeksAgo);
-			updateMonthlyHistDat(lEarliestWeeklyTs, oMonday4WeeksAgo.getTimeInMillis(), oRWorks);
-			updateMonthlyLinkDat(oMonday4WeeksAgo.getTimeInMillis(), oRWorks, oLastMonthlyTimestamp.getTimeInMillis());
+			long lEarliestWeeklyTs = createWork(oWorkObjects, oRWorks); // determine the time to start getting speed date for the histmonth files
+			WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+			Network oNetwork = oWayNetworks.getNetwork(m_sNetwork);
+			if (oNetwork == null)
+			{
+				setError();
+				throw new Exception("Invalid network id configured");
+			}
+
+			updateMonthlyHistDat(lEarliestWeeklyTs, oRWorks, m_oCurrentRun.m_lRunTime, m_sTz, oNetwork.getBoundingBox(), m_sInputFf, m_oCurrentRun.m_sInputDir);
+			long lCutoff = m_oCurrentRun.m_lRunTime + 604800000; 
 			for (int i = 0; i < oRWorks.size(); i++)
 			{
 				Work oRWork = oRWorks.get(i);
-				oRWork.m_lTimestamp = lRTimestamp;
+				oRWork.m_lTimestamp = m_oCurrentRun.m_lRunTime;
 				int nIndex = oRWork.size();
 				while (nIndex-- > 0)
 				{
 					WorkObject oObj = oRWork.get(nIndex);
-					if (oObj.m_oDetector == null)
+					if (oObj.m_oWay == null)
 						continue;
-					File oLongTs = new File(String.format("%slong_ts_pred%d.csv", m_sLocalDir, oObj.m_oDetector.m_nArchiveId));
+					File oLongTs = new File(String.format(g_sLongTsPredFf, m_oCurrentRun.m_sLongTsDir, oObj.m_oWay.m_oId.toString()));
 					String sLastLine = Util.getLastLineOfFile(oLongTs.getAbsolutePath());
-					if (sLastLine != null && !sLastLine.isEmpty() && !sLastLine.equals(LONGTSHEADER) && oSdf.parse(sLastLine.substring(0, sLastLine.indexOf(","))).getTime() > oLastMonthlyTimestamp.getTimeInMillis() + 604800000) // the 6604800000 is a week. if the last timestamp in the long_ts_pred is more than a week past the last timestamp in the histmonth file then this long_ts_pred has already been processed for the week
+					if (sLastLine != null && !sLastLine.isEmpty() && !sLastLine.equals(LONGTSHEADER) && oSdf.parse(sLastLine.substring(0, sLastLine.indexOf(","))).getTime() > lCutoff) // if the last timestamp in the long_ts_pred is more than a week past the last timestamp in the histmonth file then this long_ts_pred has already been processed for the week
 						oRWork.remove(nIndex);
 				}
 				synchronized (m_oWorkQueue)
@@ -198,18 +259,32 @@ public class MLPUpdate extends MLPBlock
 	}
 	
 	
+	/**
+	 * Since most of the processing happens in other threads than the one that
+	 * calls this method, changing the status of the block is handled differently
+	 * than the base case. If {@link #m_bRealTime} is true the current week's Monday
+	 * is added to the queue. Then if the block is {@link #IDLE} (not processing
+	 * another time in other threads) {@link #execute()} is called
+	 */
 	@Override
 	public void run()
 	{
+		if (m_bRealTime)
+		{
+			Calendar oCal = new GregorianCalendar(Directory.m_oUTC); // set the calendar to this week's Monday
+			oCal.set(Calendar.MILLISECOND, 0);
+			oCal.set(Calendar.SECOND, 0);
+			oCal.set(Calendar.MINUTE, 0);
+			oCal.set(Calendar.HOUR_OF_DAY, 0);
+			while (oCal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
+				oCal.add(Calendar.DAY_OF_WEEK, -1);
+			synchronized (m_oQueue)
+			{
+				m_oQueue.addLast(new QueueInfo(oCal.getTimeInMillis(), m_sLocalDir, m_sLongTsLocalDir, null));
+			}
+		}
 		if (checkAndSetStatus(1, 2)) // check if IDLE, if it is set to RUNNING and execute the block's task
 		{
-			if (m_bRealTime)
-			{
-				synchronized (m_oQueue)
-				{
-					m_oQueue.addLast(System.currentTimeMillis());
-				}
-			}
 			execute();
 		}
 		else
@@ -217,90 +292,52 @@ public class MLPUpdate extends MLPBlock
 	}
 	
 	
-	public long createWork(ArrayList<WorkObject> oWorkObjects, ArrayList<WorkObject> oDetectorWork, ArrayList<Work> oRWorks,
-						   Calendar oLastMonthlyTimestamp, Calendar oMonday4WeeksAgo) throws Exception
+	/**
+	 * Fills the given lists with the necessary objects to run the MLP long time
+	 * series update model and determines earliest time that needs to be used to
+	 * start generating the historic speed records needed.
+	 * @param oWorkObjects List to fill with WorkObjects
+	 * @param oRWorks List to fill with Works
+	 * @return time in milliseconds since Epoch to start generating historic speed
+	 * records
+	 * @throws Exception
+	 */
+	public long createWork(ArrayList<WorkObject> oWorkObjects, ArrayList<Work> oRWorks) 
+		throws Exception
 	{
-		fillWorkObjects(oWorkObjects, oDetectorWork);
-		if (g_sIDSTOUSE != null && !g_sIDSTOUSE.isEmpty())
-		{
-			ArrayList<Integer> oDetIds = new ArrayList();
-			ArrayList<String> oUpstreamIds = new ArrayList();
-			ArrayList<String> oTmcIds = new ArrayList();
-			try (CsvReader oIn = new CsvReader(new FileInputStream(g_sIDSTOUSE)))
-			{
-				int nCol = oIn.readLine();
-				for (int i = 0; i < nCol; i++)
-					oDetIds.add(oIn.parseInt(i));
-				
-				nCol = oIn.readLine();
-				for (int i = 0; i < nCol; i++)
-					oUpstreamIds.add(oIn.parseString(i));
-				
-				nCol = oIn.readLine();
-				for (int i = 0; i < nCol; i++)
-					oTmcIds.add(oIn.parseString(i));
-				
-				Collections.sort(oDetIds);
-				Collections.sort(oTmcIds);
-				Collections.sort(oUpstreamIds);
-			}
-			
-			int nSize = oWorkObjects.size();
-			while (nSize-- > 0)
-			{
-				WorkObject oTemp = oWorkObjects.get(nSize);
-				int nIndex = -1;
-				if (oTemp.m_sTmcCode != null && (nIndex = Collections.binarySearch(oTmcIds, oTemp.m_sTmcCode)) < 0)
-				{
-					oWorkObjects.remove(nSize);
-					continue;
-				}
-				
-				if (nIndex >= 0)
-					continue;
-				
-				if (oTemp.m_sMlpLinkId != null && Collections.binarySearch(oUpstreamIds, oTemp.m_sMlpLinkId) < 0)
-					oWorkObjects.remove(nSize);
-
-			}
-			nSize = oDetectorWork.size();
-			while (nSize-- > 0)
-			{
-				WorkObject oTemp = oDetectorWork.get(nSize);
-				if (oTemp.m_oDetector != null && Collections.binarySearch(oDetIds, oTemp.m_oDetector.m_nArchiveId) < 0)
-					oDetectorWork.remove(nSize);
-			}
-		}
+		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+		Network oNetwork = oWayNetworks.getNetwork(m_sNetwork);
+		fillWorkObjects(oWorkObjects, oNetwork, m_oCurrentRun.m_oIds);
 
 		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 		oSdf.setTimeZone(Directory.m_oUTC);
 		long lEarliestWeeklyTs = Long.MAX_VALUE;
-		long lLastHistMonthTs = oLastMonthlyTimestamp.getTimeInMillis();
-		long lLastWeeksHistMonthTs = oLastMonthlyTimestamp.getTimeInMillis() - 604800000;
-		long lMonday4WeeksAgo = oMonday4WeeksAgo.getTimeInMillis();
+		long lExpectedLastTime = m_oCurrentRun.m_lRunTime - 300000;
+		long lStartOfData = m_oCurrentRun.m_lStartOfData;
 		for (int i = 0; i < g_nThreads; i++)
 		{
 			Work oRWork = new Work(i);
-			for (int nIndex = 0; nIndex < oDetectorWork.size(); nIndex++)
+			for (int nIndex = 0; nIndex < oWorkObjects.size(); nIndex++)
 			{
 				if (nIndex % g_nThreads == i)
-					oRWork.add(oDetectorWork.get(nIndex));
+					oRWork.add(oWorkObjects.get(nIndex));
 			}
 			oRWork.m_oBoas = new ByteArrayOutputStream(2097152);
-			oRWork.m_oCompressor = new OutputStreamWriter(new BufferedOutputStream(new GZIPOutputStream(oRWork.m_oBoas) {{def.setLevel(Deflater.BEST_COMPRESSION);}}));
+			oRWork.m_oCompressor = new OutputStreamWriter(new BufferedOutputStream(Util.getGZIPOutputStream(oRWork.m_oBoas)));
 			oRWork.m_oCompressor.write(HISTDATHEADER);
 			
-			File oHistMonth = new File(String.format("%shistmonth%02d.csv.gz", m_sLocalDir, oRWork.m_nThread));
+			Path oHistPast = Paths.get(String.format(m_sInputFf, m_oCurrentRun.m_sInputDir, oRWork.m_nThread));
+
 			long lLastTimestamp = Long.MIN_VALUE;
-			if (oHistMonth.exists())
+			if (Files.exists(oHistPast))
 			{
-				try (CsvReader oIn = new CsvReader(new GZIPInputStream(new FileInputStream(oHistMonth))))
+				try (CsvReader oIn = new CsvReader(new GZIPInputStream(Files.newInputStream(oHistPast))))
 				{
 					oIn.readLine(); // skip header
 					while (oIn.readLine() > 0)
 					{
 						MLPRecord oTemp = new MLPRecord(oIn, oSdf);
-						if (oTemp.m_lTimestamp >= lMonday4WeeksAgo)
+						if (oTemp.m_lTimestamp >= lStartOfData && oTemp.m_lTimestamp <= lExpectedLastTime) // only keep records in the valid time range
 						{
 							oTemp.writeRecord(oRWork.m_oCompressor, oSdf);
 							lLastTimestamp = oTemp.m_lTimestamp;
@@ -311,44 +348,22 @@ public class MLPUpdate extends MLPBlock
 			
 			if (lLastTimestamp != Long.MIN_VALUE)
 			{
-				if (lLastHistMonthTs == lLastTimestamp || lLastWeeksHistMonthTs == lLastTimestamp)
+				if (lExpectedLastTime == lLastTimestamp)
 					oRWork.m_lTimestamp = lLastTimestamp + 300000; // the last timestamp in the file should be a Sunday at 23:55 so add 5 minutes to be 0:00 of Monday
 				else
-					oRWork.m_lTimestamp = lMonday4WeeksAgo;
+					oRWork.m_lTimestamp = lStartOfData;
 			}
 			else
-				oRWork.m_lTimestamp = lMonday4WeeksAgo;
+				oRWork.m_lTimestamp = lStartOfData;
 			
 			if (oRWork.m_lTimestamp < lEarliestWeeklyTs)
 				lEarliestWeeklyTs = oRWork.m_lTimestamp;
 			
 			oRWorks.add(oRWork);
 		}
-		
-		
-		ArrayList<String> oAddedTmcCodes = new ArrayList();
-		for (int i = 0; i < g_nThreads; i++)
-		{
-			Work oRWork = oRWorks.get(i);
-			for (int nIndex = 0; nIndex < oWorkObjects.size(); nIndex++)
-			{
-				if (nIndex % g_nThreads == i)
-				{
-					WorkObject oObj = oWorkObjects.get(nIndex);
-					if (oObj.m_oDetector == null && oObj.m_sTmcCode != null)
-					{
-						int nSearchIndex = Collections.binarySearch(oAddedTmcCodes, oObj.m_sTmcCode);
-						if (nSearchIndex >= 0)
-							continue;
-						
-						oAddedTmcCodes.add(~nSearchIndex, oObj.m_sTmcCode);
-						oRWork.add(oObj);
-					}
-				}
-			}
-		}
 
-		if (lEarliestWeeklyTs != lLastHistMonthTs + 300000 && lEarliestWeeklyTs != lLastWeeksHistMonthTs + 300000) // the last timestamp in the file wasn't the correct time so just reset the file using 4 weeks of data
+
+		if (lEarliestWeeklyTs != lExpectedLastTime + 300000) // the last timestamp in the file wasn't the correct time so just reset the file
 		{
 			for (int i = 0; i < g_nThreads; i++)
 			{
@@ -356,236 +371,222 @@ public class MLPUpdate extends MLPBlock
 				oRWork.m_oBoas = new ByteArrayOutputStream(2097152);
 				oRWork.m_oCompressor = new OutputStreamWriter(new BufferedOutputStream(new GZIPOutputStream(oRWork.m_oBoas) {{def.setLevel(Deflater.BEST_COMPRESSION);}}));
 				oRWork.m_oCompressor.write(HISTDATHEADER);
-				oRWork.m_lTimestamp = lMonday4WeeksAgo;
+				oRWork.m_lTimestamp = lStartOfData;
 			}
-			return lMonday4WeeksAgo;
+			return lStartOfData;
 		}
 		
 		return lEarliestWeeklyTs;
 	}
 	
 	
-	private void updateMonthlyHistDat(long lEarliestTs, long lMonday4WeeksAgo, ArrayList<Work> oRWorks) throws Exception
+	/**
+	 * Creates the historic speed files needed for inputs to the R code.
+	 * @param lEarliestTs Time in milliseconds since Epoch to start generating
+	 * records
+	 * @param oRWorks List of Work to be processed
+	 * @param lEndTime Time in milliseconds since Epoch to generate records to up
+	 * @param sTimeZone TimeZone ID String used by {@link java.util.TimeZone#getTimeZone(java.lang.String)}
+	 * @param nBb bounding box of the Network that is being processed.
+	 * [min lon, min lat, max lon, max lat] all the lon/lats are in decimal degrees
+	 * scaled to 7 decimal places
+	 * @param sFilenameFormat Format String used to generate file names per thread
+	 * @param sDir Directory where files are written to
+	 * @throws Exception
+	 */
+	public static void updateMonthlyHistDat(long lEarliestTs, ArrayList<Work> oRWorks, long lEndTime, String sTimeZone, int[] nBb, String sFilenameFormat, String sDir) throws Exception
 	{
 		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-		long lEndTime = lMonday4WeeksAgo + 2419200000L; // process 4 weeks of data
 
-		if (lEarliestTs == lEndTime)
+		if (lEarliestTs == lEndTime) // files have already been generated
 			return;
 		
-		KCScoutDetector oSearch = new KCScoutDetector();
-		oSearch.m_lTimestamp = -1;
-		oSearch.m_oLocation = new KCScoutDetectorLocation();
-		KCScoutDetector[] oCurrentDets = new KCScoutDetector[1442]; // contains a days worth of 5 minute observations, padded to help with boundary conditions
 		int[] nEvents = null;
-		MLPMetadata oMetaSearch = new MLPMetadata();
-		MLPMetadata oMetadata;
-		DownstreamLinks oLinksSearch = new DownstreamLinks();
-		DownstreamLinks oLinks;
-		GregorianCalendar oCentralTime = new GregorianCalendar(Directory.m_oCST6CDT); // use central time for day of week and time of day calculations
-		FileWrapper oRtmaFile = null;
-		FileWrapper[] oRapFile = new FileWrapper[1];
-//		FileWrapper[] oMrmsFiles = new FileWrapper[3];
-//		lDayTimestamp = 1540771200000L;
+		GregorianCalendar oCal = new GregorianCalendar(TimeZone.getTimeZone(sTimeZone));
+		GriddedFileWrapper oRtmaFile = null;
+		GriddedFileWrapper[] oRapFile = new GriddedFileWrapper[1];
+		GriddedFileWrapper oNdfdTempFile = null;
+		GriddedFileWrapper oNdfdWspdFile = null;
+		Units oUnits = Units.getInstance();
+		String sUnit = ObsType.getUnits(ObsType.SPDLNK);
+
+		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+		ExtMapping oExtMapping = (ExtMapping)Directory.getInstance().lookup("ExtMapping");
+
 		long lDayTimestamp = lEarliestTs;
+		Obs oSearch = new Obs();
+		oSearch.m_lObsTime1 = -1;
+		int nMlpAContrib = Integer.valueOf("MLPA", 36);
+		int nMlpBContrib = Integer.valueOf("MLPB", 36);
+		int nMlpHContrib = Integer.valueOf("MLPH", 36);
+		int nMlpOContrib = Integer.valueOf("MLPO", 36);
+		
+		int nFiveMinuteIntervals = (int)(86400000 / 300000);
+		oCal.setTimeInMillis(lDayTimestamp);
 		while (lDayTimestamp < lEndTime) // this loops a day at a time
 		{
-			ArrayList<KCScoutDetector> oDetectors = g_oDetectorStore.getDetectorData(lDayTimestamp, lDayTimestamp + 86400000, lEndTime); // get the detector data for the day
-			Collections.sort(oDetectors); // sort by id then timestamp
-			ImrcpEventResultSet oIncidents = (ImrcpEventResultSet)g_oIncidentStore.getAllData(ObsType.EVT, lDayTimestamp, lDayTimestamp + 86400000,  lEndTime); // get event data foro the day
-			ArrayList<Integer> oIdsProcessed = new ArrayList();
-			int nIdSearch;
+			ObsView oOv = (ObsView)Directory.getInstance().lookup("ObsView");
+			ImrcpObsResultSet oSpeedData = (ImrcpObsResultSet)oOv.getData(ObsType.SPDLNK, lDayTimestamp, lDayTimestamp + 86400000, nBb[1], nBb[3], nBb[0], nBb[2], lEndTime);
+			ImrcpObsResultSet oTemp = new ImrcpObsResultSet();
+			oTemp.ensureCapacity(oSpeedData.size());
+			int nIndex = oSpeedData.size();
+			
+			while (nIndex-- > 0)
+			{
+				Obs oObs = oSpeedData.get(nIndex);
+				if (oObs.m_nContribId != nMlpAContrib && oObs.m_nContribId != nMlpBContrib && oObs.m_nContribId != nMlpHContrib && oObs.m_nContribId != nMlpOContrib) // ignore predictions from MLP models
+					oTemp.add(oObs);
+			}
+			oSpeedData = oTemp;
+			Introsort.usort(oSpeedData, Obs.g_oCompObsByIdTime);
+			
+			ImrcpResultSet oEventData = (ImrcpResultSet)oOv.getData(ObsType.EVT, lDayTimestamp, lDayTimestamp + 86400000, nBb[1], nBb[3], nBb[0], nBb[2], lEndTime);
+			double dIncident = ObsType.lookup(ObsType.EVT, "incident");
+			double dWorkzone = ObsType.lookup(ObsType.EVT, "workzone");
+			double dFlooded = ObsType.lookup(ObsType.EVT, "flooded-road");
+			int nEventIndex = oEventData.size();
+			while (nEventIndex-- > 0)
+			{
+				Obs oObs = (Obs)oEventData.get(nEventIndex);
+				if (oObs.m_dValue != dIncident && oObs.m_dValue != dWorkzone && oObs.m_dValue != dFlooded)
+					oEventData.remove(nEventIndex);
+			}
+			GriddedFileWrapper[] oDailyRtma = new GriddedFileWrapper[24];
+			GriddedFileWrapper[] oDailyRap = new GriddedFileWrapper[24];
+			for (int nTimeIndex = 0; nTimeIndex < oDailyRtma.length; nTimeIndex++)
+			{
+				long lTime = lDayTimestamp + (nTimeIndex * 3600000);
+				oDailyRtma[nTimeIndex] = (GriddedFileWrapper)g_oRtmaStore.getFile(lTime, lEndTime);
+				oDailyRap[nTimeIndex] = (GriddedFileWrapper)g_oRAPStore.getFile(lTime, lEndTime);
+			}
+			oRtmaFile = oDailyRtma[0];
+			oRapFile[0] = oDailyRap[0];
 			for (int nWorkIndex = 0; nWorkIndex < oRWorks.size(); nWorkIndex++)
 			{
 				Work oWork = oRWorks.get(nWorkIndex);
-				
 				for (WorkObject oObj : oWork)
 				{
-					if (oObj.m_oDetector == null)
+					if (!oExtMapping.hasMapping(oObj.m_oWay.m_oId))
 						continue;
-					nIdSearch = oObj.m_oDetector.m_nArchiveId;
-					int nIndex = Collections.binarySearch(oIdsProcessed, nIdSearch);
-					if (nIndex < 0)
-						oIdsProcessed.add(~nIndex, nIdSearch);
-					else // do not process the same detector more than once
-						continue;
+					MLPMetadata oMetadata = oObj.m_oMetadata;
+				
+					boolean bNotInList = false;
 					
-					oMetaSearch.m_nDetectorId = oObj.m_oDetector.m_nArchiveId;
-					nIndex = Collections.binarySearch(g_oMetadata, oMetaSearch);
-					if (nIndex < 0)
-						oMetadata = g_oMetadata.get(0);
-					else
-						oMetadata = g_oMetadata.get(nIndex);
-
-
-					oLinksSearch.m_nSegmentId = oObj.m_oSegment.m_nId;
-					nIndex = Collections.binarySearch(g_oDownstreamLinks, oLinksSearch);
-					if (nIndex < 0)
-						oLinks = g_oDownstreamLinks.get(0);
-					else
-						oLinks = g_oDownstreamLinks.get(nIndex);
-
-					oSearch.m_oLocation.m_nImrcpId = oObj.m_oDetector.m_nImrcpId;
-					nIndex = Collections.binarySearch(oDetectors, oSearch); // the list was sorted by id and then timestamp, so should never be in the list with timestamp -1
+					oSearch.m_oObjId = oObj.m_oWay.m_oId;
+					nIndex = Collections.binarySearch(oSpeedData, oSearch, Obs.g_oCompObsByIdTime); // the list was sorted by id and then timestamp, so should never be in the list with timestamp -1
 					nIndex = ~nIndex; // but the 2's compliment should be the first instance of the correct id
-					boolean bNotInList = nIndex >= oDetectors.size() || oDetectors.get(nIndex).m_oLocation.m_nImrcpId != oObj.m_oDetector.m_nImrcpId; // that is if it is in the list at all
+					bNotInList = nIndex >= oSpeedData.size() || Id.COMPARATOR.compare(oSpeedData.get(nIndex).m_oObjId, oObj.m_oWay.m_oId) != 0; // that is if it is in the list at all
 
 
 					long lTimestamp = lDayTimestamp;
 
-					for (int i = 1; i < 1441; i++) // for each minute in the day get the data
+					while (nIndex < oSpeedData.size() && oSpeedData.get(nIndex).m_lObsTime1 < lTimestamp && Id.COMPARATOR.compare(oSpeedData.get(nIndex).m_oObjId, oObj.m_oWay.m_oId) == 0)
+						++nIndex;
+					
+					for (int i = 0; i < nFiveMinuteIntervals; i++)
 					{
-						if (nIndex > oDetectors.size() - 1 || bNotInList) // check for boundary
-						{
-							oCurrentDets[i] = null;
-							lTimestamp += 60000; // advance one minute
-							continue;
-						}
-						KCScoutDetector oTemp = oDetectors.get(nIndex);
-						if (oTemp.m_lTimestamp == lTimestamp && oTemp.m_oLocation.m_nImrcpId == oObj.m_oDetector.m_nImrcpId) // check if it matches the correct time and id
-						{
-							oCurrentDets[i] = oTemp; // set the value
-							++nIndex;
-							boolean bDone = false;
-							while (!bDone) // check for any repeated data and skip it
-							{
-								if (nIndex < oDetectors.size())
-								{
-									oTemp = oDetectors.get(nIndex);
-									if (oTemp.m_lTimestamp == lTimestamp && oTemp.m_oLocation.m_nImrcpId == oObj.m_oDetector.m_nImrcpId)
-										++nIndex;
-									else
-										bDone = true;
-								}
-								else
-									bDone = true;
-							}
-						}
-						else // if the data if missing set the current det to null
-							oCurrentDets[i] = null;
-						lTimestamp += 60000; // advance one minute
-					}
-					lTimestamp = lDayTimestamp - 300000; // the timestamp gets incremented at the beginning of the next loop so go back 5 minutes so it will start at the correct time
-					for (int i = 1; i < 1441; i += 5) // for each 5 minutes in the day
-					{
-						lTimestamp += 300000;
 						MLPRecord oRecord = new MLPRecord();
-
-						oRecord.m_sId = Integer.toString(oObj.m_oDetector.m_nArchiveId);
-						int nObsCount = 5;
-						double dOcc = 0;
-						double dFlow = 0;
-						double dSpeed = 0;
-						for (int j = 0; j < 5; j++) // accummulate the 5 minute values from the 1 minute observations
-						{
-							int nStartIndex = i + j;
-							KCScoutDetector oCurrentDetector = oCurrentDets[nStartIndex];
-							{
-								if (oCurrentDetector == null) // if data is missing try to get the average of the previous and next minute
-								{
-
-									KCScoutDetector oBefore = oCurrentDets[nStartIndex - 1];
-									KCScoutDetector oAfter = oCurrentDets[nStartIndex + 1];
-									if (oBefore == null || oAfter == null)
-									{
-										--nObsCount;
-										continue;
-									}
-
-									dSpeed += (oBefore.m_dAverageSpeed + oAfter.m_dAverageSpeed) / 2.0;
-									dFlow += (oBefore.m_nTotalVolume + oAfter.m_nTotalVolume) / 2.0;
-									dOcc += (oBefore.m_dAverageOcc + oAfter.m_dAverageOcc) / 2.0;
-									continue;
-								}
-								dSpeed += oCurrentDetector.m_dAverageSpeed;
-								dFlow += oCurrentDetector.m_nTotalVolume;
-								dOcc += oCurrentDetector.m_dAverageOcc;
-								oRecord.m_nLanes = oCurrentDetector.m_oLanes.length;
-							}
-						}
-						if (nObsCount == 0) // all values were null
-							oRecord.m_nSpeed = oRecord.m_nOccupancy = oRecord.m_nFlow = Integer.MIN_VALUE;
-						else
-						{
-							oRecord.m_nSpeed = (int)(dSpeed / nObsCount + 0.5); // add 0.5 to round since casting to int truncates the double
-							oRecord.m_nFlow = (int)((dFlow / nObsCount) * 5 + 0.5); // want a 5 minute total not average for flow
-							oRecord.m_nOccupancy = (int)(dOcc / nObsCount + 0.5);
-						}
-
-						if (lTimestamp % 3600000 == 0) // if it is a new hour get weather files
-						{
-							oRtmaFile = g_oRtmaStore.getFile(lTimestamp, lEndTime);
-							oRapFile[0] = g_oRAPStore.getFile(lTimestamp, lEndTime);
-						}
-		//				for (int nFile = 0; nFile < oMrmsFiles.length; nFile++)
-		//				{
-		//					oMrmsFiles[nFile] = m_oMrmsStore.getFile(lTimestamp + (nFile * 12000), lNowHour);
-		//					if (oMrmsFiles[nFile] == null)
-		//					{
-		//						m_oMrmsStore.loadFileToCache(lTimestamp + (nFile * 12000), lNowHour);
-		//						oMrmsFiles[nFile] = m_oMrmsStore.getFile(lTimestamp + (nFile * 12000), lNowHour);
-		//					}
-		//				}
-						oRecord.m_lTimestamp = lTimestamp;
-						oCentralTime.setTimeInMillis(lTimestamp);
-						nEvents = getIncidentData(oIncidents, oLinks, lTimestamp);
-						oRecord.m_nIncidentOnLink = nEvents[0];
-						oRecord.m_nIncidentDownstream = nEvents[1];
-						oRecord.m_nWorkzoneOnLink = nEvents[2];
-						oRecord.m_nWorkzoneDownstream = nEvents[3];
-						oRecord.m_nLanesClosedOnLink = nEvents[4];
-						oRecord.m_nLanesClosedDownstream = nEvents[5];
-						oRecord.m_nDayOfWeek = getDayOfWeek(oCentralTime);
-						oRecord.m_nTimeOfDay = getTimeOfDay(oCentralTime);
-						double dTemp = getTemperature(lTimestamp, oObj.m_oSegment.m_nYmin, oObj.m_oSegment.m_nXmid, oRtmaFile, null);
-						oRecord.m_nVisibility = getVisibility(lTimestamp, oObj.m_oSegment.m_nYmin, oObj.m_oSegment.m_nXmid, oRtmaFile, null);
-						oRecord.m_nWindSpeed = getWindSpeed(lTimestamp, oObj.m_oSegment.m_nYmin, oObj.m_oSegment.m_nXmid, oRtmaFile, null);
-						oRecord.m_nPrecipication = getPrecipication(lTimestamp, oObj.m_oSegment.m_nYmin, oObj.m_oSegment.m_nXmid, oRtmaFile, oRapFile, dTemp);
-						// if there are errors getting weather data set them to "default" values
-						if (oRecord.m_nPrecipication == -1)
-							oRecord.m_nPrecipication = 1;
-						if (oRecord.m_nVisibility == -1)
-							oRecord.m_nVisibility = 1;
-						if (Double.isNaN(dTemp))
-							oRecord.m_nTemperature = 55;
-						else
-							oRecord.m_nTemperature = (int)(dTemp * 9 / 5 - 459.67); // convert K to F
-						if (oRecord.m_nWindSpeed == Integer.MIN_VALUE)
-							oRecord.m_nWindSpeed = 5;
-		//				if (oRecord.m_nPrecipication == -1 || oRecord.m_nVisibility == -1 || oRecord.m_nTemperature == Integer.MIN_VALUE || oRecord.m_nWindSpeed == Integer.MIN_VALUE)
-		//				{
-		//					m_oLogger.info("Skipped due to weather");
-		//					continue;
-		//				}
-						oRecord.m_sSpeedLimit = oMetadata.m_sSpdLimit.equals("NA") ? "65" : oMetadata.m_sSpdLimit;
+						oRecord.m_sId = oMetadata.m_sId;
+						oRecord.m_sSpeedLimit = oMetadata.m_sSpdLimit;
 						oRecord.m_nHOV = oMetadata.m_nHOV;
 
 						oRecord.m_nDirection = oMetadata.m_nDirection;
 						oRecord.m_nCurve = oMetadata.m_nCurve;
 						oRecord.m_nOffRamps = oMetadata.m_nOffRamps;
 						oRecord.m_nOnRamps = oMetadata.m_nOnRamps;
-						oRecord.m_nPavementCondition = oMetadata.m_nPavementCond;
-						oRecord.m_sRoad = oMetadata.m_sRoad;
+
+						oRecord.m_nPavementCondition = oMetadata.m_nPavementCondition;
+						oRecord.m_sRoad = oObj.m_oWay.m_sName;
 						oRecord.m_nSpecialEvents = 0;
-//							oRecord.m_lTimestamp -= 604800000;
-//							oRecord.m_lTimestamp -= 604800000;
-//							oRecord.writeRecord(oOut, oSdf);
-//							oRecord.m_lTimestamp += 604800000;
-//							oRecord.m_lTimestamp += 604800000;
+
+						oRecord.m_nLanes = oMetadata.m_nLanes;
+
+						if (nIndex > oSpeedData.size() - 1 || bNotInList)
+							oRecord.m_nSpeed = oRecord.m_nOccupancy = oRecord.m_nFlow = Integer.MIN_VALUE;
+						else
+						{
+							Obs oTempObs = oSpeedData.get(nIndex);
+							if (oTempObs.m_lObsTime1 <= lTimestamp && oTempObs.m_lObsTime2 > lTimestamp && Id.COMPARATOR.compare(oTempObs.m_oObjId, oObj.m_oWay.m_oId) == 0)
+							{
+								++nIndex;
+								oRecord.m_nSpeed = (int)(oUnits.convert(oUnits.getSourceUnits(ObsType.SPDLNK, oTempObs.m_nContribId), sUnit, oTempObs.m_dValue) + 0.5);
+								boolean bDone = false;
+								while (!bDone) // check for any repeated data and skip it
+								{
+									if (nIndex < oSpeedData.size())
+									{
+										oTempObs = oSpeedData.get(nIndex);
+										if (oTempObs.m_lObsTime1 <= lTimestamp && oTempObs.m_lObsTime2 > lTimestamp && Id.COMPARATOR.compare(oTempObs.m_oObjId, oObj.m_oWay.m_oId) == 0)
+											++nIndex;
+										else
+											bDone = true;
+									}
+									else
+										bDone = true;
+								}
+							}
+						}
+
+						if (lTimestamp % 3600000 == 0) // if it is a new hour get the rtma file
+						{
+							int nHourIndex = i / 12;
+							oRtmaFile = oDailyRtma[nHourIndex];
+							oRapFile[0] = oDailyRap[nHourIndex];
+							if (lTimestamp > lEndTime)
+							{
+								oNdfdTempFile = (GriddedFileWrapper)g_oNdfdTempStore.getFile(lTimestamp, lEndTime);
+								oNdfdWspdFile = (GriddedFileWrapper)g_oNdfdWspdStore.getFile(lTimestamp, lEndTime);
+							}
+						}
+
+						oRecord.m_lTimestamp = lTimestamp;
+						oCal.setTimeInMillis(lTimestamp);
+
+						nEvents = getIncidentData(oEventData, oObj.m_oWay, oObj.m_oDownstream, lTimestamp);
+						oRecord.m_nIncidentOnLink = nEvents[0];
+						oRecord.m_nIncidentDownstream = nEvents[1];
+						oRecord.m_nWorkzoneOnLink = nEvents[2];
+						oRecord.m_nWorkzoneDownstream = nEvents[3];
+						oRecord.m_nLanesClosedOnLink = nEvents[4];
+						oRecord.m_nLanesClosedDownstream = nEvents[5];
+						oRecord.m_nDayOfWeek = getDayOfWeek(oCal);
+						oRecord.m_nTimeOfDay = getTimeOfDay(oCal);
+						double dTemp = getTemperature(lTimestamp, oObj.m_oWay.m_nMidLat, oObj.m_oWay.m_nMidLon, oRtmaFile, oNdfdTempFile);
+						oRecord.m_nVisibility = getVisibility(lTimestamp, oObj.m_oWay.m_nMidLat, oObj.m_oWay.m_nMidLon, oRtmaFile, oRapFile[0]);
+						oRecord.m_nWindSpeed = getWindSpeed(lTimestamp, oObj.m_oWay.m_nMidLat, oObj.m_oWay.m_nMidLon, oRtmaFile, oNdfdWspdFile);
+						oRecord.m_nPrecipitation = getPrecipitation(lTimestamp, oObj.m_oWay.m_nMidLat, oObj.m_oWay.m_nMidLon, oRtmaFile, oRapFile, dTemp);
+						// if there are errors getting weather data set them to "default" values
+						if (oRecord.m_nPrecipitation == -1)
+							oRecord.m_nPrecipitation = 1;
+						if (oRecord.m_nVisibility == -1)
+							oRecord.m_nVisibility = 1;
+						if (Double.isNaN(dTemp) || dTemp == Integer.MIN_VALUE)
+							oRecord.m_nTemperature = 55;
+						else
+							oRecord.m_nTemperature = (int)(dTemp * 9 / 5 - 459.67); // convert K to F
+						if (oRecord.m_nWindSpeed == Integer.MIN_VALUE)
+							oRecord.m_nWindSpeed = 5;
+
+						lTimestamp += 300000;
 						oRecord.writeRecord(oWork.m_oCompressor, oSdf);
 					}
+						
 				}
 			}
 			lDayTimestamp += 86400000;
 		}
+		
 		for (int i = 0; i < oRWorks.size(); i++)
 		{
 			Work oWork = oRWorks.get(i);
-			oWork.m_oCompressor.flush();
-			oWork.m_oCompressor.close();
-			try (BufferedOutputStream oFileOut = new BufferedOutputStream(new FileOutputStream(String.format("%shistmonth%02d.csv.gz", m_sLocalDir, oWork.m_nThread))))
+			if (i == oWork.m_nThread)
 			{
-				oWork.m_oBoas.writeTo(oFileOut);
+				oWork.m_oCompressor.flush();
+				oWork.m_oCompressor.close();
+				try (BufferedOutputStream oFileOut = new BufferedOutputStream(new FileOutputStream(String.format(sFilenameFormat, sDir, oWork.m_nThread))))
+				{
+					oWork.m_oBoas.writeTo(oFileOut);
+				}
 			}
 			oWork.m_oCompressor = null;
 			oWork.m_oBoas = null;
@@ -593,72 +594,23 @@ public class MLPUpdate extends MLPBlock
 	}
 	
 	
-	protected void updateMonthlyLinkDat(long lMonday4WeeksAgo, ArrayList<Work> oRWorks, long lLastTimestamp) throws Exception
-	{
-		SimpleDateFormat oSdfNoSec = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-		boolean bRunUpdate = false;
-		long lTimestamp = m_lStartOfFile + 2419200000L;
-		lTimestamp += Directory.m_oCST6CDT.getOffset(lTimestamp);
-		lTimestamp += 690900000;
-		for (Work oRWork : oRWorks) // check to see if any of the files need to be updated
-		{
-			int nIndex = oRWork.size();
-			while (nIndex-- > 0)
-			{
-				WorkObject oObj = oRWork.get(nIndex);
-				if (oObj.m_sTmcCode == null)
-					continue;
-				File oLongTs = new File(String.format("%slong_ts_pred_tmc_%s.csv", g_sLongTsTmcLocalDir, oObj.m_sTmcCode));
-				String sLastLine = Util.getLastLineOfFile(oLongTs.getAbsolutePath());
-				if (sLastLine != null && !sLastLine.isEmpty() && !sLastLine.equals(LONGTSHEADER) && oSdfNoSec.parse(sLastLine.substring(0, sLastLine.indexOf(","))).getTime() == lTimestamp)
-					oRWork.remove(nIndex);
-				else
-					bRunUpdate = true;
-			}
-		}
-		if (!bRunUpdate)
-			return;
-		
-		m_oLogger.debug("Loading inrix data");
-		m_oInrixData.loadData(m_sInrixFile);
-		m_oLogger.debug("Finished loading inrix data");
-		long lNow = lMonday4WeeksAgo + 2419200000L;
-		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-		for (Work oRWork : oRWorks)
-		{
-			for (WorkObject oObj : oRWork)
-			{
-				if (oObj.m_sTmcCode == null)
-					continue;
-
-				lTimestamp = lMonday4WeeksAgo;
-				int[] nSpeeds = m_oInrixData.getData(oObj.m_sTmcCode, lNow, 288 * 28);
-				if (nSpeeds == null)
-				{
-					m_oLogger.debug(String.format("Skipped tmc code %s", oObj.m_sTmcCode));
-					continue;
-				}
-				m_oLogger.debug(String.format("%slinkdat_%s.csv", g_sLongTsTmcLocalDir, oObj.m_sTmcCode));
-				try (BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format("%slinkdat_%s.csv", g_sLongTsTmcLocalDir, oObj.m_sTmcCode))))
-				{
-					oOut.write("tmc_code,measurement_tstamp,speed");
-					for (int nSpeed : nSpeeds)
-					{
-						oOut.write(String.format("\n%s,%s,%d", oObj.m_sTmcCode, oSdf.format(lTimestamp), nSpeed));
-						lTimestamp += 300000;
-					}
-				}
-			}
-		}
-	}
-	
-	
+	/**
+	 * Does nothing since files are saved in a different part of the process
+	 * for this block
+	 * @param lTimestamp MLP model run time in milliseconds since Epoch
+	 */
 	protected void save(long lTimestamp)
 	{
 		// files get saved one at a time in processWork
 	}
 
 
+	/**
+	 * Runs the MLP long time series update model for the segments in the
+	 * given Work object by calling R code through the 
+	 * {@link org.rosuda.REngine.Rserve.RConnection} and Rserve interfaces.
+	 * @param oRWork Contains the data to run the model on
+	 */
 	@Override
 	protected void processWork(Work oRWork)
 	{
@@ -668,114 +620,65 @@ public class MLPUpdate extends MLPBlock
 		try
 		{
 			oConn = new RConnection(g_sRHost);
-			oConn.eval(String.format("load(\"%s\")", g_sMarkovChains));
 			oConn.eval(String.format("load(\"%s\")", g_sRObjects));
 			evalToGetError(oConn, String.format("source(\"%s\")", g_sRDataFile));
-			oConn.eval(String.format("histdat<-read.csv(gzfile(\"%shistmonth%02d.csv.gz\"), header = TRUE, sep = \",\")", m_sHostDir, oRWork.m_nThread));
+			oConn.eval(String.format("histdat<-read.csv(gzfile(\"%s\"), header = TRUE, sep = \",\")", String.format(m_sInputFf, m_oCurrentRun.m_sInputDir, oRWork.m_nThread)));
 
-			oConn.eval("detectlist<-unique(histdat$DetectorId)");
-			oConn.eval("histdata<-new.env()");
-			evalToGetError(oConn, "makeHashListWeekly()");
+			oConn.eval("idlist<-unique(histdat$Id)");
+			evalToGetError(oConn, "makeHashLists()");
 
 			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 			oSdf.setTimeZone(Directory.m_oUTC);
-			long lTimestamp = m_lStartOfFile + 2419200000L;
-			int nOffset = Directory.m_oCST6CDT.getOffset(lTimestamp);
-			String sFiveMinutesAgo = oSdf.format(lTimestamp - 300000);
-			lTimestamp += nOffset;
+			long lTimestamp = m_oCurrentRun.m_lRunTime;
+			long lFiveMinutesBack = m_oCurrentRun.m_lRunTime - 300000;
+			String sRunTimestamp = oSdf.format(lFiveMinutesBack);
 			for (int nIndex = 0; nIndex < oRWork.size(); nIndex++)
 			{
 				WorkObject oObj = oRWork.get(nIndex);
-//				String sId;
-//				if (oObj.m_oDetector != null)
-//					sId = Integer.toString(oObj.m_oDetector.m_nArchiveId);
-//				else if (oObj.m_sMlpLinkId != null)
-//					sId = oObj.m_sMlpLinkId;
-//				else if (oObj.m_sTmcCode != null)
-//					sId = oObj.m_sTmcCode;
-//				else
-//					sId = Integer.toString(-nIndex);
-//				m_oLogger.info(String.format("Thread: %d\tIdL %s", oRWork.m_nThread, sId));
-				if (oObj.m_oDetector != null)
+				try
 				{
-					try
+					File oLongTs = new File(String.format(g_sLongTsPredFf, m_oCurrentRun.m_sLongTsDir, oObj.m_oWay.m_oId.toString()));
+					String sLastLine = Util.getLastLineOfFile(oLongTs.getAbsolutePath());
+					if (sLastLine != null && !sLastLine.isEmpty() && !sLastLine.equals(LONGTSHEADER) && oSdf.parse(sLastLine.substring(0, sLastLine.indexOf(","))).getTime() == lFiveMinutesBack)
 					{
-						File oLongTs = new File(String.format("%slong_ts_pred%d.csv", m_sLocalDir, oObj.m_oDetector.m_nArchiveId));
-						String sLastLine = Util.getLastLineOfFile(oLongTs.getAbsolutePath());
-						if (sLastLine != null && !sLastLine.isEmpty() && !sLastLine.equals(LONGTSHEADER) && oSdf.parse(sLastLine.substring(0, sLastLine.indexOf(","))).getTime() == lTimestamp)
-						{
-							m_oLogger.info("Already processed long_ts for " + oObj.m_oDetector.m_nArchiveId);
-							continue;
-						}
-						oConn.eval(String.format("detecid=%d", oObj.m_oDetector.m_nArchiveId));
-						oConn.eval("id=as.character(detecid)");
-						if (oConn.eval("length(histdata[[id]])").asInteger() == 0)
-						{
-							m_oLogger.info("No data in histdata for " + oObj.m_oDetector.m_nArchiveId);
-							continue;
-						}
-						if (oConn.eval("length(na.omit(histdata[[id]]$Speed))").asInteger() < 10)
-						{
-							m_oLogger.info(String.format("Too many NA speeds for detector %d", oObj.m_oDetector.m_nArchiveId));
-							continue;
-						}
-						double[] dTsSpeeds = evalToGetError(oConn, String.format("long_ts_update(\"%s\", histdata[[id]])", sFiveMinutesAgo)).asDoubles();
-						try (BufferedWriter oOut = new BufferedWriter(new FileWriter(oLongTs)))
-						{
-							oOut.write(LONGTSHEADER);
-							int nCount = 288;
-							for (int i = dTsSpeeds.length - 288; i < dTsSpeeds.length; i++) // timeshift the last 24 hours to the beginning of the file. there are the values are in 5 minutes intervals so 24 hours is 288
-							{
-								oOut.write(String.format("\n%s,%7.5f,%d", oSdf.format(lTimestamp - (nCount-- * 300000)), dTsSpeeds[i], oObj.m_oDetector.m_nArchiveId));
-							}
-							for (int i = 0; i < dTsSpeeds.length; i++)
-							{
-								oOut.write(String.format("\n%s,%7.5f,%d", oSdf.format(lTimestamp + (i * 300000)), dTsSpeeds[i], oObj.m_oDetector.m_nArchiveId)); 
-							}
-							for (int i = 0; i < 288; i++) // timeshift the first 24 hours to the end of the file.
-							{
-								oOut.write(String.format("\n%s,%7.5f,%d", oSdf.format(lTimestamp + (i * 300000) + 604800000), dTsSpeeds[i], oObj.m_oDetector.m_nArchiveId)); 
-							}
-						}
+						m_oLogger.info("Already processed long_ts for " + oObj.m_oWay.m_oId.toString());
+						continue;
+					}
 
-					}
-					catch (Exception oEx)
+					oConn.eval(String.format("id=\"%s\"", oObj.m_oWay.m_oId.toString()));
+					if (oConn.eval("length(histdata[[id]])").asInteger() == 0)
 					{
-						m_oLogger.error(String.format("%s,\tDetector:%d\tThread:%d", oEx.toString(), oObj.m_oDetector.m_nArchiveId, oRWork.m_nThread));
+						continue;
 					}
-				}
-				else if (oObj.m_sTmcCode != null)
-				{					
-					try
+					if (oConn.eval("length(na.omit(histdata[[id]]$Speed))").asInteger() < 10)
 					{
-						File oFile = new File(String.format("%slinkdat_%s.csv", g_sLongTsTmcLocalDir, oObj.m_sTmcCode));
-						if (!oFile.exists())
-							continue;
-						oConn.eval(String.format("linkdat<-read.csv(\"%s\")", String.format("%slinkdat_%s.csv", g_sLongTsTmcHostDir, oObj.m_sTmcCode)));
-						double[] dSpeeds = evalToGetError(oConn, String.format("long_ts_update_tmc(\"%s:00\", linkdat)", sFiveMinutesAgo)).asDoubles();
-						try (BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format("%slong_ts_pred_tmc_%s.csv", g_sLongTsTmcLocalDir, oObj.m_sTmcCode))))
+						continue;
+					}
+					double[] dTsSpeeds = evalToGetError(oConn, String.format("long_ts_update(\"%s\", histdata[[id]])", sRunTimestamp)).asDoubles();
+					try (BufferedWriter oOut = new BufferedWriter(new FileWriter(oLongTs)))
+					{
+						oOut.write(LONGTSHEADER);
+						int nCount = 288;
+						for (int i = dTsSpeeds.length - 288; i < dTsSpeeds.length; i++) // timeshift the last 24 hours to the beginning of the file. the values are in 5 minutes intervals so 24 hours is 288
 						{
-							oOut.write(LONGTSHEADER);
-							int nCount = 288;
-							for (int i = dSpeeds.length - 288; i < dSpeeds.length; i++) // timeshift the last 24 hours to the beginning of the file. there are the values are in 5 minutes intervals so 24 hours is 288
-							{
-								oOut.write(String.format("\n%s,%7.5f,%s", oSdf.format(lTimestamp - (nCount-- * 300000)), dSpeeds[i], oObj.m_sTmcCode));
-							}
-							for (int i = 0; i < dSpeeds.length; i++)
-							{
-								oOut.write(String.format("\n%s,%7.5f,%s", oSdf.format(lTimestamp + (i * 300000)), dSpeeds[i], oObj.m_sTmcCode)); 
-							}
-							for (int i = 0; i < 288; i++) // timeshift the first 24 hours to the end of the file.
-							{
-								oOut.write(String.format("\n%s,%7.5f,%s", oSdf.format(lTimestamp + (i * 300000) + 604800000), dSpeeds[i], oObj.m_sTmcCode)); 
-							}
+							oOut.write(String.format("\n%s,%4.2f", oSdf.format(lTimestamp - (nCount-- * 300000)), dTsSpeeds[i]));
+						}
+						for (int i = 0; i < dTsSpeeds.length; i++)
+						{
+							oOut.write(String.format("\n%s,%4.2f", oSdf.format(lTimestamp + (i * 300000)), dTsSpeeds[i])); 
+						}
+						for (int i = 0; i < 288; i++) // timeshift the first 24 hours to the end of the file.
+						{
+							oOut.write(String.format("\n%s,%4.2f", oSdf.format(lTimestamp + (i * 300000) + 604800000), dTsSpeeds[i])); 
 						}
 					}
-					catch (Exception oEx)
-					{
-						m_oLogger.error(oEx, oEx);
-					}
+
 				}
+				catch (Exception oEx)
+				{
+					m_oLogger.error(String.format("%s,\tId:%s\tThread:%d", oEx.toString(), oObj.m_oWay.m_oId.toString(), oRWork.m_nThread));
+				}
+				
 			}
 		}
 		catch (Exception oEx)
@@ -790,28 +693,95 @@ public class MLPUpdate extends MLPBlock
 	}
 
 
+	/**
+	 * If {@link #m_bRealTime} is false, notify the the block that will rerun
+	 * the online speed prediction model the long_ts files are ready. If there
+	 * are more times to process, schedule it to run in a separate thread in 1 
+	 * second, otherwise update the status to {@link #IDLE}
+	 * @param lTimestamp run time of MLP model in milliseconds since Epoch
+	 */
 	@Override
 	protected void finishWork(long lTimestamp)
 	{
-		if (!m_bScheduled && m_bRealTime)
-			schedule();
 		if (!m_bRealTime)
-			notify("files ready", Long.toString(m_lCurrentTime));
+		{
+			String[] sMessage = new String[]{Long.toString(m_oCurrentRun.m_lRunTime), m_oCurrentRun.m_sLongTsDir};
+			notify("files ready", sMessage);
+		}
+		m_oCurrentRun = null;
+		
+		
+		synchronized (m_oQueue)
+		{
+			if (m_oQueue.isEmpty())
+				checkAndSetStatus(2, 1); // if still RUNNING, set back to IDLE
+			else
+			{
+				Scheduling.getInstance().scheduleOnce(() -> execute(), 1000);
+			}
+		}
+		
 	}
 	
-	private void schedule()
+	
+	/**
+	 * Contains the information needed to process the long time series update
+	 * MLP model
+	 */
+	private class QueueInfo
 	{
-		Calendar oCal = new GregorianCalendar(Directory.m_oUTC); // set the calendar to next Monday
-		oCal.set(Calendar.MILLISECOND, 0);
-		oCal.set(Calendar.SECOND, 0);
-		oCal.set(Calendar.MINUTE, 0);
-		oCal.set(Calendar.HOUR_OF_DAY, 0);
-		if (oCal.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY)
-			oCal.add(Calendar.WEEK_OF_YEAR, 1);
-		else
-			while (oCal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
-				oCal.add(Calendar.DAY_OF_WEEK, 1);
-		m_nSchedId = Scheduling.getInstance().createSched(this, oCal.getTime(), m_nPeriod); // create a schedule to start the next Monday and every Monday after that
-		m_bScheduled = true;
+		/**
+		 * Time in milliseconds since Epoch to run the model. Should be midnight 
+		 * on a Monday UTC time.
+		 */
+		long m_lRunTime;
+
+		
+		/**
+		 * Time in milliseconds since Epoch to start querying for data.
+		 */
+		long m_lStartOfData;
+
+		
+		/**
+		 * Directory where input files will be located
+		 */
+		String m_sInputDir;
+
+		
+		/**
+		 * Directory where long_ts files will be saved
+		 */
+		String m_sLongTsDir;
+
+		
+		/**
+		 * Can be used to specify segments to run the model for. {@code null} if
+		 * all segments are to be processed
+		 */
+		Id[] m_oIds;
+		
+		
+		/**
+		 * Constructs a QueueInfo with the given parameters
+		 * @param lRunTime Time in milliseconds since Epoch to run the model
+		 * @param sInputDir Directory where input files will be located
+		 * @param sLongTsDir Directory where long_ts files will be saved
+		 * @param sIds {@code null} if all segments are to be processed, otherwise
+		 * contains the Ids of roadway segments to process.
+		 */
+		QueueInfo(long lRunTime, String sInputDir, String sLongTsDir, String[] sIds)
+		{
+			m_lRunTime = lRunTime;
+			m_lStartOfData = lRunTime - (m_nWeeksBack * 7 * 24 * 60 * 60 * 1000);
+			m_sInputDir = sInputDir;
+			m_sLongTsDir = sLongTsDir;
+			if (sIds != null)
+			{
+				m_oIds = new Id[sIds.length];
+				for (int nIndex = 0; nIndex < sIds.length; nIndex++)
+					m_oIds[nIndex] = new Id(sIds[nIndex]);
+			}
+		}
 	}
 }

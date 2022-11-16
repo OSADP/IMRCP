@@ -1,73 +1,130 @@
 /*
- * Copyright 2018 Synesis-Partners.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
  */
 package imrcp.forecast.mlp;
 
-import imrcp.system.CsvReader;
-
-
 /**
- *
+ * Contains metadata for a roadway segment used in the MLP models
  * @author Federal Highway Administration
  */
-public class MLPMetadata implements Comparable<MLPMetadata>
+public class MLPMetadata
 {
-	public int m_nDetectorId;
-	public int m_nDirection;
-	public String m_sRoad;
-	public int m_nOnRamps;
-	public int m_nOffRamps;
-	public String m_sLanes;
-	public int m_nCurve;
-	public String m_sSpdLimit;
-	public int m_nIsRamp;
-	public int m_nHOV;
-	public int m_nPavementCond;
+	/**
+	 * IMRCP Id as a String. 
+	 * @see imrcp.system.Id#toString()
+	 */
+	public String m_sId;
+
 	
-	public MLPMetadata()
-	{
-	}
+	/**
+	 * Speed limit in mph
+	 */
+	public String m_sSpdLimit;
 
-	public MLPMetadata(CsvReader oIn)
-	{
-		m_nDetectorId = oIn.parseInt(0);
-		String sDirection = oIn.parseString(1);
-		if (sDirection.equals("EASTBOUND"))
-			m_nDirection = 1;
-		else if (sDirection.equals("SOUTHBOUND"))
-			m_nDirection = 2;
-		else if (sDirection.equals("WESTBOUND"))
-			m_nDirection = 3;
-		else
-			m_nDirection = 4;
-		
-		m_sRoad = oIn.parseString(2);
-		m_nOnRamps = oIn.parseInt(3);
-		m_nOffRamps = oIn.parseInt(4);
-		m_sLanes = oIn.parseString(5);
-		m_nCurve = oIn.parseInt(6);
-		m_sSpdLimit = oIn.parseString(7);
-		m_nIsRamp = oIn.parseInt(8);
-		m_nHOV = oIn.parseInt(9);
-		m_nPavementCond = oIn.parseInt(10);
-	}
+	
+	/**
+	 * HOV flag.
+	 * 0 = no HOV lane
+	 * 1 = the segment contains an HOV lane
+	 */
+	public int m_nHOV;
 
+	
+	/**
+	 * Direction of travel enumeration. 
+	 * 1 = east
+	 * 2 = south
+	 * 3 = west
+	 * 4 = north
+	 * 
+	 * @see imrcp.geosrv.osm.OsmWay#getDirection() 
+	 */
+	public int m_nDirection;
 
-	@Override
-	public int compareTo(MLPMetadata o)
+	
+	/**
+	 * Curve flag.
+	 * 0 = no curve
+	 * 1 = curve
+	 * 
+	 * @see imrcp.geosrv.osm.OsmWay#getCurve() 
+	 */
+	public int m_nCurve;
+
+	
+	/**
+	 * Number of off ramps the segment has
+	 */
+	public int m_nOffRamps;
+
+	
+	/**
+	 * Number of on ramps the segment has
+	 */
+	public int m_nOnRamps;
+
+	
+	/**
+	 * Pavement Condition enumeration
+	 * 1 = good condition
+	 * 2 = average condition
+	 * 3 = poor condition
+	 */
+	public int m_nPavementCondition;
+
+	
+	/**
+	 * Name of the road
+	 */
+	public String m_sRoad;
+
+	
+	/**
+	 * Special event flag.
+	 * 0 = no special event present
+	 * 1 = special event present
+	 */
+	public int m_nSpecialEvents;
+
+	
+	/**
+	 * Number of lanes
+	 */
+	public int m_nLanes;
+
+	
+	/**
+	 * Constructs a new MLPMetadata with the given parameters.
+	 * 
+	 * @param sId IMRCP Id as String
+	 * @param sSpdLimit Speed limit
+	 * @param nHOV HOV flag. 0 = no HOV lane, 1 = HOV lane present
+	 * @param nDirection direction enumeration. 1 = east, 2 = south, 3 = west, 
+	 * 4 = north
+	 * @param nCurve curve flag. 0 = no curve, 1 = curve
+	 * @param nOffRamps number of off ramps
+	 * @param nOnRamps number of on ramps
+	 * @param nPavementCondition pavement condition enumeration. 1 = good condition,
+	 * 2 = average condition, 3 = poor condition
+	 * @param sRoad road name
+	 * @param nLanes number of lanes
+	 */
+	MLPMetadata(String sId, String sSpdLimit, int nHOV, int nDirection, int nCurve, int nOffRamps, int nOnRamps, int nPavementCondition, String sRoad, int nLanes)
 	{
-		return m_nDetectorId - o.m_nDetectorId;
+		m_sId = sId;
+		m_sSpdLimit = sSpdLimit;
+		m_nHOV = nHOV;
+
+		m_nDirection = nDirection;
+		m_nCurve = nCurve;
+		m_nOffRamps = nOffRamps;
+		m_nOnRamps = nOnRamps;
+
+		m_nPavementCondition = nPavementCondition;
+		m_sRoad = sRoad;
+		m_nSpecialEvents = 0;
+		m_nLanes = nLanes;
 	}
 }
