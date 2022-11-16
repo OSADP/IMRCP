@@ -1,118 +1,171 @@
 package imrcp.store;
 
 import imrcp.system.CsvReader;
+import imrcp.system.Id;
+import imrcp.system.ObsType;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
 
 /**
  * Class used to represent a generic Observation
+ * @author Federal Highway Administration
  */
 public class Obs
 {
-
 	/**
-	 * integer to identify the observation type. All obs types are created by
-	 * the ObsType class in the system package. They are made by calling
-	 * Integer.valueOf(String) where the String is a 6 or less character String
-	 * describing the obs type.
+	 * Header for CSV files that contain Obs
+	 */
+	public static String CSVHEADER = "ObsType,Source,ObjId,ObsTime1,ObsTime2,TimeRecv,Lat1,Lon1,Lat2,Lon2,Elev,Value,Conf,Cleared,Detail\n";
+	
+	
+	/**
+	 * IMRCP observation type id. The observation types are defined in the ObsType
+	 * class. These values are computed by converting an up to 6 character
+	 * alphanumeric string in to an integer using base 36
+	 * 
+	 * @see imrcp.system.ObsType
 	 */
 	public int m_nObsTypeId;
 
+	
 	/**
-	 * integer to identify the contributor. All the ids are made by calling
-	 * Integer.valueOf(String) where the String is a 6 or less character String
-	 * describing the contributor.
+	 * IMRCP contributor Id which is a computed by converting an up to a 6 
+	 * character alphanumeric string using base 36.
 	 */
 	public int m_nContribId;
 
+	
 	/**
-	 * A 4 byte number to identify what object in the system the Obs describes.
-	 * If there is not a specific object for the Obs the ObjId is
-	 * Integer.MIN_VALUE. The most significant nibble of the id describe what
-	 * kind of object the object is: 1 = detector, 2 = node, 3 = link, 4 =
-	 * segment, 5 = route
+	 * Id of the object the Obs is associated with. If there is no associated 
+	 * object us {@link imrcp.system.Id#NULLID}
 	 */
-	public int m_nObjId;
+	public Id m_oObjId;
 
+	
 	/**
-	 * Timestamp in milliseconds the Obs starts being valid
+	 * Start time of the Obs in milliseconds since Epoch
 	 */
 	public long m_lObsTime1;
 
+	
 	/**
-	 * Timestamp in milliseconds the Obs stops being valid
+	 * End time of the Obs in milliseconds since Epoch
 	 */
 	public long m_lObsTime2;
 
+	
 	/**
-	 * Timestamp in milliseconds the Obs was collected or generated
+	 * Received time of the Obs in milliseconds since Epoch
 	 */
 	public long m_lTimeRecv;
 
+	
 	/**
-	 * Min latitude of the observation written in integer degrees scaled to 7
-	 * decimal places
+	 * Minimum latitude in decimal degrees scaled to 7 decimal places
 	 */
 	public int m_nLat1;
 
+	
 	/**
-	 * Min longitude of the observation written in integer degrees scaled to 7
-	 * decimal places
+	 * Minimum longitude in decimal degrees scaled to 7 decimal places
 	 */
 	public int m_nLon1;
 
+	
 	/**
-	 * Max latitude of the observation written in integer degrees scaled to 7
-	 * decimal places, Integer.MIN_VALUE if the Obs is for a single point and
-	 * not a bounding box
+	 * Maximum latitude in decimal degrees scaled to 7 decimal places. If the
+	 * Obs represent a single point used {@code Integer.MIN_VALUE}
 	 */
 	public int m_nLat2;
 
+	
 	/**
-	 * Max longitude of the observation written in integer degrees scaled to 7
-	 * decimal places, Integer.MIN_VALUE if the Obs is for a single point and
-	 * not a bounding box
+	 * Maximum longitude in decimal degrees scaled to 7 decimal places. If the
+	 * Obs represent a single point used {@code Integer.MIN_VALUE}
 	 */
 	public int m_nLon2;
 
+	
 	/**
-	 * Elevation of the Obs in meters. Elevations are determined by the National
-	 * Elevation Database
+	 * Elevation of the Obs in meters.
 	 */
 	public short m_tElev;
 
+	
 	/**
-	 * The value of the observation
+	 * Value of the Obs
 	 */
 	public double m_dValue;
 
+	
 	/**
-	 * Confidence value for the obs, the system has not implemented using this
+	 * Confidence value for the Obs, the system has not implemented using this
 	 * yet.
 	 */
 	public short m_tConf;
 
+	
 	/**
-	 * Any additional detail for the observation needed by the system. For
-	 * example the road name for an Observation that has an ObjId that is a
-	 * segment
+	 * Any additional detail for the Obs needed by the system.
 	 */
 	public String m_sDetail = null;
 
+	
 	/**
-	 * Timestamp in millisecond that the obs is cleared and no longer valid
+	 * Time in milliseconds since Epoch the Obs stops being valid. Used to
+	 * show that alerts or events have expired. If an Obs hasn't expired, use
+	 * {@code Long.MIN_VALUE}
 	 */
 	public long m_lClearedTime = Long.MIN_VALUE;
-
+	
+	
 	/**
-	 * Comparator that compares obs only by their start time
+	 * Compares Obs by start time the observation type id
+	 */
+	public static final Comparator<Obs> g_oCompObsByTimeType = (Obs o1, Obs o2) ->
+	{
+		int nRet = Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
+		if (nRet == 0)
+			nRet = o1.m_nObsTypeId - o2.m_nObsTypeId;
+		return nRet;
+	};
+	
+	
+	/**
+	 * Compares Obs by start time then min lon, then min lat
+	 */
+	public static final Comparator<Obs> g_oCompObsByTimeLonLat = (Obs o1, Obs o2) ->
+	{
+		int nRet = Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
+		if (nRet == 0)
+		{
+			nRet = Integer.compare(o1.m_nLon1, o2.m_nLon1);
+			if (nRet == 0)
+				nRet = Integer.compare(o1.m_nLat1, o2.m_nLat1);
+		}
+		
+		return nRet;
+	};
+	
+	
+	/**
+	 * Compares Obs by start time
 	 */
 	public static final Comparator<Obs> g_oCompObsByTime = (Obs o1, Obs o2) -> Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
 
+	
 	/**
-	 * Comparator that compares obs first by start time, then obs type, then
-	 * contributor, then lat 1, then lon 1, then lat2, and finally lon 2
+	 * Compares Obs by associated object id
+	 */
+	public static final Comparator<Obs> g_oCompObsByObjId = (Obs o1, Obs o2) -> Id.COMPARATOR.compare(o1.m_oObjId, o2.m_oObjId);
+	
+	
+	/**
+	 * Compares Obs by start time, then observation type, then contributor id, then min lat, then min lon, then max lat, then max lon
 	 */
 	public static final Comparator<Obs> g_oCompByTimeTypeContribLatLon = (Obs o1, Obs o2) ->
 	{
@@ -142,9 +195,10 @@ public class Obs
 		return nReturn;
 	};
 
+	
 	/**
-	 * Comparator that compares obs by start time, then obs type, then
-	 * contributor, then object id.
+	 * Compares Obs by start time, observation type id, contributor id, then associated
+	 * object id
 	 */
 	public static final Comparator<Obs> g_oCompObsByTimeTypeContribObj = (Obs o1, Obs o2) ->
 	{
@@ -156,39 +210,86 @@ public class Obs
 			{
 				nReturn = o1.m_nContribId - o2.m_nContribId;
 				if (nReturn == 0)
-					nReturn = o1.m_nObjId - o2.m_nObjId;
+				{
+					nReturn = Id.COMPARATOR.compare(o1.m_oObjId, o2.m_oObjId);
+				}
 			}
 		}
 		return nReturn;
 	};
 	
+	
+	/**
+	 * Compares Obs by contributor id
+	 */
 	public static final Comparator<Obs> g_oCompObsByContrib = (Obs o1, Obs o2) ->
 	{
 		return o1.m_nContribId - o2.m_nContribId;
 	};
 	
 	
+	/**
+	 * Compares Obs by value
+	 */
 	public static final Comparator<Obs> g_oCompObsByValue = (Obs o1, Obs o2) ->
 	{
 		return Double.compare(o1.m_dValue, o2.m_dValue);
 	};
-
-
+	
+	
 	/**
-	 * Default constructor
+	 * Compares Obs by associated object id then start time
+	 */
+	public static final Comparator<Obs> g_oCompObsByIdTime = (Obs o1, Obs o2) ->
+	{
+		int nReturn = Id.COMPARATOR.compare(o1.m_oObjId, o2.m_oObjId);
+		if (nReturn == 0)
+			nReturn = Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
+		return nReturn;
+	};
+	
+	
+	/**
+	 * Compares Obs by contributor id then min lat, then min lon, then max lat
+	 */
+	public static final Comparator<Obs> g_oCompObsByContribLocation = (Obs o1, Obs o2) ->
+	{
+		int nReturn = o1.m_nContribId - o2.m_nContribId;
+		if (nReturn == 0)
+		{
+			nReturn = o1.m_nLat1 - o2.m_nLat1;
+			if (nReturn == 0)
+			{
+				nReturn = o1.m_nLon1 - o2.m_nLon1;
+				if (nReturn == 0 && o1.m_nLat2 != Integer.MIN_VALUE && o2.m_nLat2 != Integer.MIN_VALUE)
+					nReturn = Integer.compare(o1.m_nLat2, o2.m_nLat2);
+			}				
+		}
+			
+		
+		return nReturn;
+	};
+
+	
+	/**
+	 * Default constructor. Does nothing.
 	 */
 	public Obs()
 	{
-
 	}
 
-
+	
+	/**
+	 * Constructs an Obs from the given CsvReader which wraps an InputStream of
+	 * an IMRCP CSV observation file
+	 * @param oIn CsvReader ready to parse the current line of the file, meaning
+	 * {@link CsvReader#readLine()} has already been called
+	 */
 	public Obs(CsvReader oIn)
 	{
 		m_nObsTypeId = Integer.valueOf(oIn.parseString(0), 36); // obstype is written as 6 char string
 		m_nContribId = Integer.valueOf(oIn.parseString(1), 36); // contrib id is written as 6 char string
-		String sObjId = oIn.parseString(2);
-		m_nObjId = sObjId.isEmpty() || sObjId.compareTo("80000000") == 0 ? Integer.MIN_VALUE : Integer.valueOf(sObjId, 16); // object id is written in hex
+		m_oObjId = new Id(oIn.parseString(2));
 		m_lObsTime1 = oIn.parseLong(3) * 1000; // times are written in seconds, convert to millis
 		m_lObsTime2 = oIn.parseLong(4) * 1000;
 		m_lTimeRecv = oIn.parseLong(5) * 1000;
@@ -199,30 +300,43 @@ public class Obs
 		m_tElev = (short)oIn.parseInt(10);
 		m_dValue = oIn.parseDouble(11);
 		m_tConf = oIn.isNull(12) ? Short.MIN_VALUE : (short)oIn.parseInt(12);
+		
+		m_lClearedTime = oIn.isNull(13) ? Long.MIN_VALUE : oIn.parseLong(13) * 1000;
+		if (oIn.isNull(14))
+		{
+			if (m_nObsTypeId == ObsType.EVT)
+				m_sDetail = ObsType.lookup(ObsType.EVT, (int)m_dValue);
+			else
+				m_sDetail = "";
+		}
+		else
+			m_sDetail = oIn.parseString(14);
 	}
 
-
+	
 	/**
-	 * Creates a new Obs with the given parameters
-	 *
-	 * @param nObsTypeId
-	 * @param nContribId
-	 * @param nObjId
-	 * @param lObsTime1
-	 * @param lObsTime2
-	 * @param lTimeRecv
-	 * @param nLat1
-	 * @param nLon1
-	 * @param nLat2
-	 * @param nLon2
-	 * @param tElev
-	 * @param dValue
+	 * Constructs an Obs with the given parameters
+	 * 
+	 * @param nObsTypeId IMRCP observation id
+	 * @param nContribId IMRCP contributor id
+	 * @param oObjId associated object id
+	 * @param lObsTime1 start time in milliseconds since Epoch
+	 * @param lObsTime2 end time in milliseconds since Epoch
+	 * @param lTimeRecv received time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nLon1 minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nLat2 maximum latitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param nLon2 maximum longitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param tElev elevation of obs in meters
+	 * @param dValue value of the obs
 	 */
-	public Obs(int nObsTypeId, int nContribId, int nObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue)
+	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue)
 	{
 		m_nObsTypeId = nObsTypeId;
 		m_nContribId = nContribId;
-		m_nObjId = nObjId;
+		m_oObjId = oObjId == null ? Id.NULLID : oObjId;
 		m_lObsTime1 = lObsTime1;
 		m_lObsTime2 = lObsTime2;
 		m_lTimeRecv = lTimeRecv;
@@ -235,85 +349,93 @@ public class Obs
 		m_tConf = Short.MIN_VALUE;
 	}
 
-
+	
 	/**
-	 * Creates a new obs with the given parameters
-	 *
-	 * @param nObsTypeId
-	 * @param nContribId
-	 * @param nObjId
-	 * @param lObsTime1
-	 * @param lObsTime2
-	 * @param lTimeRecv
-	 * @param nLat1
-	 * @param nLon1
-	 * @param nLat2
-	 * @param nLon2
-	 * @param tElev
-	 * @param dValue
-	 * @param tConf
+	 * Constructs an Obs with the given parameters
+	 * 
+	 * @param nObsTypeId IMRCP observation id
+	 * @param nContribId IMRCP contributor id
+	 * @param oObjId associated object id
+	 * @param lObsTime1 start time in milliseconds since Epoch
+	 * @param lObsTime2 end time in milliseconds since Epoch
+	 * @param lTimeRecv received time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nLon1 minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nLat2 maximum latitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param nLon2 maximum longitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param tElev elevation of obs in meters
+	 * @param dValue value of the obs
+	 * @param tConf confidence value
 	 */
-	public Obs(int nObsTypeId, int nContribId, int nObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf)
+	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf)
 	{
-		this(nObsTypeId, nContribId, nObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue);
+		this(nObsTypeId, nContribId, oObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue);
 		m_tConf = tConf;
 	}
 
-
+	
 	/**
-	 * Creates a new Obs with the given parameters
-	 *
-	 * @param nObsTypeId
-	 * @param nContribId
-	 * @param nObjId
-	 * @param lObsTime1
-	 * @param lObsTime2
-	 * @param lTimeRecv
-	 * @param nLat1
-	 * @param nLon1
-	 * @param nLat2
-	 * @param nLon2
-	 * @param tElev
-	 * @param dValue
-	 * @param tConf
-	 * @param sDetail
+	 * Constructs an Obs with the given parameters
+	 * 
+	 * @param nObsTypeId IMRCP observation id
+	 * @param nContribId IMRCP contributor id
+	 * @param oObjId associated object id
+	 * @param lObsTime1 start time in milliseconds since Epoch
+	 * @param lObsTime2 end time in milliseconds since Epoch
+	 * @param lTimeRecv received time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nLon1 minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nLat2 maximum latitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param nLon2 maximum longitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param tElev elevation of obs in meters
+	 * @param dValue value of the obs
+	 * @param tConf confidence value
+	 * @param sDetail additional obs detail
 	 */
-	public Obs(int nObsTypeId, int nContribId, int nObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf, String sDetail)
+	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf, String sDetail)
 	{
-		this(nObsTypeId, nContribId, nObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue, tConf);
+		this(nObsTypeId, nContribId, oObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue, tConf);
 		m_sDetail = sDetail;
 	}
 
-
+	
 	/**
-	 * Creates a new Obs with the given parameters
-	 *
-	 * @param nObsTypeId
-	 * @param nContribId
-	 * @param nObjId
-	 * @param lObsTime1
-	 * @param lObsTime2
-	 * @param lTimeRecv
-	 * @param nLat1
-	 * @param nLon1
-	 * @param nLat2
-	 * @param nLon2
-	 * @param tElev
-	 * @param dValue
-	 * @param tConf
-	 * @param sDetail
+	 * Constructs an Obs with the given parameters
+	 * 
+	 * @param nObsTypeId IMRCP observation id
+	 * @param nContribId IMRCP contributor id
+	 * @param oObjId associated object id
+	 * @param lObsTime1 start time in milliseconds since Epoch
+	 * @param lObsTime2 end time in milliseconds since Epoch
+	 * @param lTimeRecv received time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nLon1 minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nLat2 maximum latitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param nLon2 maximum longitude in decimal degrees scaled to 7 decimal places,
+	 * {@code Integer.MIN_VALUE} if the obs represents a point
+	 * @param tElev elevation of obs in meters
+	 * @param dValue value of the obs
+	 * @param tConf confidence value
+	 * @param sDetail additional obs detail
+	 * @param lClearedTime time the obs expires in milliseconds since Epoch, if 
+	 * the obs is not expired use {@link java.lang.Long#MIN_VALUE}
 	 */
-	public Obs(int nObsTypeId, int nContribId, int nObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf, String sDetail, long lClearedTime)
+	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int nLat1, int nLon1, int nLat2, int nLon2, short tElev, double dValue, short tConf, String sDetail, long lClearedTime)
 	{
-		this(nObsTypeId, nContribId, nObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue, tConf, sDetail);
+		this(nObsTypeId, nContribId, oObjId, lObsTime1, lObsTime2, lTimeRecv, nLat1, nLon1, nLat2, nLon2, tElev, dValue, tConf, sDetail);
 		m_lClearedTime = lClearedTime;
 	}
 
-
+	
 	/**
-	 * Writes an Obs in csv format to the given BufferedWriter
-	 *
-	 * @param oOut BufferedWriter of the file the Obs is written to
+	 * Write the observation to the given Writer as a line of a CSV file.
+	 * 
+	 * @param oOut Writer to write the observation to
 	 * @throws Exception
 	 */
 	public void writeCsv(BufferedWriter oOut) throws Exception
@@ -323,23 +445,23 @@ public class Obs
 		oOut.write(",");
 		oOut.write(Integer.toString(m_nContribId, 36));
 		oOut.write(",");
-		if (m_nObjId != Integer.MIN_VALUE)
-			oOut.write(Integer.toHexString(m_nObjId));
+		if (!Id.isNull(m_oObjId))
+			oOut.write(m_oObjId.toString());
 		oOut.write(",");
-		oOut.write(Long.toString(m_lObsTime1 / 1000));
+		oOut.write(Long.toString(m_lObsTime1 / 1000)); // write seconds
 		oOut.write(",");
-		oOut.write(Long.toString(m_lObsTime2 / 1000));
+		oOut.write(Long.toString(m_lObsTime2 / 1000)); // write seconds
 		oOut.write(",");
-		oOut.write(Long.toString(m_lTimeRecv / 1000));
+		oOut.write(Long.toString(m_lTimeRecv / 1000)); // write seconds
 		oOut.write(",");
 		oOut.write(Integer.toString(m_nLat1));
 		oOut.write(",");
 		oOut.write(Integer.toString(m_nLon1));
 		oOut.write(",");
-		if (m_nLat2 != Integer.MIN_VALUE)
+		if (m_nLat2 != Integer.MIN_VALUE && m_nLat2 != Integer.MAX_VALUE)
 			oOut.write(Integer.toString(m_nLat2));
 		oOut.write(",");
-		if (m_nLon2 != Integer.MIN_VALUE)
+		if (m_nLon2 != Integer.MIN_VALUE && m_nLat2 != Integer.MAX_VALUE)
 			oOut.write(Integer.toString(m_nLon2));
 		oOut.write(",");
 		oOut.write(Short.toString(m_tElev));
@@ -348,91 +470,71 @@ public class Obs
 		oOut.write(",");
 		if (m_tConf != Short.MIN_VALUE)
 			oOut.write(Short.toString(m_tConf));
+		oOut.write(",");
+		if (m_lClearedTime != Long.MIN_VALUE)
+			oOut.write(Long.toString(m_lClearedTime / 1000)); // write seconds
+		oOut.write(",");
+		if (m_sDetail != null)
+			oOut.write(m_sDetail);
 		oOut.write("\n");
+		
 	}
 
-
+	
 	/**
-	 * Writes an Obs in csv format to the given BufferedWriter with times
-	 * formatted by the given SimpleDateFormat
-	 *
-	 * @param oOut BufferedWriter of the file the Obs is written to
-	 * @param oFormat formatter for the times
-	 * @throws Exception
+	 * Checks if this Obs is valid for the given parameters meaning it has the
+	 * same observation type id, the start and end time intersect the given
+	 * time range, the received time is before or equal to the given reference
+	 * time, if the cleared time is set it must be after the reference time,
+	 * and the spatial extents of the obs intersect the given bounding box.
+	 * 
+	 * @param nObsType IMRCP observation id
+	 * @param lStartTime start time in milliseconds since Epoch
+	 * @param lEndTime end time in milliseconds since Epoch
+	 * @param lRefTime reference time in milliseconds since Epoch
+	 * @param nStartLat minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nEndLat maximum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nStartLon minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nEndLon maximum longitude in decimal degrees scaled to 7 decimal places
+	 * @return true if the Obs is valid for the requested parameters, otherwise
+	 * false
 	 */
-	public void writeCsv(BufferedWriter oOut, SimpleDateFormat oFormat) throws Exception
+	public boolean matches(int nObsType, long lStartTime, long lEndTime, long lRefTime, int nStartLat, int nEndLat, int nStartLon, int nEndLon)
 	{
-		oOut.write(Integer.toString(m_nObsTypeId, 36));
-		oOut.write(",");
-		oOut.write(Integer.toString(m_nContribId, 36));
-		oOut.write(",");
-		if (m_nObjId != Integer.MIN_VALUE)
-			oOut.write(Integer.toHexString(m_nObjId));
-		oOut.write(",");
-		oOut.write(oFormat.format(m_lObsTime1));
-		oOut.write(",");
-		oOut.write(oFormat.format(m_lObsTime2));
-		oOut.write(",");
-		oOut.write(oFormat.format(m_lTimeRecv));
-		oOut.write(",");
-		oOut.write(Integer.toString(m_nLat1));
-		oOut.write(",");
-		oOut.write(Integer.toString(m_nLon1));
-		oOut.write(",");
-		if (m_nLat2 != Integer.MIN_VALUE)
-			oOut.write(Integer.toString(m_nLat2));
-		oOut.write(",");
-		if (m_nLon2 != Integer.MIN_VALUE)
-			oOut.write(Integer.toString(m_nLon2));
-		oOut.write(",");
-		oOut.write(Short.toString(m_tElev));
-		oOut.write(",");
-		oOut.write(Double.toString(m_dValue));
-		oOut.write(",");
-		if (m_tConf != Short.MIN_VALUE)
-			oOut.write(Short.toString(m_tConf));
-		oOut.write("\n");
+		if (m_nLat2 == Integer.MIN_VALUE || m_nLat2 == Integer.MAX_VALUE)
+			return matchesPoint(nObsType, lStartTime, lEndTime, lRefTime, nStartLat, nEndLat, nStartLon, nEndLon);
+		return (m_nObsTypeId == nObsType || nObsType == ObsType.ALL) && (m_lTimeRecv <= lRefTime || m_lTimeRecv > m_lObsTime1)
+			&& (m_lClearedTime < 0 || m_lClearedTime > lRefTime)
+			&& m_lObsTime1 < lEndTime && m_lObsTime2 >= lStartTime
+			&& m_nLat2 >= nStartLat && m_nLat1 < nEndLat
+			&& m_nLon2 >= nStartLon && m_nLon1 < nEndLon;
 	}
 
-
+	
 	/**
-	 * Checks if the Obs matches the given query parameters
-	 *
-	 * @param nObsType query obs type
-	 * @param lStartTime query start time
-	 * @param lEndTime query end time
-	 * @param nStartLat query min lat
-	 * @param nEndLat query max lat
-	 * @param nStartLon query min lon
-	 * @param nEndLon query max lon
-	 * @return true if Obs is valid for the query, false otherwise
+	 * Checks if this Obs is valid for the given parameters meaning it has the
+	 * same observation type id, the start and end time intersect the given
+	 * time range, the received time is before or equal to the given reference
+	 * time, if the cleared time is set it must be after the reference time,
+	 * and the spatial extents of the obs intersect the given bounding box.
+	 * 
+	 * @param nObsType IMRCP observation id
+	 * @param lStartTime start time in milliseconds since Epoch
+	 * @param lEndTime end time in milliseconds since Epoch
+	 * @param lRefTime reference time in milliseconds since Epoch
+	 * @param nStartLat minimum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nEndLat maximum latitude in decimal degrees scaled to 7 decimal places
+	 * @param nStartLon minimum longitude in decimal degrees scaled to 7 decimal places
+	 * @param nEndLon maximum longitude in decimal degrees scaled to 7 decimal places
+	 * @return true if the Obs is valid for the requested parameters, otherwise
+	 * false
 	 */
-	public boolean matches(int nObsType, long lStartTime, long lEndTime, int nStartLat, int nEndLat, int nStartLon, int nEndLon)
+	public boolean matchesPoint(int nObsType, long lStartTime, long lEndTime, long lRefTime, int nStartLat, int nEndLat, int nStartLon, int nEndLon)
 	{
-		if (m_nLat2 == Integer.MIN_VALUE)
-			return matchesPoint(nObsType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon);
-		return m_nObsTypeId == nObsType && m_lObsTime1 < lEndTime && m_lObsTime2 >= lStartTime
-		   && m_nLat2 >= nStartLat && m_nLat1 < nEndLat
-		   && m_nLon2 >= nStartLon && m_nLon1 < nEndLon;
-	}
-
-
-	/**
-	 * Checks if the Obs matches the given query parameters
-	 *
-	 * @param nObsType query obs type
-	 * @param lStartTime query start time
-	 * @param lEndTime query end time
-	 * @param nStartLat query min lat
-	 * @param nEndLat query max lat
-	 * @param nStartLon query min lon
-	 * @param nEndLon query max lon
-	 * @return true if Obs is valid for the query, false otherwise
-	 */
-	public boolean matchesPoint(int nObsType, long lStartTime, long lEndTime, int nStartLat, int nEndLat, int nStartLon, int nEndLon)
-	{
-		return m_nObsTypeId == nObsType && m_lObsTime1 < lEndTime && m_lObsTime2 >= lStartTime
-		   && m_nLat1 >= nStartLat && m_nLat1 < nEndLat
-		   && m_nLon1 >= nStartLon && m_nLon1 < nEndLon;
+		return (m_nObsTypeId == nObsType || nObsType == ObsType.ALL) && (m_lTimeRecv <= lRefTime || m_lTimeRecv > m_lObsTime1)
+			&& (m_lClearedTime < 0 || m_lClearedTime > lRefTime)
+			&& m_lObsTime1 < lEndTime && m_lObsTime2 >= lStartTime
+			&& m_nLat1 >= nStartLat && m_nLat1 < nEndLat
+			&& m_nLon1 >= nStartLon && m_nLon1 < nEndLon;
 	}
 }

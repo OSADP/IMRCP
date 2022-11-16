@@ -15,105 +15,87 @@
  */
 package imrcp.store;
 
-import imrcp.forecast.mlp.MLPMetadata;
-import imrcp.geosrv.KCScoutDetectorLocation;
-import imrcp.geosrv.KCScoutDetectorLocations;
-import imrcp.geosrv.Segment;
-import imrcp.geosrv.SegmentShps;
-import imrcp.system.Config;
+import imrcp.geosrv.osm.OsmWay;
+import imrcp.geosrv.WayNetworks;
 import imrcp.system.CsvReader;
 import imrcp.system.Directory;
+import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
-import java.io.FileInputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 
 /**
- *
+ * Parses and creates {@link Obs} CSV files created by the MLP traffic processes
  * @author Federal Highway Administration
  */
 public class MLPCsv extends CsvWrapper
 {
-	private static ArrayList<MLPMetadata> g_oMetadata = new ArrayList();
-	private static final Comparator<KCScoutDetectorLocation> g_oDETCOMP = (KCScoutDetectorLocation o1, KCScoutDetectorLocation o2) -> {return o1.m_nSegmentId - o2.m_nSegmentId;};
-	
-	static
-	{
-		try (CsvReader oIn = new CsvReader(new FileInputStream(Config.getInstance().getString("imrcp.forecast.mlp.MLPBlock", "MLPBlock", "metadata", ""))))
-		{
-			oIn.readLine(); // skip header
-			while (oIn.readLine() > 0)
-				g_oMetadata.add(new MLPMetadata(oIn));
-			Collections.sort(g_oMetadata);
-		}
-		catch (Exception oEx)
-		{
-			oEx.printStackTrace();
-		}
-	}
+	/**
+	 * Constructor a new MLPCsv with the given observation types
+	 * @param nObsTypes array of observation type ids this file provides
+	 */
 	public MLPCsv(int[] nObsTypes)
 	{
 		super(nObsTypes);
 	}
 
+	
 	/**
-	 * Loads the file into memory. If the file is already in memory it starts
-	 * reading lines from the previous location of the file pointer of the
-	 * member BufferedReader
-	 *
-	 * @param lStartTime the time the file starts being valid
-	 * @param lEndTime the time the file stops being valid
-	 * @param sFilename absolute path to the file
-	 * @throws Exception
+	 * Parses the MLP CSV prediction file and creates {@link ObsType#SPDLNK} Obs 
+	 * from the predictions and {@link ObsType#TRFLNK} by looking up the speed 
+	 * limit of the associated roadway segment and determine what percent of the
+	 * speed limit the speed prediction is.
 	 */
 	@Override
 	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception
 	{
-		ArrayList<KCScoutDetectorLocation> oDetectors = new ArrayList();
-		((KCScoutDetectorLocations)Directory.getInstance().lookup("KCScoutDetectorLocations")).getDetectors(oDetectors, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
-		Collections.sort(oDetectors, g_oDETCOMP);
-		m_oCsvFile = new CsvReader(new FileInputStream(sFilename));
-		m_oCsvFile.readLine(); // skip header
+		m_oCsvFile = new CsvReader(Files.newInputStream(Paths.get(sFilename)));
+		int nCol = m_oCsvFile.readLine(); // the first line has two possibilities depend on which version creating the files.
+		long lStep;
+		if (nCol == 1) // first option which is now the normal is writing the time step in milliseconds in between consecutive predictions
+		{
+			lStep = m_oCsvFile.parseLong(0);
+		}
+		else // the second option is a header with no useful information so default the time step to 15 mintues
+		{
+			lStep = 900000;
+		}
 		m_nContribId = nContribId;
-		SegmentShps oShps = (SegmentShps)Directory.getInstance().lookup("SegmentShps");
+		ArrayList<Obs> oNewObs = new ArrayList();
+		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+		while ((nCol = m_oCsvFile.readLine()) > 0)
+		{
+			if (nCol <= 1) // skip blank lines
+				continue;
+			String[] sIdContrib = m_oCsvFile.parseString(0).split(":");
+			String sContrib = "MLP";
+			Id oId = new Id(sIdContrib[0]);
+			
+			if (sIdContrib.length > 1)
+				sContrib += sIdContrib[1]; // use a different character for the different MLP models like A for online prediction, H for Hurricane model
+			int nContrib = Integer.valueOf(sContrib, 36);
+			double dSpeedLimit = oWays.getSpdLimit(oId);
+			if (dSpeedLimit < 0)
+				dSpeedLimit = 65; // default speed limit
+
+			OsmWay oWay = oWays.getWayById(oId);
+			if (oWay == null) // ignore predictions that are not associated with a roadway segment in the network
+				continue;
+			
+			for (int i = 1; i < nCol; i++)
+			{
+				long lObsTime1 = lStartTime + ((i - 1) * lStep);
+				double dVal = m_oCsvFile.parseDouble(i);
+				oNewObs.add(new Obs(ObsType.SPDLNK, nContrib, oId, lObsTime1, lObsTime1 + lStep, lStartTime, oWay.m_nMidLat, oWay.m_nMidLon, Integer.MIN_VALUE, Integer.MIN_VALUE, oWay.m_tElev, dVal));
+				oNewObs.add(new Obs(ObsType.TRFLNK, nContrib, oId, lObsTime1, lObsTime1 + lStep, lStartTime, oWay.m_nMidLat, oWay.m_nMidLon, Integer.MIN_VALUE, Integer.MIN_VALUE, oWay.m_tElev, Math.floor(dVal / dSpeedLimit * 100)));
+
+			}
+		}
 		synchronized (m_oObs)
 		{
-			int nCol;
-			while ((nCol = m_oCsvFile.readLine()) > 0)
-			{
-				if (nCol <= 1) // skip blank lines
-					continue;
-				String[] sIdContrib = m_oCsvFile.parseString(0).split(":");
-				String sContrib = "MLP";
-				int nId = Integer.parseInt(sIdContrib[0]);
-				if (sIdContrib.length > 1)
-					sContrib += sIdContrib[1];
-				int nContrib = Integer.valueOf(sContrib, 36);
-				double dSpeedLimit = 65.0;
-				KCScoutDetectorLocation oSearch = new KCScoutDetectorLocation();
-				oSearch.m_nSegmentId = nId;
-				int nIndex = Collections.binarySearch(oDetectors, oSearch, g_oDETCOMP);
-				if (nIndex >= 0)
-				{
-					oSearch = oDetectors.get(nIndex);
-					MLPMetadata oMetaSearch = new MLPMetadata();
-					oMetaSearch.m_nDetectorId = oSearch.m_nArchiveId;
-					nIndex = Collections.binarySearch(g_oMetadata, oMetaSearch);
-					if (nIndex >= 0 && !(oMetaSearch = g_oMetadata.get(nIndex)).m_sSpdLimit.equals("NA"))
-						dSpeedLimit = Double.parseDouble(oMetaSearch.m_sSpdLimit);
-				}
-				Segment oSeg = oShps.getLinkById(nId);
-				for (int i = 1; i < nCol; i++)
-				{
-					long lObsTime1 = lStartTime + ((i - 1) * 300000); // 5 minute forecasts
-					double dVal = m_oCsvFile.parseDouble(i);
-					m_oObs.add(new Obs(ObsType.SPDLNK, nContrib, nId, lObsTime1, lObsTime1 + 300000, lStartTime, oSeg.m_nYmid, oSeg.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oSeg.m_tElev, dVal));
-					m_oObs.add(new Obs(ObsType.TRFLNK, nContrib, nId, lObsTime1, lObsTime1 + 300000, lStartTime, oSeg.m_nYmid, oSeg.m_nXmid, Integer.MIN_VALUE, Integer.MIN_VALUE, oSeg.m_tElev, Math.floor(dVal / dSpeedLimit * 100)));
-					
-				}
-			}
+			m_oObs.addAll(oNewObs);
 			Introsort.usort(m_oObs, Obs.g_oCompObsByTime);
 		}
 

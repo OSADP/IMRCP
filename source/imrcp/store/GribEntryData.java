@@ -6,7 +6,7 @@
 package imrcp.store;
 
 import imrcp.geosrv.GeoUtil;
-import imrcp.store.grib.DataRepTemp;
+import imrcp.store.grib.DataRep;
 import imrcp.store.grib.Grid;
 import imrcp.store.grib.LambertConformalProj;
 import imrcp.store.grib.LatLonProj;
@@ -17,16 +17,31 @@ import ucar.unidata.geoloc.projection.LambertConformal;
 import ucar.unidata.geoloc.projection.LatLonProjection;
 
 /**
- *
+ * An EntryData for .grb2 files. As of now only the .png compression for .grb2
+ * is implemented since this is used by the MRMS files.
  * @author Federal Highway Administration
  */
 public class GribEntryData extends EntryData
 {
-	public DataRepTemp m_oDataRep;
+	/**
+	 * DataRep object that corresponds to Section 5 of a .grb2 file
+	 */
+	public DataRep m_oDataRep;
+
+	
+	/**
+	 * Grid used to store the data from Section 7 of a .grb2 file
+	 */
 	float[][] m_fData;
 	
 	
-	public GribEntryData(Grid oGrid)
+	/**
+	 * Constructs a new GribEntryData from the given Grid.
+	 * @param oGrid grb2 Grid object
+	 * @param nContrib IMRCP contributor Id
+	 * @throws IOException
+	 */
+	public GribEntryData(Grid oGrid, int nContrib)
 	   throws IOException
 	{
 		m_fData = oGrid.m_fData;
@@ -35,7 +50,7 @@ public class GribEntryData extends EntryData
 		double[] dHrz = new double[oProj.m_nX];
 		double[] dVrt = new double[oProj.m_nY];
 		ProjectionImpl oGridProj = null;
-		if (oProj.m_nTemplate == 0)
+		if (oProj.m_nTemplate == 0) // lat/lon projection
 		{
 			LatLonProj oLatLon = (LatLonProj)oProj;
 			dHrz[0] = GeoUtil.adjustLon(oLatLon.m_dStartLon);
@@ -46,24 +61,16 @@ public class GribEntryData extends EntryData
 				dVrt[i] = dVrt[i - 1] + oLatLon.m_dLatInc;
 			oGridProj = new LatLonProjection();
 		}
-		else if (oProj.m_nTemplate == 30)
+		else if (oProj.m_nTemplate == 30) // lambert conformal projection
 		{
 			LambertConformalProj oLam = (LambertConformalProj)oProj;
 			oGridProj = new LambertConformal(oLam.m_dOriginLat, oLam.m_dOriginLon, oLam.m_dParallelOne, oLam.m_dParallelTwo, 0, 0, oLam.m_dRadius);
 		}
 		
-		setProjProfile(dHrz, dVrt, oGridProj);
+		setProjProfile(dHrz, dVrt, oGridProj, nContrib);
 	}
 	
 	
-	/**
-	 * Returns the value of the cell at the given horizontal and vertical index.
-	 * The time index must be set separately.
-	 *
-	 * @param nHrz horizontal index
-	 * @param nVrt vertical index
-	 * @return value of the cell at the given horizontal and vertical index
-	 */
 	@Override
 	public double getValue(int nHrz, int nVrt)
 	{
@@ -73,10 +80,13 @@ public class GribEntryData extends EntryData
 	}
 
 
+	/**
+	 * Entry datas of this type do nothing have multiple time dimensions so does
+	 * nothing.
+	 */	
 	@Override
 	public void setTimeDim(int nIndex)
 	{
-		
 	}
 	
 }

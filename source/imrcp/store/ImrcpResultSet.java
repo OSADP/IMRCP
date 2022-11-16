@@ -1,5 +1,6 @@
 package imrcp.store;
 
+import imrcp.system.Id;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -25,76 +26,82 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * An template ArrayList that implements ResultSet. The idea was to have the
- * same interface to get data from the system whether it came from a database,
- * csv files, netcdf files, or anything else.
- *
- * @param <T>
+ * Template class that implements the ResultSet interface with an ArrayList. 
+ * Many of the functions are not implement since only a subset of the interface
+ * functions were needed.
+ * @author Federal Highway Administration
+ * @param <T> type of object stored by the ResultSet
  */
 public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 {
-
 	/**
-	 * Used to keep track of what is the current row
+	 * Keeps track of the current row(index) of the ArrayList
 	 */
 	protected int m_nCursor;
 
+	
 	/**
-	 * Array of column names
+	 * Contains the column names of the objects stored in the list
 	 */
 	protected String[] m_sColNames;
 
+	
 	/**
-	 * Array of Functions that uses lambda expressions to return the correct
-	 * value for each column when getInt(int)is called. In the child classes,
-	 * an interface must be defined for the T that is used
+	 * Child classes implement an interface for the specific T to get int values
+	 * from the columns
 	 */
 	protected Function<T, Integer>[] m_oIntDelegates;
 
+	
 	/**
-	 * Array of Functions that uses lambda expressions to return the correct
-	 * value for each column when getString(int)is called. In the child
-	 * classes, an interface must be defined for the T that is used
+	 * Child classes implement an interface for the specific T to get String values
+	 * from the columns
 	 */
 	protected Function<T, String>[] m_oStringDelegates;
 
+	
 	/**
-	 * Array of Functions that uses lambda expressions to return the correct
-	 * value for each column when getDouble(int)is called. In the child
-	 * classes, an interface must be defined for the T that is used
+	 * Child classes implement an interface for the specific T to get double values
+	 * from the columns
 	 */
 	protected Function<T, Double>[] m_oDoubleDelegates;
 
+	
 	/**
-	 * Array of Functions that uses lambda expressions to return the correct
-	 * value for each column when getLong(int)is called. In the child classes,
-	 * an interface must be defined for the T that is used
+	 * Child classes implement an interface for the specific T to get long values
+	 * from the columns
 	 */
 	protected Function<T, Long>[] m_oLongDelegates;
 
+	
 	/**
-	 * Array of Functions that uses lambda expressions to return the correct
-	 * value for each column when getShort(int)is called. In the child classes,
-	 * an interface must be defined for the T that is used
+	 * Child classes implement an interface for the specific T to get short values
+	 * from the columns
 	 */
 	protected Function<T, Short>[] m_oShortDelegates;
-
-
+	
+	
 	/**
-	 * Default Constructor.
+	 * Child classes implement an interface for the specific T to get Id values
+	 * from the columns
+	 */
+	protected Function<T, Id>[] m_oIdDelegates;
+
+	
+	/**
+	 * Default constructor, sets the cursor to before the first row
 	 */
 	ImrcpResultSet()
 	{
 		m_nCursor = -1;
 	}
 
-
+	
 	/**
-	 * Returns the index of the column with the given name
-	 *
-	 * @param sCol desired column name
-	 * @return the index of the column with the given name or -1 if a column
-	 * with the name doesn't exist
+	 * Looks up the index for the given column name.
+	 * @param sCol Column to look up
+	 * @return Index that corresponds to the column name. If the column name does
+	 * not exist -1
 	 */
 	protected int lookup(String sCol)
 	{
@@ -108,17 +115,14 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return nIndex;
 	}
 
-
+	
 	/**
-	 * Checks to see if the given cursor and the given column index are valid
-	 * numbers for the result set
-	 *
-	 * @param nColIndex column index to test if valid
-	 * @return If the cursor and column index are valid returns 1 minus the
-	 * column index because the arrays containing the column data are 0 based,
-	 * not 1 based like ResultSets.
-	 * @throws SQLException this Exception is thrown when the cursor or the
-	 * column index is invalid
+	 * Tests if the cursor and given column index are in range and returns the
+	 * correct index for the column. Indices are 1 based for ResultSets, since 
+	 * the underlaying list is zero based the correct index is nColIndex - 1
+	 * @param nColIndex 1 based column index
+	 * @return 0 based column index
+	 * @throws SQLException if the cursor or column index is out of range
 	 */
 	protected int rangeTest(int nColIndex) throws SQLException
 	{
@@ -128,11 +132,10 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return nColIndex;
 	}
 
-
+	
 	/**
-	 * Increments the cursor and tells whether there is another row
-	 *
-	 * @return true if the cursor is less than the size of the ArrayList
+	 * Advances the cursor and checks if there are any more rows available
+	 * @return true if the cursor is not past the end of the list
 	 * @throws SQLException
 	 */
 	@Override
@@ -143,9 +146,8 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 
 
 	/**
-	 * Wrapper for the ArrayList clear() function
-	 *
-	 * @throws SQLException
+	 * Wrapper for {@link ArrayList#clear()}
+	 * @throws SQLException 
 	 */
 	@Override
 	public void close() throws SQLException
@@ -153,15 +155,12 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		clear();
 	}
 
-
+	
 	/**
-	 * Returns the String for the given column index (1 based)
-	 *
-	 * @param columnIndex desired column index(1 based)
-	 * @return the value the StringDelegate function returns for the given
-	 * column index for the current row
-	 * @throws SQLException if the cursor is greater than the size of the
-	 * ArrayList or if the column index is not valid
+	 * Gets the String value for the given column
+	 * @param columnIndex 1 based column index
+	 * @return String value for the given column
+	 * @throws SQLException
 	 */
 	@Override
 	public String getString(int columnIndex) throws SQLException
@@ -169,15 +168,12 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return m_oStringDelegates[rangeTest(columnIndex)].apply(get(m_nCursor));
 	}
 
-
+	
 	/**
-	 * Returns the short for the given column index (1 based)
-	 *
-	 * @param columnIndex desired column index(1 based)
-	 * @return the value the ShortyDelegate function returns for the given
-	 * column index for the current row
-	 * @throws SQLException if the cursor is greater than the size of the
-	 * ArrayList or if the column index is not valid
+	 * Gets the short value for the given column
+	 * @param columnIndex 1 based column index
+	 * @return short value for the given column
+	 * @throws SQLException
 	 */
 	@Override
 	public short getShort(int columnIndex) throws SQLException
@@ -185,15 +181,12 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return m_oShortDelegates[rangeTest(columnIndex)].apply(get(m_nCursor));
 	}
 
-
+	
 	/**
-	 * Returns the int for the given column index (1 based)
-	 *
-	 * @param columnIndex desired column index(1 based)
-	 * @return the value the IntDelegate function returns for the given column
-	 * index for the current row
-	 * @throws SQLException if the cursor is greater than the size of the
-	 * ArrayList or if the column index is not valid
+	 * Gets the int value for the given column
+	 * @param columnIndex 1 based column index
+	 * @return int value for the given column
+	 * @throws SQLException
 	 */
 	@Override
 	public int getInt(int columnIndex) throws SQLException
@@ -201,15 +194,12 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return m_oIntDelegates[rangeTest(columnIndex)].apply(get(m_nCursor));
 	}
 
-
+	
 	/**
-	 * Returns the long for the given column index (1 based)
-	 *
-	 * @param columnIndex desired column index(1 based)
-	 * @return the value the LongDelegate function returns for the given column
-	 * index for the current row
-	 * @throws SQLException if the cursor is greater than the size of the
-	 * ArrayList or if the column index is not valid
+	 * Gets the long value for the given column
+	 * @param columnIndex 1 based column index
+	 * @return
+	 * @throws SQLException
 	 */
 	@Override
 	public long getLong(int columnIndex) throws SQLException
@@ -217,15 +207,12 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return m_oLongDelegates[rangeTest(columnIndex)].apply(get(m_nCursor));
 	}
 
-
+	
 	/**
-	 * Returns the double for the given column index (1 based)
-	 *
-	 * @param columnIndex desired column index(1 based)
-	 * @return the value the DoubleDelegate function returns for the given
-	 * column index for the current row
-	 * @throws SQLException if the cursor is greater than the size of the
-	 * ArrayList or if the column index is not valid
+	 * Gets the double value for the given column
+	 * @param columnIndex 1 based column index
+	 * @return double value for the given column
+	 * @throws SQLException
 	 */
 	@Override
 	public double getDouble(int columnIndex) throws SQLException
@@ -233,7 +220,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		return m_oDoubleDelegates[rangeTest(columnIndex)].apply(get(m_nCursor));
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -242,7 +229,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -252,7 +239,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -262,7 +249,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -272,7 +259,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -282,7 +269,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -292,7 +279,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -302,7 +289,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -312,7 +299,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -322,7 +309,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -332,7 +319,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -342,7 +329,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -352,7 +339,7 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-
+	
 	/**
 	 * NOT IMPLEMENTED
 	 */
@@ -2081,5 +2068,4 @@ public class ImrcpResultSet<T> extends ArrayList<T> implements ResultSet
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
-
 }

@@ -13,36 +13,146 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 /**
- *
- * @author
+ * FilterInputStream used to parse PNG datastreams
+ * @author Federal Highway Administration
  */
 public class PngInStream extends FilterInputStream
 {
+	/**
+	 * Marker for IDAT section
+	 */
 	public final static int IDAT = 0x49444154;
+
+	
+	/**
+	 * Marker for IEND section
+	 */
 	public final static int IEND = 0x49454e44;
+
+	
+	/**
+	 * Marker for IHDR section
+	 */
 	public final static int IHDR = 0x49484452;
+
+	
+	/**
+	 * The first eight bytes of a PNG datastream
+	 */
 	public final static long PNGHDR = -8552249625308161526L; // 0x89504E470D0A1A0A
+
+	
+	/**
+	 * Width of image in pixels
+	 */
 	int m_nWidth;
+
+	
+	/**
+	 * Height of image in pixels
+	 */
 	int m_nHeight;
+
+	
+	/**
+	 * Bit depth. Can be 1, 2, 4, 8, or 16
+	 */
 	private int m_nDepth;
+
+	
+	/**
+	 * Color type that defines the PNG image type. 
+	 * 0 - greyscale
+	 * 2 - Truecolor
+	 * 3 - Indexed-color
+	 * 4 - Greyscale with alpha
+	 * 6 - Truecolor with alpha
+	 */
 	private int m_nColor;
+
+	
+	/**
+	 * Compression method. Only compression method 0 (deflate/inflate compression
+	 * with a sliding window of at most 32768 bytes) is defined by the W3C standard
+	 */
 	private int m_nCompMethod;
+
+	
+	/**
+	 * Filter method. Only filter method 0 (adaptive filtering with five basic 
+	 * filter types) is defined by the W3C standard.
+	 */
 	private int m_nFilterMethod;
+
+	
+	/**
+	 * Interlace method
+	 */
 	private int m_nInterlaceMethod;
+
+	
+	/**
+	 * Bytes Per Pixel
+	 */
 	int m_nBPP;
+
+	
+	/**
+	 * Stores the bytes of the IDAT section
+	 */
 	private byte[] m_yIDAT;
+
+	
+	/**
+	 * DataInputStream used to wrap the InputStream of the PNG datastream
+	 */
 	private DataInputStream m_oDis;
+
+	
+	/**
+	 * Stores the type of the current chunk
+	 */
 	private int m_nChunkType;
+
+	
+	/**
+	 * Stores the length of the current chunk
+	 */
 	private int m_nChunkLength;
+
+	
+	/**
+	 * Inflater used to decompress the data
+	 */
 	private final Inflater m_oInf = new Inflater();
+
+	
+	/**
+	 * Byte array used to read a single byte from the datastream
+	 */
 	private final byte[] m_yInfBuf = new byte[1];
 	
+	
+	/**
+	 * Calls {@link #PngInStream(java.io.DataInputStream)} by wrapping the given 
+	 * InputStream with a DataInputStream.
+	 * @param oIn InputStream representing the start of a PNG datastream
+	 * @throws IOException
+	 */
 	public PngInStream(InputStream oIn) 
 	   throws IOException
 	{
 		this(new DataInputStream(oIn));
 	}
 	
+	/**
+	 * Constructs a new PngInStream with the given DataInputStream. This function
+	 * prepares the PngInStream to be ready to read the image line by line. To 
+	 * do this the IHDR section is read and then the IDAT section is read into
+	 * {@link #m_yIDAT} and set as the input of {@link #m_oInf}
+	 * @param oIn DataInputStream wrapping a PNG datastream
+	 * @throws IOException
+	 */
 	public PngInStream(DataInputStream oIn) 
 	   throws IOException
 	{
@@ -66,7 +176,7 @@ public class PngInStream extends FilterInputStream
 		oIn.skipBytes(4); // skip crc
 
 		
-		while (m_nChunkType != IDAT)
+		while (m_nChunkType != IDAT) // skip until the IDAT section
 		{
 			m_nChunkLength = oIn.readInt();
 			m_nChunkType = oIn.readInt();
@@ -74,12 +184,15 @@ public class PngInStream extends FilterInputStream
 				oIn.skipBytes(m_nChunkLength + 4); // skip chunk data and crc
 		}
 		m_yIDAT = new byte[m_nChunkLength];
-		super.read(m_yIDAT, 0, m_nChunkLength);
+		super.read(m_yIDAT, 0, m_nChunkLength); // read the IDAT chunk
 		m_oDis.skipBytes(4);
 		m_oInf.setInput(m_yIDAT);
 	}
 	
 	
+	/**
+	 * Reads bytes from {@link #m_oInf} into yBuf
+	 */
 	@Override
 	public int read(byte[] yBuf, int nOff, int nLen)
 	   throws IOException
@@ -100,7 +213,7 @@ public class PngInStream extends FilterInputStream
 			}
 			catch (DataFormatException oDfe)
 			{
-				oDfe.printStackTrace();
+				throw new IOException(oDfe);
 			}
 			
 			nOff += nBytes; // increment dest offset
@@ -110,6 +223,10 @@ public class PngInStream extends FilterInputStream
 	}
 
 	
+	/**
+	 * Wrapper for {@link PngInStream#read(byte[], int, int)} passing {@link #m_yInfBuf}
+	 * as the buffer meaning 1 byte from {@link #m_oInf} is read into {@link #m_yInfBuf}
+	 */
 	@Override
 	public int read() 
 	   throws IOException
@@ -117,7 +234,11 @@ public class PngInStream extends FilterInputStream
 		return read(m_yInfBuf, 0, 1) == -1 ? -1 : m_yInfBuf[0] & 0xff;
 	}
 
-	
+	/**
+	 * Attempts to read the IDAT chunk of the PNG datastream into {@link #m_yIDAT}
+	 * @return the length of the chunk in bytes.
+	 * @throws IOException
+	 */
 	private int readIDAT() 
 	   throws IOException
 	{
@@ -148,7 +269,11 @@ public class PngInStream extends FilterInputStream
 		}
 	}
 	
-	
+	/**
+	 * Reads to the end of the PNG datastream.
+	 * @return 0
+	 * @throws IOException
+	 */
 	public int finish()
 	   throws IOException
 	{

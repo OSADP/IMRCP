@@ -5,55 +5,62 @@
  */
 package imrcp.store;
 
-import imrcp.FileCache;
 import imrcp.store.grib.GribParameter;
+import java.util.ArrayList;
+import java.util.Collections;
 
 /**
- *
+ * FileCache that manages .grb2 files.
  * @author Federal Highway Administration
  */
 public class GribStore extends FileCache
 {
+	/**
+	 * Stores the GribParameters associated with the observation types this
+	 * store provides
+	 */
 	private GribParameter[] m_nParameters;
 	
+	
+	/**
+	 * @return a new {@link GribWrapper} with the configured observation types
+	 * and GribParameters
+	 */
 	@Override
-	protected FileWrapper getNewFileWrapper()
+	protected GriddedFileWrapper getNewFileWrapper()
 	{
 		return new GribWrapper(m_nSubObsTypes, m_nParameters);
 	}
 
 	
 	/**
-	 * Fills in the ImrcpResultSet with obs that match the query.
-	 *
-	 * @param oReturn ImrcpResultSet that will be filled with obs
-	 * @param nType obstype id
-	 * @param lStartTime start time of the query in milliseconds
-	 * @param lEndTime end time of the query in milliseconds
-	 * @param nStartLat lower bound of latitude (int scaled to 7 decimal places)
-	 * @param nEndLat upper bound of latitude (int scaled to 7 decimals places)
-	 * @param nStartLon lower bound of longitude (int scaled to 7 decimal
-	 * places)
-	 * @param nEndLon upper bound of longitude (int scaled to 7 decimal places)
-	 * @param lRefTime reference time
+	 * Determines the files that match the query and then calls {@link GribWrapper#getData(int, long, int, int, int, int, imrcp.store.ImrcpResultSet)}
+	 * for each of those files.
 	 */
 	@Override
 	public void getData(ImrcpResultSet oReturn, int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime)
 	{
 		long lObsTime = lStartTime;
+		ArrayList<GribWrapper> oChecked = new ArrayList();
 		while (lObsTime < lEndTime)
 		{
 			GribWrapper oFile = (GribWrapper) getFile(lObsTime, lRefTime);
 			if (oFile != null) // file isn't in current files
 			{
-				oFile.m_lLastUsed = System.currentTimeMillis();
-				oFile.getData(nType, lObsTime, nStartLat, nStartLon, nEndLat, nEndLon, oReturn);
+				int nIndex = Collections.binarySearch(oChecked, oFile, FileCache.FILENAMECOMP);
+				if (nIndex < 0) // only check files once
+				{
+					oFile.m_lLastUsed = System.currentTimeMillis();
+					oFile.getData(nType, lObsTime, nStartLat, nStartLon, nEndLat, nEndLon, oReturn);
+					oChecked.add(~nIndex, oFile);
+				}
 			}
 
 			lObsTime += m_nFileFrequency;
 		}
 	}
+	
 	
 	@Override
 	public void reset()

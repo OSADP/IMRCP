@@ -1,26 +1,26 @@
 package imrcp.store;
 
 import imrcp.geosrv.GeoUtil;
+import imrcp.system.Id;
 import imrcp.system.ObsType;
 import java.text.SimpleDateFormat;
 import java.util.function.Function;
 
 /**
- *
- *
+ * The implementation for {@link ImrcpResultSet}s that contain {@link CAPObs}
+ * @author Federal Highway Administration
  */
 public class ImrcpCapResultSet extends ImrcpResultSet<CAPObs>
 {
-
 	/**
-	 * A ResultSet that contains CAPObs. Used by the CAPStore to return data
+	 * Object used to format time stamps into date strings
 	 */
 	protected SimpleDateFormat m_oFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss.SSS");
 
-
+	
 	/**
-	 * Initializes all the column names and different delegates that use lambda
-	 * expressions
+	 * Default constructor. Defines the column names and necessary delegate 
+	 * objects
 	 */
 	public ImrcpCapResultSet()
 	{
@@ -41,24 +41,24 @@ public class ImrcpCapResultSet extends ImrcpResultSet<CAPObs>
 			"conf_value",
 			"detail",
 			"cleared_time",
-			"id"
+			"cap_id"
 		};
 
 		m_oIntDelegates = new IntDelegate[]
 		{
-			oCap -> {return oCap.m_nObsTypeId;},
-			oCap -> {return oCap.m_nContribId;},
-			oCap -> {return oCap.m_nObjId;},
+			oCap -> oCap.m_nObsTypeId,
+			oCap -> oCap.m_nContribId,
+			null, // no objid as int
 			null, // no obs_time1 as int
 			null, // no obs_time2 as int
 			null, // no time_recv as int
-			oCap -> {return oCap.m_nLat1;},
-			oCap -> {return oCap.m_nLon1;},
-			oCap -> {return oCap.m_nLat2;},
-			oCap -> {return oCap.m_nLon2;},
-			oCap -> {return (int)oCap.m_tElev;},
+			oCap -> oCap.m_nLat1,
+			oCap -> oCap.m_nLon1,
+			oCap -> oCap.m_nLat2,
+			oCap -> oCap.m_nLon2,
+			oCap -> (int)oCap.m_tElev,
 			null, // no value as int
-			oCap -> {return (int)oCap.m_tConf;},
+			oCap -> (int)oCap.m_tConf,
 			null,
 			null,
 			null
@@ -66,39 +66,39 @@ public class ImrcpCapResultSet extends ImrcpResultSet<CAPObs>
 
 		m_oStringDelegates = new StringDelegate[]
 		{
-			oCap -> {return ObsType.getName(oCap.m_nObsTypeId);},
-			oCap -> {return Integer.toString(oCap.m_nContribId, 36);},
-			oCap -> {return Integer.toHexString(oCap.m_nObjId);},
-			oCap -> {return m_oFormat.format(oCap.m_lObsTime1);},
-			oCap -> {return m_oFormat.format(oCap.m_lObsTime2);},
-			oCap -> {return m_oFormat.format(oCap.m_lTimeRecv);},
-			oCap -> {return Integer.toString(oCap.m_nLat1);},
-			oCap -> {return Integer.toString(oCap.m_nLon1);},
-			oCap -> {return Integer.toString(oCap.m_nLat2);},
-			oCap -> {return Integer.toString(oCap.m_nLon2);},
-			oCap -> {return Short.toString(oCap.m_tElev);},
-			oCap -> {return String.format("%10.4f", oCap.m_dValue);},
-			oCap -> {return Short.toString(oCap.m_tConf);},
-			oCap -> {return oCap.m_sDetail;},
-			oCap -> {return m_oFormat.format(oCap.m_lClearedTime);},
-			oCap -> {return oCap.m_sId;}
+			oCap -> ObsType.getName(oCap.m_nObsTypeId),
+			oCap -> Integer.toString(oCap.m_nContribId, 36),
+			oCap -> oCap.m_oObjId.toString(),
+			oCap -> m_oFormat.format(oCap.m_lObsTime1),
+			oCap -> m_oFormat.format(oCap.m_lObsTime2),
+			oCap -> m_oFormat.format(oCap.m_lTimeRecv),
+			oCap -> Integer.toString(oCap.m_nLat1),
+			oCap -> Integer.toString(oCap.m_nLon1),
+			oCap -> Integer.toString(oCap.m_nLat2),
+			oCap -> Integer.toString(oCap.m_nLon2),
+			oCap -> Short.toString(oCap.m_tElev),
+			oCap -> String.format("%10.4f", oCap.m_dValue),
+			oCap -> Short.toString(oCap.m_tConf),
+			oCap -> oCap.m_sDetail,
+			oCap -> m_oFormat.format(oCap.m_lClearedTime),
+			oCap -> oCap.m_sCapId
 		};
 
 		m_oDoubleDelegates = new DoubleDelegate[]
 		{
-			oCap -> {return (double)oCap.m_nObsTypeId;},
-			oCap -> {return (double)oCap.m_nContribId;},
-			oCap -> {return (double)oCap.m_nObjId;},
+			oCap -> (double)oCap.m_nObsTypeId,
+			oCap -> (double)oCap.m_nContribId,
+			null, // no objid as double
 			null, // no obs_time1 as double
 			null, // no obs_time2 as double
 			null, // no time_recv as double
-			oCap -> {return GeoUtil.fromIntDeg(oCap.m_nLat1);},
-			oCap -> {return GeoUtil.fromIntDeg(oCap.m_nLon1);},
-			oCap -> {return GeoUtil.fromIntDeg(oCap.m_nLat2);},
-			oCap -> {return GeoUtil.fromIntDeg(oCap.m_nLon2);},
-			oCap -> {return (double)oCap.m_tElev;},
-			oCap -> {return oCap.m_dValue;},
-			oCap -> {return ((double)oCap.m_tConf) / 100.0;},
+			oCap -> GeoUtil.fromIntDeg(oCap.m_nLat1),
+			oCap -> GeoUtil.fromIntDeg(oCap.m_nLon1),
+			oCap -> GeoUtil.fromIntDeg(oCap.m_nLat2),
+			oCap -> GeoUtil.fromIntDeg(oCap.m_nLon2),
+			oCap -> (double)oCap.m_tElev,
+			oCap -> oCap.m_dValue,
+			oCap -> ((double)oCap.m_tConf) / 100.0,
 			null,
 			null,
 			null
@@ -106,21 +106,21 @@ public class ImrcpCapResultSet extends ImrcpResultSet<CAPObs>
 
 		m_oLongDelegates = new LongDelegate[]
 		{
-			oCap -> {return (long)oCap.m_nObsTypeId;},
-			oCap -> {return (long)oCap.m_nContribId;},
-			oCap -> {return (long)oCap.m_nObjId;},
-			oCap -> {return oCap.m_lObsTime1;},
-			oCap -> {return oCap.m_lObsTime2;},
-			oCap -> {return oCap.m_lTimeRecv;},
-			oCap -> {return (long)oCap.m_nLat1;},
-			oCap -> {return (long)oCap.m_nLon1;},
-			oCap -> {return (long)oCap.m_nLat2;},
-			oCap -> {return (long)oCap.m_nLon2;},
-			oCap -> {return (long)oCap.m_tElev;},
+			oCap -> (long)oCap.m_nObsTypeId,
+			oCap -> (long)oCap.m_nContribId,
+			null, // no objid as long
+			oCap -> oCap.m_lObsTime1,
+			oCap -> oCap.m_lObsTime2,
+			oCap -> oCap.m_lTimeRecv,
+			oCap -> (long)oCap.m_nLat1,
+			oCap -> (long)oCap.m_nLon1,
+			oCap -> (long)oCap.m_nLat2,
+			oCap -> (long)oCap.m_nLon2,
+			oCap -> (long)oCap.m_tElev,
 			null, // no value as long
-			oCap -> {return (long)oCap.m_tConf;},
+			oCap -> (long)oCap.m_tConf,
 			null,
-			oCap -> {return oCap.m_lClearedTime;},
+			oCap -> oCap.m_lClearedTime,
 			null
 		};
 
@@ -136,35 +136,79 @@ public class ImrcpCapResultSet extends ImrcpResultSet<CAPObs>
 			null, // no lon1 as short
 			null, // no lat2 as short
 			null, // no lon2 as short
-			oCap -> {return oCap.m_tElev;},
+			oCap -> oCap.m_tElev,
 			null, // no value as short
-			oCap -> {return oCap.m_tConf;},
+			oCap -> oCap.m_tConf,
 			null,
+			null,
+			null
+		};
+		
+		m_oIdDelegates = new IdDelegate[]
+		{
+			null, // no obstype_id as Id
+			null, // no contrib_id as Id
+			oObs -> oObs.m_oObjId,
+			null, // no obs_time1 as Id
+			null, // no obs_time2 as Id
+			null, // no time_recv as Id
+			null, // no lat1 as Id
+			null, // no lon1 as Id
+			null, // no lat2 as Id
+			null, // no lon2 as Id
+			null, // no elev as Id
+			null, // no value as Id
+			null, // no conf as Id
 			null,
 			null
 		};
 	}
 
+	
 	/**
-	 *
+	 * Necessary template definition for {@link ImrcpResultSet#m_oIntDelegates}
 	 */
 	protected interface IntDelegate extends Function<CAPObs, Integer>
 	{
 	}
 
+	
+	/**
+	 * Necessary template definition for {@link ImrcpResultSet#m_oStringDelegates}
+	 */
 	private interface StringDelegate extends Function<CAPObs, String>
 	{
 	}
 
+	
+	/**
+	 * Necessary template definition for {@link ImrcpResultSet#m_oDoubleDelegates}
+	 */
 	private interface DoubleDelegate extends Function<CAPObs, Double>
 	{
 	}
 
+	
+	/**
+	 * Necessary template definition for {@link ImrcpResultSet#m_oLongDelegates}
+	 */
 	private interface LongDelegate extends Function<CAPObs, Long>
 	{
 	}
 
+	
+	/**
+	 * Necessary template definition for {@link ImrcpResultSet#m_oShortDelegates}
+	 */
 	private interface ShortDelegate extends Function<CAPObs, Short>
+	{
+	}
+	
+	
+	/**
+	 * Necessary template definition for {@link ImrcpResultSet#m_oIdDelegates}
+	 */
+	private interface IdDelegate extends Function<CAPObs, Id>
 	{
 	}
 }

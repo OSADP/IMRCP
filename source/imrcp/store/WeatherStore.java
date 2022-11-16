@@ -1,80 +1,85 @@
 package imrcp.store;
 
-import imrcp.FileCache;
+import java.util.ArrayList;
+import java.util.Collections;
 
 /**
- * This abstract class represents the base store class for weather data.
- *
+ * FileCache that manages weather files that can be loaded by {@link NcfWrapper}s, which
+ * which comes from different National Weather Service products like RTMA, RAP,
+ * NDFD, and GFS.
+ * @author Federal Highway Administration
  */
 public class WeatherStore extends FileCache
 {
-
 	/**
-	 * Array of ObsType Ids used for the file
+	 * IMRCP observation types the file provides
 	 */
 	protected int[] m_nObsTypes;
 
+	
 	/**
-	 * Array of titles of ObsTypes used in the NetCDF file
+	 * Label of the corresponding observation types found in the file
 	 */
 	protected String[] m_sObsTypes;
 
+	
 	/**
-	 * Title for the horizontal axis in the NetCDF file
+	 * Label of the horizontal axis in the file
 	 */
 	protected String m_sHrz;
 
+	
 	/**
-	 * Title for the vertical axis in the NetCDF file
+	 * Label of the vertical axis in the file
 	 */
 	protected String m_sVrt;
 
+	
 	/**
-	 * Title for the time axis in the NetCDF file
+	 * Label of the time axis in the file
 	 */
 	protected String m_sTime;
 	
+	
+	/**
+	 * Number of files that are expected to be downloaded each collection cycle
+	 */
 	protected int m_nFilesPerPeriod;
 
-
+	
 	/**
-	 * Returns a new NcfWrapper
-	 *
-	 * @return a new NcfWrapper
+	 * @return a new {@link NcfWrapper} with the configured parameters.
 	 */
 	@Override
-	protected FileWrapper getNewFileWrapper()
+	protected GriddedFileWrapper getNewFileWrapper()
 	{
 		return new NcfWrapper(m_nObsTypes, m_sObsTypes, m_sHrz, m_sVrt, m_sTime);
 	}
 	
-
+	
 	/**
-	 * Fills in the ImrcpResultSet with obs that match the query.
-	 *
-	 * @param oReturn ImrcpResultSet that will be filled with obs
-	 * @param nType obstype id
-	 * @param lStartTime start time of the query in milliseconds
-	 * @param lEndTime end time of the query in milliseconds
-	 * @param nStartLat lower bound of latitude (int scaled to 7 decimal places)
-	 * @param nEndLat upper bound of latitude (int scaled to 7 decimals places)
-	 * @param nStartLon lower bound of longitude (int scaled to 7 decimal
-	 * places)
-	 * @param nEndLon upper bound of longitude (int scaled to 7 decimal places)
-	 * @param lRefTime reference time
+	 * Determines the files that match the query and then calls {@link NcfWrapper#getData(int, long, int, int, int, int)}
+	 * on each of those files
 	 */
 	@Override
 	public void getData(ImrcpResultSet oReturn, int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime)
 	{
 		long lObsTime = lStartTime;
+		ArrayList<NcfWrapper> oChecked = new ArrayList();
 		while (lObsTime < lEndTime)
 		{
 			NcfWrapper oFile = (NcfWrapper) getFile(lObsTime, lRefTime);
 			if (oFile != null) // file isn't in current files
 			{
-				oFile.m_lLastUsed = System.currentTimeMillis();
-				oReturn.addAll(oFile.getData(nType, lObsTime, nStartLat, nStartLon, nEndLat, nEndLon));
+				int nIndex = Collections.binarySearch(oChecked, oFile, FileCache.FILENAMECOMP);
+				if (nIndex < 0 || m_nMaxForecast > m_nFileFrequency) // check files once unless their max forecast is greater than the file frequency (NDFD files) so all of the valid forecasts get added to the list
+				{
+					oFile.m_lLastUsed = System.currentTimeMillis();
+					oReturn.addAll(oFile.getData(nType, lObsTime, nStartLat, nStartLon, nEndLat, nEndLon));
+					if (nIndex < 0)
+						oChecked.add(~nIndex, oFile);
+				}
 			}
 			
 			lObsTime += m_nFileFrequency;

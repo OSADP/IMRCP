@@ -6,96 +6,96 @@ import ucar.nc2.dataset.VariableDS;
 import ucar.unidata.geoloc.ProjectionImpl;
 
 /**
- * Represents one entry of data in a netcdf file, for example all of air
- * temperature from an RTMA file.
+ * EntryData for files that are opened using the NetCDF library from NCAR.
+ * 
+ * @see ucar.nc2.NetcdfFile#open(java.lang.String) 
+ * @author Federal Highway Administration
  */
 public class NcfEntryData extends EntryData
 {
 	/**
-	 * NCAR VariableDS object. Contains metadata for the data entry and used to
-	 * set the dimension variables for the Index object
+	 * Variable object from the NetCDF library
 	 */
 	public VariableDS m_oVar;
 
+	
 	/**
-	 * Array object that contains all of the values of the data.
+	 * Array object from the NetCDF library
 	 */
 	public Array m_oArray;
 
+	
 	/**
-	 * Index object used with the Array object to get the desired values
+	 * Index object from the NetCDF library
 	 */
 	public Index m_oIndex;
 
+	
 	/**
-	 * integer that represents the horizontal index's number in the Index object
+	 * Index used to access the horizontal axis
 	 */
 	public int m_nHrzIndex;
 
+	
 	/**
-	 * integer that represents the vertical index's number in the Index object
+	 * Index used to access the vertical axis
 	 */
 	public int m_nVrtIndex;
 
+	
 	/**
-	 * integer that represents the time index's number in the Index object
+	 * Index used to access the time axis
 	 */
 	public int m_nTimeIndex;
 
+	
 	/**
-	 * boolean to tell if the time index is used or not. Some files only have
-	 * one time value so we don't need to use the time index in that case
+	 * Flag indicating if the time index needs to be set
 	 */
 	protected boolean m_bUseTimeIndex = true;
 	
+	
 	/**
-	 * The last delta for the vertical coordinates. Used so the delta does not
-	 * always have to be calculated
+	 * Contains the values of the time axis
 	 */
+	public double[] m_dTime;
 
+	
 	/**
-	 * array that contains the values of the header of the time axis of the file
+	 * Constructs a new NcfEntryData with the given parameters
+	 * @param nObsTypeId IMRCP observation type id provided by this EntryData
+	 * @param oProj Project Coordinate System implementation
+	 * @param oVar NetCDF Variable object
+	 * @param oArray NetCDF Array object
+	 * @param dHrz values of the horizontal axis
+	 * @param sHrzName label of the horizontal axis
+	 * @param dVrt values of the vertical axis
+	 * @param sVrtName label of the vertical axis
+	 * @param dTime values of the time axis
+	 * @param sTimeName label of the time axis
+	 * @param nContrib IMRCP contributor Id 
 	 */
-	protected double[] m_dTime;
-
-
-	/**
-	 * Creates a new NcfEntryData with the given parameters
-	 *
-	 * @param nObsTypeId integer obs type id
-	 * @param oProj Projection object from netcdf file
-	 * @param oVar VariableDS object from netcdf file
-	 * @param oArray Array object from netcdf file
-	 * @param dHrz horizontal axis header
-	 * @param sHrzName name of the horizontal header in the netcdf file
-	 * @param dVrt vertical axis header
-	 * @param sVrtName name of the vertical header in the netcdf file
-	 * @param dTime time axis header
-	 * @param sTimeName name of the time header in the netcdf file
-	 */
-	public NcfEntryData(int nObsTypeId, ProjectionImpl oProj, VariableDS oVar, Array oArray, double[] dHrz, String sHrzName, double[] dVrt, String sVrtName, double[] dTime, String sTimeName)
+	public NcfEntryData(int nObsTypeId, ProjectionImpl oProj, VariableDS oVar, Array oArray, double[] dHrz, String sHrzName, double[] dVrt, String sVrtName, double[] dTime, String sTimeName, int nContrib)
 	{
 		m_nObsTypeId = nObsTypeId;
 		m_oVar = oVar;
 		m_oArray = oArray;
 		m_oIndex = m_oArray.getIndex();
 		m_dTime = dTime;
-		m_nHrzIndex = m_oVar.findDimensionIndex(sHrzName);
+		m_nHrzIndex = m_oVar.findDimensionIndex(sHrzName); // the axis indices
 		m_nVrtIndex = m_oVar.findDimensionIndex(sVrtName);
 		m_nTimeIndex = m_oVar.findDimensionIndex(sTimeName);
 		if (m_nTimeIndex < 0)
 			m_bUseTimeIndex = false;
-		
-		setProjProfile(dHrz, dVrt, oProj);
+				
+		setProjProfile(dHrz, dVrt, oProj, nContrib); // set the ProjProfile
 	}
 
-
+	
 	/**
-	 * Sets the internal Index object's horizontal and vertical dimension to the
-	 * given values.
-	 *
-	 * @param nHrz horizontal dimension
-	 * @param nVrt vertical dimension
+	 * Sets the horizontal and vertical dimensions (axes) to the given values
+	 * @param nHrz position to set the horizontal axis to
+	 * @param nVrt position to set the vertical axis to
 	 */
 	public void setHrzVrtDim(int nHrz, int nVrt)
 	{
@@ -105,47 +105,47 @@ public class NcfEntryData extends EntryData
 
 
 	/**
-	 * Set the internal Index object's time dimension to the given value if the
-	 * UseTimeIndex flag is set
-	 *
-	 * @param nTime time dimension
+	 * If the time index is used, sets the time dimension (axis) to the given
+	 * value.
+	 * @param nTime position to set the time axis to
 	 */
+	@Override
 	public void setTimeDim(int nTime)
 	{
 		if (m_bUseTimeIndex)
 			m_oIndex.setDim(m_nTimeIndex, nTime);
 	}
 
-
+	
 	/**
-	 * Tells whether the given value is the fill value for the netcdf file
-	 *
+	 * Wrapper for {@link ucar.nc2.dataset.VariableDS#isFillValue(double)}
 	 * @param dVal value to test
-	 * @return true if the value is the fill value, otherwise false
+	 * @return true if the value is the fill value defined by the file, otherwise
+	 * false
 	 */
 	public boolean isFillValue(double dVal)
 	{
 		return m_oVar.isFillValue(dVal);
 	}
 
-
+	
 	/**
-	 * Tells whether the given value is the missing value for the netcdf file
-	 *
+	 * Wrapper for {@link ucar.nc2.dataset.VariableDS#isMissing(double)}
 	 * @param dVal value to test
-	 * @return true if the value is the missing value otherwise false
+	 * @return true if the value is the missing value defined by the file, otherwise
+	 * false
 	 */
 	public boolean isMissing(double dVal)
 	{
 		return m_oVar.isMissing(dVal);
 	}
 
-
+	
 	/**
-	 * Tells whether the given value is invalid data for the netcdf file
-	 *
+	 * Wrapper for {@link ucar.nc2.dataset.VariableDS#isInvalidData(double)}
 	 * @param dVal value to test
-	 * @return true if the value is invalid date otherwise false
+	 * @return true if the value is the invalid as defined by the file, otherwise
+	 * false
 	 */
 	public boolean isInvalidData(double dVal)
 	{
@@ -153,20 +153,13 @@ public class NcfEntryData extends EntryData
 	}
 
 
-	/**
-	 * Returns the value of the cell at the given horizontal and vertical index.
-	 * The time index must be set separately.
-	 *
-	 * @param nHrz horizontal index
-	 * @param nVrt vertical index
-	 * @return value of the cell at the given horizontal and vertical index
-	 */
+	
 	@Override
 	public double getValue(int nHrz, int nVrt)
 	{
-		if (nHrz > getHrz() || nVrt > getVrt())
+		if (nHrz > getHrz() || nVrt > getVrt()) // out of range
 			return Double.NaN;
-		setHrzVrtDim(nHrz, nVrt);
+		setHrzVrtDim(nHrz, nVrt); // set the position in the grid
 		return m_oArray.getDouble(m_oIndex);
 	}
 }

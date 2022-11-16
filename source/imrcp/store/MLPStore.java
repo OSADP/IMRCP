@@ -16,15 +16,17 @@
 package imrcp.store;
 
 /**
- *
+ * FileCache that manages CSV files produced by the different MLP traffic processes
  * @author Federal Highway Administration
  */
 public class MLPStore extends CsvStore
 {
+	/**
+	 * @return a new {@link MLPCsv} with the configured observation types
+	 */
 	@Override
 	protected FileWrapper getNewFileWrapper()
 	{
 		return new MLPCsv(m_nSubObsTypes);
 	}
-	
 }

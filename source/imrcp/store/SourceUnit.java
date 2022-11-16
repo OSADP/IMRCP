@@ -3,32 +3,33 @@ package imrcp.store;
 import imrcp.system.CsvReader;
 
 /**
- * This class is used to store data on the units of observations from a given
- * source
+ * Contains the units used by data collected different contributors.
+ * @author Federal Highway Administration
  */
 public class SourceUnit
 {
-
 	/**
-	 * Integer obs type id. Must be an obs type for the ObsType class
+	 * IMRCP observation type id of data
 	 */
 	public int m_nObsTypeId;
 
+	
 	/**
-	 * Contributor id
+	 * IMRCP contributor id of data
 	 */
 	public int m_nContribId;
 
+	
 	/**
-	 * Units used by this source
+	 * Units used in the source files
 	 */
 	public String m_sUnit;
 
-
+	
 	/**
-	 * Creates a new SourceUnit from a line of the csv file with SourceUnit data
-	 *
-	 * @param sLine
+	 * Constructs a new SourceUnit from a line of the SourceUnits CSV file.
+	 * @param oIn CsvReader wrapping the InputStream of the SourceUnits CSV file
+	 * ready to parse the current line.
 	 */
 	public SourceUnit(CsvReader oIn)
 	{

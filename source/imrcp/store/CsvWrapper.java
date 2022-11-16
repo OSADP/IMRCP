@@ -5,22 +5,28 @@ import imrcp.system.Introsort;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
-import java.util.Date;
 
 /**
- * File wrapper used for stores that use csv files to store their data
+ * FileWrapper for parsing IMRCP CSV observation files.
+ * @author Federal Highway Administration
  */
 public class CsvWrapper extends FileWrapper
 {
-
+	/**
+	 * CsvReader that wraps the InputStream for the file
+	 */
 	CsvReader m_oCsvFile = null;
 
+	
+	/**
+	 * Contains observations created from the lines of the file
+	 */
 	final ArrayList<Obs> m_oObs = new ArrayList();
 
-
+	
 	/**
-	 * Default Constructor. Creates a new CsvWrapper with no variables
-	 * initialized
+	 * Constructs a new CsvWrapper with the given observation types
+	 * @param nObsTypes array of observation types this file provides
 	 */
 	public CsvWrapper(int[] nObsTypes)
 	{
@@ -29,14 +35,10 @@ public class CsvWrapper extends FileWrapper
 
 
 	/**
-	 * Loads the file into memory. If the file is already in memory it starts
-	 * reading lines from the previous location of the file pointer of the
-	 * member BufferedReader
-	 *
-	 * @param lStartTime the time the file starts being valid
-	 * @param lEndTime the time the file stops being valid
-	 * @param sFilename absolute path to the file
-	 * @throws Exception
+	 * IMRCP CSV observation files can be appended to while the file is already
+	 * in memory. If the file is not in memory {@link #m_oCsvFile} gets initialized
+	 * and skips the header. Observations are then created and added to {@link #m_oObs}
+	 * for each line of the file.
 	 */
 	@Override
 	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception
@@ -66,7 +68,9 @@ public class CsvWrapper extends FileWrapper
 
 
 	/**
-	 * Cleans up resources when the file is removed from memory
+	 * Closes {@link #m_oCsvFile} if it is not null and then deletes the file
+	 * if the delete flag is true and its length is less than 85 bytes since 
+	 * that would be a file that is just the header or an invalid file.
 	 */
 	@Override
 	public void cleanup(boolean bDelete)
@@ -84,22 +88,5 @@ public class CsvWrapper extends FileWrapper
 		{
 			m_oLogger.error(oException, oException);
 		}
-	}
-
-
-	/**
-	 * Not implemented
-	 *
-	 * @param nObsType
-	 * @param lTimestamp
-	 * @param nLat
-	 * @param nLon
-	 * @param oTimeRecv
-	 * @return
-	 */
-	@Override
-	public double getReading(int nObsType, long lTimestamp, int nLat, int nLon, Date oTimeRecv)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 }

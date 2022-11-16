@@ -1,199 +1,158 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
 package imrcp.store;
 
 import imrcp.system.BlockConfig;
+import imrcp.system.Config;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * An abstract class used to load files of different formats into memory.
+ * Base class for files that are loaded into memory by {@link imrcp.store.FileCache}
+ * (stores).
+ * @author Federal Highway Administration
  */
-public abstract class FileWrapper implements Comparable<FileWrapper>
+public abstract class FileWrapper
 {
-	protected static final HashMap<Integer, Integer> FCSTMINMAP;
 	/**
-	 * Timestamp of when the file starts being valid
+	 * Time in milliseconds since Epoch of the earliest observation or forecast
+	 * contained in this file
 	 */
 	public long m_lStartTime;
 
+	
 	/**
-	 * Timestamp of when the file stops being valid
+	 * Time in milliseconds since Epoch of the latest observation or forecast 
+	 * contained in this file
 	 */
 	public long m_lEndTime;
 	
 	
+	/**
+	 * Time in milliseconds since Epoch that the file starts being valid, usually
+	 * when the file is downloaded/created
+	 */
 	public long m_lValidTime; 
 
+	
 	/**
-	 * Timestamp of when the file was last used by the system
+	 * Time in milliseconds since Epoch that the file was last accessed/used
 	 */
 	public long m_lLastUsed = System.currentTimeMillis();
 
+	
 	/**
-	 * Logger
+	 * Logger object
 	 */
 	protected Logger m_oLogger = LogManager.getLogger(getClass());
 
+	
 	/**
-	 * Absolute path of the file being loaded
+	 * Absolute path of the file
 	 */
 	public String m_sFilename;
 	
+	
 	/**
-	 * array of obs type ids the NetCDF file has data for
+	 * Contains the IMRCP observation type ids that this file provides
 	 */
 	public int[] m_nObsTypes;
+
 	
-	protected ArrayList<EntryData> m_oEntryMap;
-	
+	/**
+	 * IMRCP contributor Id which is a computed by converting an up to a 6
+	 * character alphanumeric string using base 36.
+	 */
 	public int m_nContribId;
+
 	
+	/**
+	 * Static map object that maps IMRCP contributor Ids to a default time in 
+	 * milliseconds of how long forecasts last for that contributor
+	 */
+	public static final HashMap<Integer, Integer> FCSTMINMAP;
+
+	
+	/**
+	 * Index used for this file in a store's {@link imrcp.store.FileCache#m_oFormatters}
+	 */
+	public int m_nFormatIndex = 0;
+	
+	
+	/**
+	 * Construct and fill in FCSTMINMAP by using the configuration object
+	 */
 	static
 	{
 		FCSTMINMAP = new HashMap();
-		BlockConfig oConfig = new BlockConfig(FileWrapper.class.getName(), "NcfWrapper");
-		String[] sFcsts = oConfig.getStringArray("fcst", "");
-		for (String sContrib : sFcsts)
-			FCSTMINMAP.put(Integer.valueOf(sContrib, 36), oConfig.getInt(sContrib, 3600000));
-		FCSTMINMAP.put(Integer.MIN_VALUE, oConfig.getInt("default", 3600000));
+		if (Config.getInstance() != null)
+		{	
+			BlockConfig oConfig = new BlockConfig(FileWrapper.class.getName(), "FileWrapper");
+			String[] sFcsts = oConfig.getStringArray("fcst", "");
+			for (String sContrib : sFcsts)
+				FCSTMINMAP.put(Integer.valueOf(sContrib, 36), oConfig.getInt(sContrib, 3600000));
+			FCSTMINMAP.put(Integer.MIN_VALUE, oConfig.getInt("default", 3600000));
+		}
 	}
-	public FileWrapper()
-	{
-		
-	}
-
-
+	
+	
 	/**
-	 * Abstract method used to load files into memory
-	 *
-	 * @param lStartTime the time the file starts being valid
-	 * @param lEndTime the time the files stops being valid
-	 * @param sFilename absolute path of the file being loaded
-	 * @throws Exception
+	 * Parses and loads observations from the given file into memory.
+	 * @param lStartTime time in milliseconds since Epoch that the file starts 
+	 * having observations
+	 * @param lEndTime time in milliseconds since Epoch that the file stops 
+	 * having observations
+	 * @param lValidTime time in milliseconds since Epoch that the file starts
+	 * being valid (usually the time it is received)
+	 * @param sFilename path of the file being loaded
+	 * @param nContribId IMRCP contributor Id which is a computed by converting
+	 * an up to a 6 character alphanumeric string using base 36.
+	 * @throws Exception 
 	 */
 	public abstract void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId) throws Exception;
 
 
 	/**
-	 * Abstract method used to clean up resources when the file is removed from
-	 * memory
+	 * Called when a FileWrapper is removed from the cache in memory to clean up
+	 * resources if necessary.
+	 * @param bDelete flag used to indicate if index files created when the file
+	 * is loaded into memory or the file itself should be deleted or not
 	 */
 	public abstract void cleanup(boolean bDelete);
 	
+	
+	/**
+	 * Attempts to delete the given File. Right now the implementation is
+	 * commented out so files are not accidentally deleted
+	 * @param oFile File to delete
+	 */
 	public void deleteFile(File oFile)
 	{
-		if (oFile.exists())
-			oFile.delete();
-	}
-
-
-	/**
-	 * Abstract method used to get a single value out of a file that matches the
-	 * query parameters.
-	 *
-	 * @param nObsType obs type id
-	 * @param lTimestamp query time
-	 * @param nLat latitude written in integer degrees scaled to 7 decimal
-	 * places
-	 * @param nLon longitude written in integer degrees scaled to 7 decimal
-	 * places
-	 * @param oTimeRecv Date object set to the time the file was received. Can
-	 * be null
-	 * @return the value that matches the query parameters, or NaN if no match
-	 * was found
-	 */
-	public abstract double getReading(int nObsType, long lTimestamp, int nLat, int nLon, Date oTimeRecv);
-
-	/**
-	 * Retrieves the grid data associated with supported observation types.
-	 *
-	 * @param nObsTypeId	the observation type identifier used to find grid data.
-	 *
-	 * @return the grid data for the variable specified by observation type.
-	 */
-	public EntryData getEntryByObsId(int nObsTypeId)
-	{
-		if (m_oEntryMap == null)
-			return null;
-		
-		int nIndex = m_oEntryMap.size();
-		while (nIndex-- > 0)
-		{
-			if (m_oEntryMap.get(nIndex).m_nObsTypeId == nObsTypeId)
-				return m_oEntryMap.get(nIndex);
-		}
-		return null; // requested obstype not available
+//		m_oLogger.info("Deleting invalid file: " + oFile.getAbsolutePath());
+//		if (oFile.exists())
+//			oFile.delete();
 	}
 	
 	
 	/**
-	 * A static utility method that returns the nearest match in an array of
-	 * doubles to the target double value. The method assumes that the data have
-	 * a constant delta and approximates the index using value ratios.
-	 *
-	 * @param dValues	the array of double values to search.
-	 * @param oValue	the double value to find.
-	 *
-	 * @return	the nearest index of the stored value to the target value
+	 * Sets the start, end, and valid times of the FileWrapper to the given
+	 * values
+	 * @param lValid Time in milliseconds since Epoch that the file starts 
+	 * being valid
+	 * @param lStart Time in milliseconds since Epoch of the earliest observation 
+	 * or forecast contained in this file
+	 * @param lEnd Time in milliseconds since Epoch of the latest observation 
+	 * or forecast contained in this file
 	 */
-	protected static int getIndex(double[] dValues, Double oValue)
-	{
-		double dBasis;
-		double dDist;
-
-		int nMaxIndex = dValues.length - 1;
-		double dLeft = dValues[0]; // test for value in range
-		double dLeftDelta = (dValues[1] - dLeft) / 2.0;
-		double dRight = dValues[nMaxIndex];
-		double dRightDelta = (dRight - dValues[nMaxIndex - 1]) / 2.0;
-
-		dLeft -= dLeftDelta;
-		dRight += dRightDelta;
-
-		dBasis = dRight - dLeft;
-		dDist = oValue - dLeft;
-		int nReturn = (int)((dDist / dBasis * (double)dValues.length));
-		if (nReturn < 0 || nReturn >= dValues.length)
-			return -1;
-
-		return nReturn;
-	}
-	
-	
-	public int getTimeIndex(EntryData oData, long lTimestamp)
-	{
-		return 0;
-	}
-	
-	
 	public void setTimes(long lValid, long lStart, long lEnd)
 	{
 		m_lValidTime = lValid;
 		m_lStartTime = lStart;
 		m_lEndTime = lEnd;
-	}
-	
-	
-	/**
-	 * Compares by filename
-	 *
-	 * @param o1 the FileWrapper to compare to
-	 * @return
-	 */
-	@Override
-	public int compareTo(FileWrapper o)
-	{
-		int nReturn = Long.compare(o.m_lValidTime, m_lValidTime); // sort on valid time in descending order
-		if (nReturn == 0)
-		{
-			nReturn = Long.compare(m_lStartTime, o.m_lStartTime); // then on start time in ascending order
-			if (nReturn == 0)
-				nReturn = Long.compare(m_lEndTime, o.m_lEndTime); // and finally on end time in ascending order
-		}
-		
-		return nReturn;
 	}
 }

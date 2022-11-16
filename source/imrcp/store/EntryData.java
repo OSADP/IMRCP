@@ -14,297 +14,140 @@
  */
 package imrcp.store;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import ucar.unidata.geoloc.LatLonPointImpl;
 import ucar.unidata.geoloc.ProjectionImpl;
-import ucar.unidata.geoloc.ProjectionPointImpl;
 
 /**
- *
+ * Base class for representing one entry of gridded data found in {@link imrcp.store.GriddedFileWrapper}s
  * @author Federal Highway Administration
  */
 abstract public class EntryData
 {
-	public static int xTL = 0;
-	public static int yTL = 1;
-	public static int xTR = 2;
-	public static int yTR = 3;
-	public static int xBR = 4;
-	public static int yBR = 5;
-	public static int xBL = 6;
-	public static int yBL = 7;
-	
+	/**
+	 * Observation type of the entry
+	 */
 	protected int m_nObsTypeId;
-	protected static final ArrayList<ProjProfile> PROFILES = new ArrayList();
+
+	
+	/**
+	 * Object used to project coordinates from lon/lat to projected coordinate
+	 * system and vice versa
+	 */
 	public ProjProfile m_oProjProfile;
 
+	
+	/**
+	 * Gets the value of the grid at the given x and y coordinates
+	 * @param nHrz x coordinate
+	 * @param nVrt y coordinate
+	 * @return value of the grid at the given x and y coordinates, if the coordinates
+	 * are out of range, {@code Double.NaN} is returned
+	 */
 	abstract public double getValue(int nHrz, int nVrt);
+
+	
+	/**
+	 * Sets the time dimension to the given index, if applicable.
+	 * @param nIndex
+	 */
 	abstract public void setTimeDim(int nIndex);
 	
 	
-	protected final void setProjProfile(double[] dX, double[] dY, ProjectionImpl oProj)
+	/**
+	 * Sets {@link #m_oProjProfile} by calling {@link ProjProfiles#getInstance()#newProfile(double[], double[], ucar.unidata.geoloc.ProjectionImpl, int)}
+	 * with the given parameters
+	 * @param dX array containing the values of the x axis of the projected coordinate system
+	 * @param dY array containing the values of the y axis of the projected coordinate system
+	 * @param oProj object created with the parameters of the projected coordinate system
+	 * @param nContrib IMRCP contributor Id for the source of the projected 
+	 * coordinate system 
+	 */
+	protected final void setProjProfile(double[] dX, double[] dY, ProjectionImpl oProj, int nContrib)
 	{
-		ProjProfile oSearch = new ProjProfile(dX, dY);
-		synchronized (PROFILES)
-		{
-			int nIndex = Collections.binarySearch(PROFILES, oSearch);
-			if (nIndex < 0)
-			{
-				oSearch.initGrid(dX, dY, oProj);
-				nIndex = ~nIndex;
-				PROFILES.add(nIndex, oSearch);
-			}
-			m_oProjProfile = PROFILES.get(nIndex);
-		}
+		m_oProjProfile = ProjProfiles.getInstance().newProfile(dX, dY, oProj, nContrib);
 	}
 	
 	
+	/**
+	 * Fills the given int[] with the indices of the grid that correspond to the
+	 * lon/lat bounding box created by the given lon/lat points. The lon and 
+	 * lats do not have to be in a specific order as there is logic to handle 
+	 * either case in function that gets called. Wrapper for 
+	 * {@link ProjProfile#getIndices(double, double, double, double, int[])}
+	 * @param dLon1 longitude 1 in decimal degrees
+	 * @param dLat1 latitude 1 in decimal degrees
+	 * @param dLon2 longitude 2 in decimal degrees
+	 * @param dLat2 latitude 2 in de decimal degrees
+	 * @param nIndices array to be filled with the indices of the grid corresponding
+	 * to the lon/lat points. [min x index, max y index, max x index, min y index]
+	 */
 	public void getIndices(double dLon1, double dLat1, double dLon2, double dLat2, int[] nIndices)
 	{
 		m_oProjProfile.getIndices(dLon1, dLat1, dLon2, dLat2, nIndices);
 	}
 	
-	private static int reverseBinarySearch(double[] a, double key) 
-	{
-        int low = 0;
-        int high = a.length - 1;
-
-        while (low <= high) 
-		{
-            int mid = (low + high) >>> 1;
-            double midVal = a[mid];
-
-            if (midVal > key)
-                low = mid + 1;  // Neither val is NaN, thisVal is smaller
-            else if (midVal < key)
-                high = mid - 1; // Neither val is NaN, thisVal is larger
-            else 
-			{
-                long midBits = Double.doubleToLongBits(midVal);
-                long keyBits = Double.doubleToLongBits(key);
-                if (midBits == keyBits)     // Values are equal
-                    return mid;             // Key found
-                else if (midBits > keyBits) // (-0.0, 0.0) or (!NaN, NaN)
-                    low = mid + 1;
-                else                        // (0.0, -0.0) or (NaN, !NaN)
-                    high = mid - 1;
-            }
-        }
-        return -(low + 1);  // key not found.
-    }
-		
-		
+	
 	/**
-	 * Returns the length of the vertical axis of the netcdf file
-	 *
-	 * @return length of the vertical axis
+	 * Fills the given int[] with the indices of the grid that correspond to the
+	 * lon/lat point. Wrapper for {@link ProjProfile#getPointIndices(double, double, int[])}
+	 * @param dLon longitude in decimal degrees
+	 * @param dLat latitude in decimal degrees
+	 * @param nIndices array to be filled with the indices of the grid corresponding 
+	 * to the lon/lat point.
+	 */
+	public void getPointIndices(double dLon, double dLat, int[] nIndices)
+	{
+		m_oProjProfile.getPointIndices(dLon, dLat, nIndices);
+	}
+	
+	/**
+	 * Returns the IMRCP observation type id for the EntryData
+	 * 
+	 * @return IMRCP observation type id
+	 */
+	public int getObsType()
+	{
+		return m_nObsTypeId;
+	}
+
+	
+	/**
+	 * Get the last valid index (length - 1) of the vertical axis
+	 * @return Last valid index (length - 1) of the vertical axis of this EntryData's
+	 * projected coordinate system grid
 	 */
 	public int getVrt()
 	{
 		return m_oProjProfile.m_nVrt - 1;
 	}
 
-
+	
 	/**
-	 * Returns the length of the horizontal axis of the netcdf file
-	 *
-	 * @return length of the horizontal axis
+	 * Get the last valid index (length - 1) of the horizontal axis
+	 * @return Last valid index (length - 1) of the horizontal axis of this EntryData's
+	 * projected coordinate system grid
 	 */
 	public int getHrz()
 	{
 		return m_oProjProfile.m_nHrz - 1;
 	}
 	
-
+	
 	/**
-	 * Returns the value of the Array at the given horizontal and vertical
-	 * index. The time index must be set separately. The given double array is
-	 * filled in with the points of the corners of the cell in lat and lon in
-	 * the following order: top left, top right, bot right, bot left. For each
-	 * point, the lat is first, then the lon.
-	 *
-	 * @param nHrzIndex horizontal index of the desired cell
-	 * @param nVrtIndex vertical index of the desired cell
-	 * @param dCorners array to be filled in with the corners of the cell
-	 * @return value of the Array at the given index
+	 * Fills the given double array with the latitude and longitudes of the 
+	 * corners of the cell of the grid at the given horizontal and vertical indices/coordinates 
+	 * and returns the value of the cell. Wrapper for {@link ProjProfile#getCell}
+	 * and {@link #getValue(int, int)}
+	 * @param nHrzIndex x coordinate
+	 * @param nVrtIndex y coordinate
+	 * @param dCorners array to store the latitude and longitudes of the cell
+	 * [top left lon, top left lat, top right lon, top right lat, bottom right lon,
+	 * bottom right lat, bottom left lon, bottom right lat]
+	 * @return value of the grid at the given x and y coordinates, if the coordinates
+	 * are out of range, {@code Double.NaN} is returned
 	 */
 	public double getCell(int nHrzIndex, int nVrtIndex, double[] dCorners)
 	{
 		m_oProjProfile.getCell(nHrzIndex, nVrtIndex, dCorners);
 		return getValue(nHrzIndex, nVrtIndex);
-	}
-	
-	
-	public class ProjProfile implements Comparable<ProjProfile>
-	{
-		public int m_nVrt;
-		public int m_nHrz;
-		public double m_dX1;
-		public double m_dX2;
-		public double m_dY1;
-		public double m_dY2;
-		public double[] m_dXs;
-		public double[] m_dYs;
-		public double[][] m_dGrid;
-		public boolean m_bUseReverseY;
-		public ProjectionImpl m_oProj;
-
-		public ProjProfile()
-		{
-		}
-		
-		
-		public ProjProfile(double[] dX, double[] dY)
-		{
-			m_nVrt = dY.length;
-			m_nHrz = dX.length;
-			m_dXs = dX; // keep the original coordinate grids to use for lookup later
-			m_dYs = dY;
-			m_dX1 = dX[0];
-			m_dX2 = dX[m_nHrz - 1];
-			m_dY1 = dY[0];
-			m_dY2 = dY[m_nVrt - 1];
-			m_bUseReverseY = m_dY1 > m_dY2;
-		}
-		
-		
-		public void initGrid(double[] dX, double[] dY, ProjectionImpl oProj)
-		{
-			m_oProj = oProj;
-			
-			if (oProj != null)
-			{
-				ProjectionPointImpl oProjPt = new ProjectionPointImpl();
-				LatLonPointImpl oLatLonPt = new LatLonPointImpl();
-
-				int nHrz = m_nHrz * 2;
-				m_dGrid = new double[m_nVrt][];
-				for (int i = 0; i < m_nVrt; i++)
-				{
-					m_dGrid[i] = new double[nHrz];
-					for (int j = 0; j < nHrz;)
-					{
-						oProjPt.setLocation(dX[j >> 1], dY[i]);
-						oProj.projToLatLon(oProjPt, oLatLonPt);
-						m_dGrid[i][j++] = oLatLonPt.getLongitude();
-						m_dGrid[i][j++] = oLatLonPt.getLatitude();
-					}
-				}
-			}
-			else
-			{
-				System.arraycopy(dY, 0, m_dYs, 0, m_nVrt);
-				System.arraycopy(dX, 0, m_dXs, 0, m_nHrz);
-			}
-		}
-		
-		public void getCell(int nHrz, int nVrt, double[] dCorners)
-		{
-			nHrz = nHrz << 1;
-			double dTop = m_dGrid[nVrt][nHrz + 1];
-			double dBot = m_dGrid[nVrt + 1][nHrz + 1];
-			if (dTop > dBot)
-			{
-				dCorners[xTL] = m_dGrid[nVrt][nHrz]; // top left lon
-				dCorners[yTL] = dTop; // lat
-				dCorners[xTR] = m_dGrid[nVrt][nHrz + 2]; // top right lon
-				dCorners[yTR] = m_dGrid[nVrt][nHrz + 3]; // lat
-
-				dCorners[xBR] = m_dGrid[++nVrt][nHrz + 2]; // increment to next row, bot right lon
-				dCorners[yBR] = m_dGrid[nVrt][nHrz + 3]; // lat
-				dCorners[xBL] = m_dGrid[nVrt][nHrz]; // bot left lon
-				dCorners[yBL] = dBot; // lat
-			}
-			else
-			{
-				dCorners[xBL] = m_dGrid[nVrt][nHrz]; // top left lon
-				dCorners[yBL] = dTop; // lat
-				dCorners[xBR] = m_dGrid[nVrt][nHrz + 2]; // top right lon
-				dCorners[yBR] = m_dGrid[nVrt][nHrz + 3]; // lat
-				
-				dCorners[xTR] = m_dGrid[++nVrt][nHrz + 2]; // increment to next row, bot right lon
-				dCorners[yTR] = m_dGrid[nVrt][nHrz + 3]; // lat
-				dCorners[xTL] = m_dGrid[nVrt][nHrz]; // bot left lon
-				dCorners[yTL] = dBot; // lat
-			}
-		}
-		
-		
-		public void getIndices(double dLon1, double dLat1, double dLon2, double dLat2, int[] nIndices)
-		{
-			ProjectionPointImpl oProjPt = new ProjectionPointImpl();
-			LatLonPointImpl oLatLonPt = new LatLonPointImpl();
-			oLatLonPt.set(dLat1, dLon1);
-			m_oProj.latLonToProj(oLatLonPt, oProjPt);
-			
-			int nIndex = Arrays.binarySearch(m_dXs, oProjPt.getX());
-			if (nIndex < 0)
-				nIndex = ~nIndex - 1;
-			nIndices[0] = nIndex;
-
-			if (m_bUseReverseY)
-			{
-				nIndex = reverseBinarySearch(m_dYs, oProjPt.getY());
-				if (nIndex < 0)
-					nIndex = ~nIndex + 1;
-			}
-			else
-			{
-				nIndex = Arrays.binarySearch(m_dYs, oProjPt.getY());
-				if (nIndex < 0)
-					nIndex = ~nIndex - 1;
-			}
-			nIndices[1] = nIndex;
-			
-			oLatLonPt.set(dLat2, dLon2);
-			m_oProj.latLonToProj(oLatLonPt, oProjPt);
-			
-			nIndex = Arrays.binarySearch(m_dXs, oProjPt.getX());
-			if (nIndex < 0)
-				nIndex = ~nIndex - 1;
-			nIndices[2] = nIndex;
-
-			if (m_bUseReverseY)
-			{
-				nIndex = reverseBinarySearch(m_dYs, oProjPt.getY());
-				if (nIndex < 0)
-					nIndex = ~nIndex + 1;
-			}
-			else
-			{
-				nIndex = Arrays.binarySearch(m_dYs, oProjPt.getY());
-				if (nIndex < 0)
-					nIndex = ~nIndex - 1;
-			}
-			nIndices[3] = nIndex;			
-		}
-		
-		@Override
-		public int compareTo(ProjProfile o)
-		{
-			int nCompare = m_nVrt - o.m_nVrt;
-			if (nCompare != 0)
-				return nCompare;
-			
-			nCompare = m_nHrz - o.m_nHrz;
-			if (nCompare != 0)
-				return nCompare;
-			
-			nCompare = Double.compare(m_dX1, o.m_dX1);
-			if (nCompare != 0)
-				return nCompare;
-			
-			nCompare = Double.compare(m_dX2, o.m_dX2);
-			if (nCompare != 0)
-				return nCompare;
-			
-			nCompare = Double.compare(m_dY1, o.m_dY1);
-			if (nCompare != 0)
-				return nCompare;
-			
-			return Double.compare(m_dY2, o.m_dY2);
-		}
 	}
 }

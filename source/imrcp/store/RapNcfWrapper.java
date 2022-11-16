@@ -1,28 +1,27 @@
 package imrcp.store;
 
 import imrcp.geosrv.GeoUtil;
-import imrcp.geosrv.NED;
-import imrcp.system.Directory;
+import imrcp.system.Id;
 import imrcp.system.ObsType;
 import java.util.ArrayList;
 import java.util.Date;
 import ucar.ma2.Index;
 
 /**
- * Contains overriden getReading and getData methods to handle the precipication
- * data contained in the RAP netcdf files
+ * Parses and creates {@link Obs} from .grb2 received from National Weather
+ * Service's Rapid Refresh product. Has specific implementations of getReading
+ * and getData for precipitation type and wind speed observations.
+ * @author Federal Highway Administration
  */
 public class RapNcfWrapper extends NcfWrapper
 {
 	/**
-	 * Calls the parent constructor for NcfWrapper
-	 *
-	 * @param nObsTypes	lookup observation type id array corresponding with
-	 * names.
-	 * @param sObsTypes	lookup observation name array corresponding with ids.
-	 * @param sHrz	name of the horizontal NetCDF index variable.
-	 * @param sVrt	name of the vertical NetCDF index variable.
-	 * @param sTime	name of the time NefCDF index variable
+	 * Constructs a new RapNcfWrapper with the given parameters
+	 * @param nObsTypes IMRCP observation types provided in the file
+	 * @param sObsTypes Label of the observation types found in the file
+	 * @param sHrz horizontal axis label
+	 * @param sVrt vertical axis label
+	 * @param sTime time axis label
 	 */
 	public RapNcfWrapper(int[] nObsTypes, String[] sObsTypes, String sHrz, String sVrt, String sTime)
 	{
@@ -31,17 +30,8 @@ public class RapNcfWrapper extends NcfWrapper
 
 
 	/**
-	 * Finds the RAPGrid model value for an observation type by time and
-	 * location.
-	 *
-	 * @param nObsTypeId	the observation type to lookup.
-	 * @param lTimestamp	the timestamp of the observation.
-	 * @param nLat	the latitude of the requested data.
-	 * @param nLon	the longitude of the requested data.
-	 * @param oTimeRecv
-	 *
-	 * @return	the RAPGrid model value for the requested observation type for
-	 * the specified time at the specified location.
+	 * Handles the different logic necessary for getting precipitation type
+	 * and wind speed data.
 	 */
 	@Override
 	public synchronized double getReading(int nObsTypeId, long lTimestamp, int nLat, int nLon, Date oTimeRecv)
@@ -70,25 +60,79 @@ public class RapNcfWrapper extends NcfWrapper
 		{
 			double dU = super.getReading(5, lTimestamp, nLat, nLon, oTimeRecv);
 			double dV = super.getReading(6, lTimestamp, nLat, nLon, oTimeRecv);
+			return Math.sqrt(dU * dU + dV * dV); // get the magnitude of the u and v component vectors
+		}
+		else
+			return super.getReading(nObsTypeId, lTimestamp, nLat, nLon, oTimeRecv); // all other obstypes can used parent class implementation
+	}
+	
+	
+	/**
+	 * Handles the different logic necessary for getting precipitation type
+	 * and wind speed data.
+	 */
+	@Override
+	public double getReading(int nObsType, long lTimestamp, int[] nIndices)
+	{
+		if (nObsType == ObsType.TYPPC)
+		{
+			double dReturn = Double.NaN;
+			double dFR = 0;
+			double dIP = 0;
+			double dS = 0;
+			double dR = 0;
+			if ((dFR = super.getReading(4, lTimestamp, nIndices)) == 1)  //freezing rain
+				dReturn = ObsType.lookup(ObsType.TYPPC, "freezing-rain");
+			else if ((dIP = super.getReading(3, lTimestamp, nIndices)) == 1) //ice pellets
+				dReturn = ObsType.lookup(ObsType.TYPPC, "ice-pellets");
+			else if ((dS = super.getReading(2, lTimestamp, nIndices)) == 1) //snow
+				dReturn = ObsType.lookup(ObsType.TYPPC, "snow");
+			else if ((dR = super.getReading(1, lTimestamp, nIndices)) == 1) //rain
+				dReturn = ObsType.lookup(ObsType.TYPPC, "rain");
+			else if (!Double.isNaN(dFR) || !Double.isNaN(dIP) || !Double.isNaN(dS) || !Double.isNaN(dR)) //no precip
+				dReturn = ObsType.lookup(ObsType.TYPPC, "none");
+
+			return dReturn;
+		}
+		else if (nObsType == ObsType.SPDWND)
+		{
+			double dU = super.getReading(5, lTimestamp, nIndices);
+			double dV = super.getReading(6, lTimestamp, nIndices);
 			return Math.sqrt(dU * dU + dV * dV);
 		}
 		else
-			return super.getReading(nObsTypeId, lTimestamp, nLat, nLon, oTimeRecv);
+			return super.getReading(nObsType, lTimestamp, nIndices);
 	}
 
+	/**
+	 * Gets a list of wind speed obs that match the given query parameters. The 
+	 * logic is different for wind speed because the u and v vectors have to
+	 * be combined to get the magnitude.
+	 * 
+	 * @param lTimestamp query time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude of query in decimal degrees scaled to 7
+	 * decimal places
+	 * @param nLon1 minimum longitude of query in decimal degrees scaled to 7
+	 * decimal places
+	 * @param nLat2 maximum latitude of query in decimal degrees scaled to 7
+	 * decimal places
+	 * @param nLon2 maximum longitude of query in decimal degrees scaled to 7
+	 * decimal places
+	 * @return
+	 */
 	public synchronized ArrayList<Obs> getWindSpeedData(long lTimestamp,
 	   int nLat1, int nLon1, int nLat2, int nLon2)
 	{
 		ArrayList<Obs> oReturn = new ArrayList();
 
-		NcfEntryData oU = (NcfEntryData)getEntryByObsId(5);
+		NcfEntryData oU = (NcfEntryData)getEntryByObsId(5); // u component vector of wind speed
 		if (oU == null)
 		{
 			m_oLogger.error("Requested obstype not supported");
 			return oReturn;
 		}
 
-		NcfEntryData oV = (NcfEntryData)getEntryByObsId(6);
+		NcfEntryData oV = (NcfEntryData)getEntryByObsId(6); // v component vector of wind speed
 
 		if (oV == null)
 		{
@@ -110,12 +154,10 @@ public class RapNcfWrapper extends NcfWrapper
 		int nTimeIndex = oU.m_oVar.findDimensionIndex(m_sTime);
 		if (nTimeIndex >= 0)
 			oIndex.setDim(nTimeIndex, nTime);
-
-		NED oNed = ((NED)Directory.getInstance().lookup("NED"));
 		
 		try
 		{
-			for (int nVrtIndex = nIndices[3]; nVrtIndex <= nIndices[1]; nVrtIndex++)
+			for (int nVrtIndex = nIndices[3]; nVrtIndex <= nIndices[1]; nVrtIndex++) // for each cell contained in the lat/lon bounding box
 			{
 				for (int nHrzIndex = nIndices[0]; nHrzIndex <= nIndices[2]; nHrzIndex++)
 				{
@@ -127,15 +169,14 @@ public class RapNcfWrapper extends NcfWrapper
 					   oV.m_oVar.isFillValue(dV) || oV.m_oVar.isInvalidData(dV) || oV.m_oVar.isMissing(dV))
 						continue;
 					
-					double dVal = Math.sqrt(dU * dU + dV * dV);
+					double dVal = Math.sqrt(dU * dU + dV * dV); // calculate magnitude of wind speed
 					int nObsLat1 = GeoUtil.toIntDeg(dCorners[7]); // bot
 					int nObsLon1 = GeoUtil.toIntDeg(dCorners[6]); // left
 					int nObsLat2 = GeoUtil.toIntDeg(dCorners[3]); // top
 					int nObsLon2 = GeoUtil.toIntDeg(dCorners[2]); // right
-					short tElev = (short)Double.parseDouble(oNed.getAlt((nObsLat1 + nObsLat2) / 2, (nObsLon1 + nObsLon2) / 2));
 					oReturn.add(new Obs(ObsType.SPDWND, m_nContribId,
-					   Integer.MIN_VALUE, m_lStartTime, m_lEndTime, m_oNcFile.getLastModified(),
-					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, tElev, dVal));
+					   Id.NULLID, m_lStartTime, m_lEndTime, m_lValidTime,
+					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, Short.MIN_VALUE, dVal));
 				}
 			}
 		}
@@ -145,33 +186,25 @@ public class RapNcfWrapper extends NcfWrapper
 		}
 		return oReturn;
 	}
+	
 	/**
-	 * Unless the ObsType is TYPPC or PCCAT, calls the super.getData method.
-	 * Need to override it for the precipitation obs because it uses 4 different
-	 * data entries for precipitation type in the RAP netcdf file
-	 *
-	 * @param nObsTypeId query integer obs type id
-	 * @param lTimestamp query timestamp
-	 * @param nLat1 query min latitude written in integer degrees scaled to 7
-	 * decimal places
-	 * @param nLon1 query min longitude written in integer degrees scaled to 7
-	 * decimal places
-	 * @param nLat2 query max latitude written in integer degrees scaled to 7
-	 * decimal places
-	 * @param nLon2 query max longitude written in integer degrees scaled to 7
-	 * decimal places
-	 * @return ArrayList with 0 or more Obs in it that match the query
+	 * Returns a list of observations that match the given query parameters. The
+	 * implementation in {@link #super#getData(int, long, int, int, int, int)} 
+	 * works for all observation types except wind speed, precipitation type,
+	 * and precipitation category.
+	 * 
 	 */
 	@Override
 	public synchronized ArrayList<Obs> getData(int nObsTypeId, long lTimestamp,
 	   int nLat1, int nLon1, int nLat2, int nLon2)
 	{
 		ArrayList<Obs> oReturn = new ArrayList();
-		if (nObsTypeId == ObsType.SPDWND)
+		if (nObsTypeId == ObsType.SPDWND) // handle special wind speed case
 			return getWindSpeedData(lTimestamp, nLat1, nLon1, nLat2, nLon2);
-		if (nObsTypeId != ObsType.TYPPC && nObsTypeId != ObsType.PCCAT)
+		if (nObsTypeId != ObsType.TYPPC && nObsTypeId != ObsType.PCCAT) // everything else besides precipitation type and category can used parent class implementation
 			return super.getData(nObsTypeId, lTimestamp, nLat1, nLon1, nLat2, nLon2);
 
+		// get the different precipitation type flag readings
 		NcfEntryData oRain = (NcfEntryData)getEntryByObsId(1);
 		if (oRain == null)
 		{
@@ -182,7 +215,7 @@ public class RapNcfWrapper extends NcfWrapper
 		NcfEntryData oIce = (NcfEntryData)getEntryByObsId(3);
 		NcfEntryData oFRain = (NcfEntryData)getEntryByObsId(4);
 		NcfEntryData oPrecipRate = null;
-		if (nObsTypeId == ObsType.PCCAT)
+		if (nObsTypeId == ObsType.PCCAT) // need precip rate for precip category
 		{
 			oPrecipRate = (NcfEntryData)getEntryByObsId(ObsType.RTEPC);
 			if (oPrecipRate == null)
@@ -212,11 +245,10 @@ public class RapNcfWrapper extends NcfWrapper
 		int nTimeIndex = oRain.m_oVar.findDimensionIndex(m_sTime);
 		if (nTimeIndex >= 0)
 			oIndex.setDim(nTimeIndex, nTime);
-		NED oNed = ((NED)Directory.getInstance().lookup("NED"));
 
 		try
 		{
-			for (int nVrtIndex = nIndices[3]; nVrtIndex <= nIndices[1]; nVrtIndex++)
+			for (int nVrtIndex = nIndices[3]; nVrtIndex <= nIndices[1]; nVrtIndex++) // for each cell that intersects the lat/lon bounding box
 			{
 				for (int nHrzIndex = nIndices[0]; nHrzIndex <= nIndices[2]; nHrzIndex++)
 				{
@@ -295,10 +327,9 @@ public class RapNcfWrapper extends NcfWrapper
 					int nObsLon1 = GeoUtil.toIntDeg(dCorners[6]); // left
 					int nObsLat2 = GeoUtil.toIntDeg(dCorners[3]); // top
 					int nObsLon2 = GeoUtil.toIntDeg(dCorners[2]); // right
-					short tElev = (short)Double.parseDouble(oNed.getAlt((nObsLat1 + nObsLat2) / 2, (nObsLon1 + nObsLon2) / 2));
 					oReturn.add(new Obs(nObsTypeId, m_nContribId,
-					   Integer.MIN_VALUE, m_lStartTime, m_lEndTime, m_oNcFile.getLastModified(),
-					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, tElev, dVal));
+					   Id.NULLID, m_lStartTime, m_lEndTime, m_lValidTime,
+					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, Short.MIN_VALUE, dVal));
 				}
 			}
 		}

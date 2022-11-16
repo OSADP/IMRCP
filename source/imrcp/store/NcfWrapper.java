@@ -1,78 +1,74 @@
 package imrcp.store;
 
 import imrcp.geosrv.GeoUtil;
-import imrcp.geosrv.NED;
-import imrcp.system.BlockConfig;
-import imrcp.system.Config;
-import imrcp.system.Directory;
+import imrcp.system.Id;
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
+import java.util.TimeZone;
 import ucar.ma2.Array;
 import ucar.ma2.Index;
 import ucar.nc2.NetcdfFile;
+import ucar.nc2.Variable;
 import ucar.nc2.dataset.NetcdfDataset;
 import ucar.nc2.dt.GridDatatype;
 import ucar.nc2.dt.grid.GridDataset;
 
 /**
- * NetCDF Wrapper. This class provides convenience methods for finding data by
- * time range, retrieving data values by observation type, and cleaning up
- * locally stored NetCDF files when done using them.
+ * Parses and creates {@link Obs} from .grb2 received from different National Weather
+ * Service products. UCAR's NetCDF library is used to load the files into memory
+ * @author Federal Highway Administration
  */
-public class NcfWrapper extends FileWrapper
+public class NcfWrapper extends GriddedFileWrapper
 {
 	/**
-	 * Array of observation type titles
+	 * Contains the observation type labels that correspond to the observation type
+	 * id in {@link #m_nObsTypes}
 	 */
 	protected String[] m_sObsTypes;
 
+	
 	/**
-	 * Title of the horizontal axis
+	 * Horizontal axis label in the file
 	 */
 	protected String m_sHrz;
 
+	
 	/**
-	 * Title of the vertical axis
+	 * Vertical axis label in the file
 	 */
 	protected String m_sVrt;
 
+	
 	/**
-	 * Title of the time axis
+	 * Time axis label in the file
 	 */
 	protected String m_sTime;
 
+	
 	/**
-	 * The NetCDF File
+	 * Original file loaded by the NetCDF library
 	 */
-	protected NetcdfFile m_oNcFile;
-	
-	
-
+	public NetcdfFile m_oNcFile;
 	
 	
 	/**
-	 * Default private constructor. The default constructor should not be needed
-	 * as the file loading operation requires mapping variables to be
-	 * initialized.
+	 * Default constructor. Does nothing
 	 */
 	private NcfWrapper()
 	{
 	}
 
-
+	
 	/**
-	 * NcfWrapper constructor. This constructor is used by the different
-	 * WeatherStores to initialize name and observation type mappings used by
-	 * this class to manipulate source-specific data parameters.
-	 *
-	 * @param nObsTypes	lookup observation type id array corresponding with
-	 * names.
-	 * @param sObsTypes	lookup observation name array corresponding with ids.
-	 * @param sHrz	name of the horizontal NetCDF index variable.
-	 * @param sVrt	name of the vertical NetCDF index variable.
-	 * @param sTime	name of the time NefCDF index variable
+	 * Constructs a new NcfWrapper with the given parameters
+	 * @param nObsTypes IMRCP observation types provided in the file
+	 * @param sObsTypes Label of the observation types found in the file
+	 * @param sHrz horizontal axis label
+	 * @param sVrt vertical axis label
+	 * @param sTime time axis label
 	 */
 	public NcfWrapper(int[] nObsTypes, String[] sObsTypes, String sHrz, String sVrt, String sTime)
 	{
@@ -85,78 +81,39 @@ public class NcfWrapper extends FileWrapper
 
 
 	/**
-	 * This method is used for finding time indices from different netcdf
-	 * formats.
-	 *
-	 * @param dValues the array of double vales to search
-	 * @param oValue the double value to find
-	 * @return the nearest index of the stored value to the target value, -1 if
-	 * the target value is outside of the values in the array
+	 * Gets the time index to use for the given EntryData and query time.
+	 * @param oData EntryData being queried
+	 * @param lTimestamp query time in milliseconds since Epoch
+	 * @return index corresponding to the query time for the time dimension or -1
+	 * if the time is outside of the EntryData's range
 	 */
 	@Override
 	public int getTimeIndex(EntryData oData, long lTimestamp)
 	{
-		double dBasis;
-		double dDist;
-
-		double[] dValues = ((NcfEntryData)oData).m_dTime;
-		double dValue = lTimestamp - m_lStartTime;
-		//for the time arrays, if there is only one time return index 0
-		if (dValues.length < 5)
-			return 0;
-
-		double nDifference = 180;
-		int nMaxIndex = dValues.length - 1;
-		if (dValues.length < 50)    //this branch will be taken for NDFD files' time array. need a better way to determine this
+		if (m_sFilename.contains("ndfd")) // ndfd files are the only files we use at the moment that have multiple time values in them
 		{
-			if (dValues[0] == 1.0) //check if units are in hours
-			{
-				dValue = dValue / 1000 / 60 / 60 + 1;  //convert from milliseconds to hours, add one to be at the first hour in the array
-				//find forecasts that are an hour apart
-				while (nDifference > 1 && nMaxIndex > 1)
-				{
-					nDifference = dValues[nMaxIndex] - dValues[nMaxIndex - 1];
-					//if the forecasts are more than an hour apart update the max index
-					if (nDifference > 1)
-						--nMaxIndex;
-				}
-			}
-			else if (dValues[0] == 30.0)  //check if units are in minutes
-			{
-				dValue = dValue / 1000 / 60 + 30;  //convert from milliseconds to minutes, add 30 to be at the first hour in the array
-				//find forecasts that are an hour apart
-				while (nDifference > 60 && nMaxIndex > 1)
-				{
-					nDifference = dValues[nMaxIndex] - dValues[nMaxIndex - 1];
-					//if the forecasts are more than an hour apart remove them
-					if (nDifference > 60)
-						--nMaxIndex;
-				}
-			}
+			if (lTimestamp < m_lStartTime || lTimestamp > m_lEndTime)
+				return -1;
+			double[] dValues = ((NcfEntryData)oData).m_dTime;
+			int nIndex = Arrays.binarySearch(dValues, lTimestamp);
+			if (nIndex >= 0)
+				return nIndex;
+			else
+				return ~nIndex - 1;
 		}
-
-		double dLeft = dValues[0]; // test for value in range
-		double dRight = dValues[nMaxIndex];
-
-		dBasis = dRight - dLeft;
-		dDist = dValue - dLeft;
-		int nReturn = (int)((dDist / dBasis * (double)nMaxIndex));
-		if (nReturn < 0 || nReturn >= nMaxIndex)
-			return -1;
-
-		return nReturn;
+		else
+			return 0;
 	}
 
-
+	
 	/**
-	 * A utility method that creates an array of double values from the
-	 * in-memory NetCDF data by object layer name.
-	 *
-	 * @param oNcFile reference to the loaded NetCDF data
-	 * @param sName Name of the observation layer to read.
-	 *
-	 * @return an array of the copied (@code Double} observation values.
-	 * @throws java.lang.Exception
+	 * Creates a double[] that contains the values stored in the {@link ucar.ma2.Array}
+	 * in the given NetcdfFile with the given label/name.
+	 * @param oNcFile File to get the Array from
+	 * @param sName label of the Array
+	 * @return double[] with the values store in the Array in the NetcdfFile with
+	 * the given name.
+	 * @throws Exception
 	 */
 	protected static double[] fromArray(NetcdfFile oNcFile, String sName)
 	   throws Exception
@@ -173,13 +130,7 @@ public class NcfWrapper extends FileWrapper
 
 
 	/**
-	 * Attempts to load the specified NetCDF file. Parent container sets its
-	 * management parameters when this method succeeds.
-	 *
-	 * @param lStartTime
-	 * @param sFilename	the NetCDF file name to load.
-	 * @param lEndTime
-	 * @throws java.lang.Exception
+	 * Loads the gridded data of the file into memory using the UCAR NetCDF library.
 	 */
 	@Override
 	public void load(long lStartTime, long lEndTime, long lValidTime, String sFilename, int nContribId)
@@ -189,6 +140,28 @@ public class NcfWrapper extends FileWrapper
 		double[] dHrz = fromArray(oNcFile, m_sHrz); // sort order varies
 		double[] dVrt = fromArray(oNcFile, m_sVrt);
 		double[] dTime = fromArray(oNcFile, m_sTime);
+		
+		if (sFilename.contains("ndfd"))
+		{
+			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+			oSdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+			Variable oVar = oNcFile.getRootGroup().findVariable(m_sTime);
+			String sUnits = oVar.getUnitsString();
+			String sTs = sUnits.substring(sUnits.lastIndexOf(" "));
+			long lTime = oSdf.parse(sTs).getTime();
+			int nMultipier = 3600000; // default units is hours
+			if (sUnits.toLowerCase().startsWith("minute")) // check if file is in minutes
+				nMultipier = 60000;
+			
+			int nOffset = 0;
+			if (sFilename.contains("qpf"))
+				nOffset = 21600000;
+			
+			for (int nIndex = 0; nIndex < dTime.length; nIndex++)
+			{
+				dTime[nIndex] = lTime + dTime[nIndex] * nMultipier - nOffset;
+			}
+		}
 		// create obstype array mapping
 		ArrayList<EntryData> oEntryMap = new ArrayList(m_nObsTypes.length);
 		for (GridDatatype oGrid : new GridDataset(new NetcdfDataset(oNcFile)).getGrids())
@@ -196,7 +169,7 @@ public class NcfWrapper extends FileWrapper
 			for (int nObsTypeIndex = 0; nObsTypeIndex < m_sObsTypes.length; nObsTypeIndex++)
 			{ // save obs type id to grid name mapping
 				if (m_sObsTypes[nObsTypeIndex].contains(oGrid.getName()))
-					oEntryMap.add(new NcfEntryData(m_nObsTypes[nObsTypeIndex], oGrid.getProjection(), oGrid.getVariable(), oGrid.getVariable().read(), dHrz, m_sHrz, dVrt, m_sVrt, dTime, m_sTime));
+					oEntryMap.add(new NcfEntryData(m_nObsTypes[nObsTypeIndex], oGrid.getProjection(), oGrid.getVariable(), oGrid.getVariable().read(), dHrz, m_sHrz, dVrt, m_sVrt, dTime, m_sTime, nContribId));
 			}
 		}
 
@@ -209,7 +182,8 @@ public class NcfWrapper extends FileWrapper
 
 
 	/**
-	 * Remove NetCDF files that are no longer in use.
+	 * If the delete flag is true, deletes the index files created by the
+	 * NetCDF library.
 	 */
 	@Override
 	public void cleanup(boolean bDelete)
@@ -246,21 +220,23 @@ public class NcfWrapper extends FileWrapper
 		}
 	}
 
-
+	
 	/**
-	 * Returns an ArrayList of Obs that match the query
-	 *
-	 * @param nObsTypeId query integer obs type id
-	 * @param lTimestamp query timestamp
-	 * @param nLat1 query min latitude written in integer degrees scaled to 7
+	 * Iterates gridded data that corresponds to the bounding box defined by the
+	 * given longitudes and latitudes and create {@link Obs} for the values
+	 * that match the query.
+	 * 
+	 * @param nObsTypeId IMRCP observation type
+	 * @param lTimestamp query time in milliseconds since Epoch
+	 * @param nLat1 minimum latitude of the query in decimal degrees scaled to 7
 	 * decimal places
-	 * @param nLon1 query min longitude written in integer degrees scaled to 7
+	 * @param nLon1 minimum longitude of the query in decimal degrees scaled to 7
 	 * decimal places
-	 * @param nLat2 query max latitude written in integer degrees scaled to 7
+	 * @param nLat2 maximum latitude of the query in decimal degrees scaled to 7
 	 * decimal places
-	 * @param nLon2 query max longitude written in integer degrees scaled to 7
+	 * @param nLon2 maximum longitude of the query in decimal degrees scaled to 7
 	 * decimal places
-	 * @return ArrayList with 0 or more Obs in it that match the query
+	 * @return ArrayList filled with Obs that match the query
 	 */
 	public ArrayList<Obs> getData(int nObsTypeId, long lTimestamp,
 	   int nLat1, int nLon1, int nLat2, int nLon2)
@@ -277,15 +253,26 @@ public class NcfWrapper extends FileWrapper
 		double[] dCorners = new double[8];
 		oEntry.getIndices(GeoUtil.fromIntDeg(nLon1), GeoUtil.fromIntDeg(nLat1), GeoUtil.fromIntDeg(nLon2), GeoUtil.fromIntDeg(nLat2), nIndices);
 		int nTime = getTimeIndex(oEntry, lTimestamp);
-
+		if (nTime < 0)
+			return oReturn;
 
 		oEntry.setTimeDim(nTime);
-		NED oNed = ((NED)Directory.getInstance().lookup("NED"));
 		int nForecastLengthMillis;
 		if (FCSTMINMAP.containsKey(m_nContribId))
 			nForecastLengthMillis = FCSTMINMAP.get(m_nContribId);
 		else
 			nForecastLengthMillis = FCSTMINMAP.get(Integer.MIN_VALUE);
+		
+		if (oEntry.m_dTime.length > 1)
+		{
+			int nDiff;
+			if (nTime < oEntry.m_dTime.length - 1)
+				nDiff = (int)(oEntry.m_dTime[nTime + 1] - oEntry.m_dTime[nTime]);
+			else
+				nDiff = (int)(m_lEndTime - oEntry.m_dTime[nTime]);
+			
+			nForecastLengthMillis = nDiff;
+		}
 
 		try
 		{
@@ -304,10 +291,9 @@ public class NcfWrapper extends FileWrapper
 					int nObsLon1 = GeoUtil.toIntDeg(dCorners[6]); // left
 					int nObsLat2 = GeoUtil.toIntDeg(dCorners[3]); // top
 					int nObsLon2 = GeoUtil.toIntDeg(dCorners[2]); // right
-					short tElev = (short)Double.parseDouble(oNed.getAlt((nObsLat1 + nObsLat2) / 2, (nObsLon1 + nObsLon2) / 2));
 					oReturn.add(new Obs(nObsTypeId, m_nContribId,
-					   Integer.MIN_VALUE, m_lStartTime + (nTime * nForecastLengthMillis), m_lStartTime + ((nTime + 1) * nForecastLengthMillis), m_oNcFile.getLastModified(), // fix the end time to be configurable for each type of 
-					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, tElev, dVal));
+					   Id.NULLID, m_lStartTime + (nTime * nForecastLengthMillis), m_lStartTime + ((nTime + 1) * nForecastLengthMillis), m_lValidTime, // fix the end time to be configurable for each type of 
+					   nObsLat1, nObsLon1, nObsLat2, nObsLon2, Short.MIN_VALUE, dVal));
 				}
 			}
 		}
@@ -319,18 +305,7 @@ public class NcfWrapper extends FileWrapper
 	}
 
 
-	/**
-	 * Finds the model value for an observation type by time and location.
-	 *
-	 * @param nObsTypeId	the observation type to lookup.
-	 * @param lTimestamp	the timestamp of the observation.
-	 * @param nLat	the latitude of the requested data.
-	 * @param nLon	the longitude of the requested data.
-	 * @param oTimeRecv
-	 *
-	 * @return	the model value for the requested observation type for the
-	 * specified time at the specified location.
-	 */
+	@Override
 	public double getReading(int nObsTypeId, long lTimestamp,
 	   int nLat, int nLon, Date oTimeRecv)
 	{
@@ -340,7 +315,7 @@ public class NcfWrapper extends FileWrapper
 			return Double.NaN; // requested observation type not supported
 		
 		int[] nIndices = new int[4];
-		oEntry.getIndices(GeoUtil.fromIntDeg(nLon), GeoUtil.fromIntDeg(nLat), GeoUtil.fromIntDeg(nLon), GeoUtil.fromIntDeg(nLat), nIndices);
+		oEntry.getPointIndices(GeoUtil.fromIntDeg(nLon), GeoUtil.fromIntDeg(nLat), nIndices);
 		int nTime = getTimeIndex(oEntry, lTimestamp);
 
 		if (nIndices[0] >= oEntry.getHrz() || nIndices[1] >= oEntry.getVrt() || nIndices[0] < 0 || nIndices[1] < 0 || nTime < 0)
@@ -371,15 +346,57 @@ public class NcfWrapper extends FileWrapper
 		return Double.NaN;
 	}
 
-
+	
 	/**
-	 * Returns the file name of the Netcdf File
-	 *
-	 * @return file name
+	 * @return The value of {@link #m_oNcFile} calling {@link ucar.nc2.NetcdfFile#getLocation()}
+	 * which should be the path of the file.
 	 */
 	@Override
 	public String toString()
 	{
 		return m_oNcFile.getLocation();
+	}
+
+	
+	@Override
+	public void getIndices(int nLon, int nLat, int[] nIndices)
+	{
+		m_oEntryMap.get(0).getPointIndices(GeoUtil.fromIntDeg(nLon), GeoUtil.fromIntDeg(nLat), nIndices); // doesn't matter want EntryData is used to get the indices since they all use the same grid
+	}
+
+	@Override
+	public double getReading(int nObsType, long lTimestamp, int[] nIndices)
+	{
+		m_lLastUsed = System.currentTimeMillis();
+		NcfEntryData oEntry = (NcfEntryData)getEntryByObsId(nObsType);
+		if (oEntry == null)
+			return Double.NaN; // requested observation type not supported
+		
+		int nTime = getTimeIndex(oEntry, lTimestamp);
+
+		if (nIndices[0] >= oEntry.getHrz() || nIndices[1] >= oEntry.getVrt() || nIndices[0] < 0 || nIndices[1] < 0 || nTime < 0)
+			return Double.NaN; // projected coordinates are outside data ranage
+
+		try
+		{
+			Index oIndex = oEntry.m_oArray.getIndex();
+			oIndex.setDim(oEntry.m_nHrzIndex, nIndices[0]);
+			oIndex.setDim(oEntry.m_nVrtIndex, nIndices[1]);
+			int nTimeIndex = oEntry.m_oVar.findDimensionIndex(m_sTime);
+			if (nTimeIndex >= 0)
+				oIndex.setDim(nTimeIndex, nTime);
+
+			double dVal = oEntry.m_oArray.getDouble(oIndex);
+			if (oEntry.m_oVar.isFillValue(dVal) || oEntry.m_oVar.isInvalidData(dVal) || oEntry.m_oVar.isMissing(dVal))
+				return Double.NaN; // no valid data for specified location
+
+			return dVal;
+		}
+		catch (Exception oException)
+		{
+			m_oLogger.error(oException, oException);
+		}
+
+		return Double.NaN;
 	}
 }

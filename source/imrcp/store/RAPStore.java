@@ -1,15 +1,14 @@
 package imrcp.store;
 
-import java.text.SimpleDateFormat;
-import java.util.ArrayDeque;
-
 /**
- * This class handles storing and retrieving RAP data in memory.
+ * FileCache that manages .grb2 files downloaded from National Weather Service's
+ * Rapid Refresh product.
+ * @author Federal Highway Administration
  */
 public class RAPStore extends WeatherStore
 {
 	/**
-	 * Default constructor.
+	 * Default Constructor. Does nothing.
 	 */
 	public RAPStore()
 	{
@@ -17,12 +16,10 @@ public class RAPStore extends WeatherStore
 	
 	
 	/**
-	 * Returns a new RapNcfWrapper
-	 *
-	 * @return a new RapNcfWrapper
+	 * @return a new {@link RapNcfWrapper} with the configured values.
 	 */
 	@Override
-	public FileWrapper getNewFileWrapper()
+	public GriddedFileWrapper getNewFileWrapper()
 	{
 		return new RapNcfWrapper(m_nObsTypes, m_sObsTypes, m_sHrz, m_sVrt, m_sTime);
 	}

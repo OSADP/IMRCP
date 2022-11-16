@@ -1,14 +1,21 @@
 package imrcp.store;
 
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 
 /**
- * The store for CAP alerts received from the NWS.
+ * FileCache that manages .tar.gz shapefiles received from the National Weather
+ * Service's Common Alerting Protocol system.
+ * @author Federal Highway Administration
  */
-public class CAPStore extends CsvStore implements Comparator<CAPObs>
+public class CAPStore extends FileCache
 {
+	/**
+	 * @return a new {@link ImrcpCapResultSet} filled with observations that match
+	 * the query.
+	 */
+	@Override
 	public ResultSet getData(int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime)
 	{
@@ -18,46 +25,36 @@ public class CAPStore extends CsvStore implements Comparator<CAPObs>
 			getData(oReturn, nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime);
 		return oReturn;
 	}
+	
+	
 	/**
-	 * Fills in the ImrcpResultSet will obs that match the query
-	 *
-	 * @param oReturn ImrcpResultSet that will be filled with obs
-	 * @param nType obstype id
-	 * @param lStartTime start time of the query in milliseconds
-	 * @param lEndTime end time of the query in milliseconds
-	 * @param nStartLat lower bound of latitude (int scaled to 7 decimal places)
-	 * @param nEndLat upper bound of latitude (int scaled to 7 decimals places)
-	 * @param nStartLon lower bound of longitude (int scaled to 7 decimal
-	 * places)
-	 * @param nEndLon upper bound of longitude (int scaled to 7 decimal places)
-	 * @param lRefTime reference time
+	 * Determines the files that match the query and adds all of the observations
+	 * from those files that match the query.
 	 */
 	@Override
 	public void getData(ImrcpResultSet oReturn, int nType, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime)
 	{
 		long lObsTime = lStartTime;
+		ArrayList<CapWrapper> oProcessed = new ArrayList();
 		while (lObsTime <= lEndTime)
 		{
-			CAPCsv oFile = (CAPCsv) getFile(lObsTime, lRefTime);
-			if (oFile != null) // file isn't cached
+			CapWrapper oFile = (CapWrapper) getFile(lObsTime, lRefTime);
+			if (oFile != null)
 			{
-				synchronized (oFile.m_oCapObs)
+				int nIndex = Collections.binarySearch(oProcessed, oFile, FileCache.FILENAMECOMP);
+				if (nIndex < 0)
 				{
 					oFile.m_lLastUsed = System.currentTimeMillis();
-					for (CAPObs oObs : oFile.m_oCapObs)
+					for (CAPObs oObs : oFile.m_oObs)
 					{
-						if ((oObs.m_lTimeRecv <= lRefTime || oObs.m_lTimeRecv > oObs.m_lObsTime1) && (oObs.m_lClearedTime == Long.MIN_VALUE || oObs.m_lClearedTime > lRefTime) && oObs.matches(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon))
+						if (oObs.matches(nType, lStartTime, lEndTime, lRefTime, nStartLat, nEndLat, nStartLon, nEndLon))
 						{
-							int nIndex = Collections.binarySearch(oReturn, oObs, this);
-							if (nIndex < 0)
-								oReturn.add(~nIndex, oObs);
-							else
-								if (oObs.m_lTimeRecv > ((CAPObs) oReturn.get(nIndex)).m_lTimeRecv)
-									oReturn.set(nIndex, oObs);
+							oReturn.add(oObs);
 						}
 					}
-				}
+					oProcessed.add(~nIndex, oFile);
+				}		
 			}
 			lObsTime += m_nFileFrequency;
 		}
@@ -65,42 +62,11 @@ public class CAPStore extends CsvStore implements Comparator<CAPObs>
 
 
 	/**
-	 * Returns a new CAPCsv file wrapper
-	 *
-	 * @return new CAPCsv
+	 * @return a new {@link CapWrapper}
 	 */
 	@Override
 	protected FileWrapper getNewFileWrapper()
 	{
-		return new CAPCsv(m_nSubObsTypes);
-	}
-
-
-	/**
-	 * Compares by lat1, lon1, lat2, lon2, and value(alert type) in that order
-	 *
-	 * @param o1 first CAPObs
-	 * @param o2 second CAPObs
-	 * @return
-	 */
-	@Override
-	public int compare(CAPObs o1, CAPObs o2)
-	{
-		int nReturn = o1.m_nLat1 - o2.m_nLat1;
-		if (nReturn == 0)
-		{
-			nReturn = o1.m_nLon1 - o2.m_nLon1;
-			if (nReturn == 0)
-			{
-				nReturn = o1.m_nLat2 - o2.m_nLat2;
-				if (nReturn == 0)
-				{
-					nReturn = o1.m_nLon2 - o2.m_nLon2;
-					if (nReturn == 0)
-						nReturn = Double.compare(o1.m_dValue, o2.m_dValue);
-				}
-			}
-		}
-		return nReturn;
+		return new CapWrapper();
 	}
 }
