@@ -1,4 +1,4 @@
-#settingsPane div {max-width:220px}
+
 .divStack{
   display:none;
 }
@@ -56,6 +56,7 @@ div.divStack div.ui-widget-header{
 .divStackLayer{
   /* position: absolute; */
   display: none;
+  max-width:230px;
   padding-right: 5px;
   float: left;
 }
