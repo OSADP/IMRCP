@@ -15,78 +15,57 @@
  */
 package imrcp.web.layers;
 
+import imrcp.store.CAPObs;
 import imrcp.store.Obs;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
 import imrcp.web.LatLngBounds;
 import imrcp.web.ObsChartRequest;
 import imrcp.web.ObsRequest;
-import imrcp.web.PlatformRequest;
+import imrcp.web.SecureBaseBlock;
+import imrcp.web.Session;
 import java.io.IOException;
-import java.sql.SQLException;
 import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
 import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.TimeZone;
 import java.util.regex.Pattern;
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-import javax.sql.DataSource;
 import org.apache.http.HttpStatus;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.codehaus.jackson.JsonEncoding;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 
 /**
- *
- * @author scot.lange
+ * Base class used for handling different requests based on the IMRCP Map UI's 
+ * layers which include points (sensors, events, alerts), lines (roads), 
+ * and polygons (areal weather)
+ * @author Federal Highway Administration
  */
-public abstract class LayerServlet extends HttpServlet
+public abstract class LayerServlet extends SecureBaseBlock
 {
-
-	private final Pattern m_oObsRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/-?[0-9]{1,10}(?:/[0-9]{11,14}){2}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
-
-  private final Pattern m_oObsChartRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}chartObs(?:/-?[0-9]{1,10}){2}(?:/[0-9]{11,14}){3}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
-	private final Pattern m_oLayerRequestPatter = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}(?:[0-9]{11,14}/){2}[0-9]{1,2}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}/-?[0-9]{1,10}$");
+	/**
+	 * Regex Pattern used to verify the validity of obs requests
+	 */
+	private final Pattern m_oObsRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs(?:/[0-9]{11,14}){2}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
 
 	
-	
-	private static final Logger m_oLogger = LogManager.getLogger(LayerServlet.class);
+	/**
+	 * Regex Pattern used to verify the validity of chart requests
+	 */
+	private final Pattern m_oObsChartRequestPattern = Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}chartObs(?:/-?[0-9]{1,10}){1}(?:/[0-9]{11,14}){3}(?:/-?[0-9]{1,3}\\.?[0-9]*){4,4}$");
 
+	
+	/**
+	 * Factory object used to create {@link JsonGenerator} objects
+	 */
 	private final JsonFactory m_oJsonFactory = new JsonFactory();
 
-	private final String m_sPreviousRequestsSessionParam;
-
-	private final boolean m_bHasObs;
-
-	private final int[] m_nZoomLevels;
-
-	private final SimpleDateFormat m_oDateTableFormat;
-
-	/**
-	 *
-	 */
-	protected long m_lSearchRangeInterval = 20 * 60 * 1000;
-
-	/**
-	 *
-	 */
-	protected DataSource m_oDatasource;
-
-	/**
-	 *
-	 */
 	
+	/**
+	 * Compares Obs by observation type id, then contributor id, then start time,
+	 * then end time.
+	 */
 	protected static Comparator<Obs> g_oObsDetailComp = (Obs o1, Obs o2) ->
 	{
 		int nReturn = ObsType.getDescription(o1.m_nObsTypeId).compareTo(ObsType.getDescription(o2.m_nObsTypeId));
@@ -103,183 +82,135 @@ public abstract class LayerServlet extends HttpServlet
 		return nReturn;
 	};
 
-
-	/**
-	 *
-	 * @param bHasObs
-	 * @param nZoomLevels
-	 * @throws NamingException
-	 */
-	public LayerServlet(boolean bHasObs, int... nZoomLevels) throws NamingException
+	
+	@Override
+	public void reset()
 	{
-		this.m_bHasObs = bHasObs;
-		this.m_nZoomLevels = nZoomLevels;
-		this.m_sPreviousRequestsSessionParam = this.getClass() + "." + this.hashCode() + ".LastRequestBounds";
-		this.m_oDateTableFormat = new SimpleDateFormat("'obs.\"obs_'yyyy-MM-dd'\"'");
-		m_oDateTableFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-
-		InitialContext oInitCtx = new InitialContext();
-		Context oCtx = (Context) oInitCtx.lookup("java:comp/env");
-		m_oDatasource = (DataSource) oCtx.lookup("jdbc/imrcp");
-		oInitCtx.close();
+		super.reset();
 	}
 
-
-
+	
 	/**
-	 * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
-	 * methods.
-	 *
-	 * @param oReq servlet request
-	 * @param oResp servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
+	 * Handles finding observation that match the HTTP request.
+	 * 
+	 * @param oReq object that contains the request the client has made of the servlet
+	 * @param oRes object that contains the response the servlet sends to the client
+	 * @param oSess object that contains information about the user that made the
+	 * request
+	 * @return HTTP status code to be included in the response.
+	 * @throws IOException
+	 * @throws ServletException
 	 */
-	protected void processRequest(HttpServletRequest oReq, HttpServletResponse oResp)
-	   throws ServletException, IOException
+	public int doPlatformObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	   throws IOException, ServletException
 	{
-		oResp.setHeader("Content-Type", "application/json");
-
 		try
 		{
+			oRes.setContentType("application/json");
 			String sRequestUri = oReq.getRequestURI();
-
-			if (sRequestUri.endsWith("GetZoomLevels"))
+			// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
+			if (!m_oObsRequestPattern.matcher(sRequestUri).find()) // ignore bad requests
 			{
-				try (JsonGenerator oOutputGenerator = m_oJsonFactory.createJsonGenerator(oResp.getOutputStream(), JsonEncoding.UTF8))
-				{
-					oOutputGenerator.writeStartArray();
-
-					for (Integer nZoomLevel : m_nZoomLevels)
-						oOutputGenerator.writeNumber(nZoomLevel);
-
-					oOutputGenerator.writeEndArray();
-				}
-				return;
-			}
-			
-			if (sRequestUri.contains("platformObs"))
-			{// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
-				if (!m_oObsRequestPattern.matcher(sRequestUri).find())
-				{
-					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-					return;
-				}
-
-				String[] sUriParts = oReq.getRequestURI().split("/");
-
-				if (sUriParts.length < 7)
-				{
-					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-					return;
-				}
-
-				long lRequestTimeRef = Long.parseLong(sUriParts[sUriParts.length - 6]);
-				long lRequestTimeStart = Long.parseLong(sUriParts[sUriParts.length - 5]);
-				double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
-				double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
-				double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
-				double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 1]);
-				int nPlatformId = Integer.parseInt(sUriParts[sUriParts.length - 7]);
-				ObsRequest oObsRequest = new ObsRequest();
-				oObsRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
-				oObsRequest.setPlatformIds(nPlatformId);
-				oObsRequest.setRequestTimestampRef(lRequestTimeRef);
-				oObsRequest.setRequestTimestampStart(lRequestTimeStart);
-				oObsRequest.setRequestTimestampEnd(lRequestTimeStart + 60000);
-				String sSourceId = oReq.getParameter("src");
-				oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
-
-				processObsRequest(oResp, oObsRequest);
-			}
-			else if (sRequestUri.contains("chartObs"))
-			{// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
-				if (!m_oObsChartRequestPattern.matcher(sRequestUri).find())
-				{
-					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-					return;
-				}
-
-				String[] sUriParts = oReq.getRequestURI().split("/");
-
-				if (sUriParts.length < 9)
-				{
-					oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-					return;
-				}
-
-				long lRequestTimeRef = Long.parseLong(sUriParts[sUriParts.length - 7]);
-				long lRequestTimeStart = Long.parseLong(sUriParts[sUriParts.length - 6]);
-				long lRequestTimeEnd = Long.parseLong(sUriParts[sUriParts.length - 5]);
-				double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
-				double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
-				double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
-				double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 1]);
-				int nObstypeId = Integer.parseInt(sUriParts[sUriParts.length - 8]);
-				int nPlatformId = Integer.parseInt(sUriParts[sUriParts.length - 9]);
-				ObsChartRequest oObsRequest = new ObsChartRequest();
-				oObsRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
-				oObsRequest.setPlatformIds(nPlatformId);
-				oObsRequest.setRequestTimestampRef(lRequestTimeRef);
-				oObsRequest.setRequestTimestampStart(lRequestTimeStart);
-				oObsRequest.setRequestTimestampEnd(lRequestTimeEnd);
-				oObsRequest.setObstypeId(nObstypeId);
-				String sSourceId = oReq.getParameter("src");
-				oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
-
-				processChartRequest(oResp, oObsRequest);
+				return HttpStatus.SC_BAD_REQUEST;
 			}
 
+			String[] sUriParts = oReq.getRequestURI().split("/");
 
-			if (!m_oLayerRequestPatter.matcher(sRequestUri).find())
+			if (sUriParts.length < 6) // requests must have less than 6 parts
 			{
-				oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-				return;
+				return HttpStatus.SC_BAD_REQUEST;
 			}
 
-			String[] sUriParts = sRequestUri.split("/");
+			// get all of the query parameters from the request URL
+			long lRequestTimeRef = Long.parseLong(sUriParts[sUriParts.length - 6]);
+			long lRequestTimeStart = Long.parseLong(sUriParts[sUriParts.length - 5]);
+			double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
+			double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
+			double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
+			double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 1]);
+			ObsRequest oObsRequest = new ObsRequest();
+			oObsRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
+			oObsRequest.setRequestTimestampRef(lRequestTimeRef);
+			oObsRequest.setRequestTimestampStart(lRequestTimeStart);
+			oObsRequest.setRequestTimestampEnd(lRequestTimeStart + 60000);
+			String sSourceId = oReq.getParameter("src");
+			oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
 
-			if (sUriParts.length < 8)
-			{
-				oResp.setStatus(HttpStatus.SC_BAD_REQUEST);
-				return;
-			}
-
-			//this will either be the actual servlet context, or a subcontext used
-			//to allow separate caching for multiple map layers to use the same layer servlet
-			String sLayerContext = sUriParts[sUriParts.length - 9];
-			long lRangeRef = Long.parseLong(sUriParts[sUriParts.length - 8]);
-			long lRangeStart = Long.parseLong(sUriParts[sUriParts.length - 7]);
-			int nZoom = Integer.parseInt(sUriParts[sUriParts.length - 6]);
-			double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 5]);
-			double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
-			double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
-			double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
-			int nObsTypeId = Integer.parseInt(sUriParts[sUriParts.length - 1]);
-
-			PlatformRequest oPlatformRequest = new PlatformRequest();
-			oPlatformRequest.setSession(oReq.getSession());
-			oPlatformRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
-			oPlatformRequest.setRequestTimestampStart(lRangeStart);
-			oPlatformRequest.setRequestTimestampRef(lRangeRef);
-			oPlatformRequest.setRequestZoom(nZoom);
-			oPlatformRequest.setRequestObsType(nObsTypeId);
-
-			processLayerRequest(oReq, oResp, oPlatformRequest, sLayerContext);
-
+			processObsRequest(oRes, oObsRequest); // process the request
+			return HttpServletResponse.SC_OK; // OK if no Exception are thrown
 		}
-		catch (Exception ex)
+		catch (Exception oEx)
 		{
-			m_oLogger.error("", ex);
-			oResp.setStatus(500);
+			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 	}
 
-
+	
 	/**
-	 *
-	 * @param oResp
-	 * @param oObsRequest
+	 * Handles finding observation that match the HTTP request to generate a
+	 * chart.
+	 * 
+	 * @param oReq object that contains the request the client has made of the servlet
+	 * @param oRes object that contains the response the servlet sends to the client
+	 * @param oSession object that contains information about the user that made the
+	 * request
+	 * @return HTTP status code to be included in the response.
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public int doChartObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	   throws ServletException, IOException
+	{
+		String sRequestUri = oReq.getRequestURI();
+		try
+		{
+			// Pattern.compile("^(?:[a-zA-Z0-9_-]*/){1,}platformObs/[0-9]*/[0-9]{1,30}$").matcher(requestUrl).matches()
+			if (!m_oObsChartRequestPattern.matcher(sRequestUri).find()) // ignore bad requests
+			{
+				return HttpStatus.SC_BAD_REQUEST;
+			}
+
+			String[] sUriParts = oReq.getRequestURI().split("/");
+
+			if (sUriParts.length < 8) // requests must have less than 8 parts
+			{
+				return HttpStatus.SC_BAD_REQUEST;
+			}
+
+			// set all of the query parameters from the URL request
+			long lRequestTimeRef = Long.parseLong(sUriParts[sUriParts.length - 7]);
+			long lRequestTimeStart = Long.parseLong(sUriParts[sUriParts.length - 6]);
+			long lRequestTimeEnd = Long.parseLong(sUriParts[sUriParts.length - 5]);
+			double dLat1 = Double.parseDouble(sUriParts[sUriParts.length - 4]);
+			double dLng1 = Double.parseDouble(sUriParts[sUriParts.length - 3]);
+			double dLat2 = Double.parseDouble(sUriParts[sUriParts.length - 2]);
+			double dLng2 = Double.parseDouble(sUriParts[sUriParts.length - 1]);
+			int nObstypeId = Integer.parseInt(sUriParts[sUriParts.length - 8]);
+			ObsChartRequest oObsRequest = new ObsChartRequest();
+			oObsRequest.setRequestBounds(new LatLngBounds(dLat1, dLng1, dLat2, dLng2));
+			oObsRequest.setRequestTimestampRef(lRequestTimeRef);
+			oObsRequest.setRequestTimestampStart(lRequestTimeStart);
+			oObsRequest.setRequestTimestampEnd(lRequestTimeEnd);
+			oObsRequest.setObstypeId(nObstypeId);
+			String sSourceId = oReq.getParameter("src");
+			oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
+
+			processChartRequest(oRes, oObsRequest); // process the request
+			oRes.setContentType("application/json");
+			return HttpServletResponse.SC_OK;
+		}
+		catch (Exception oEx)
+		{
+			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+		}
+	}
+
+	
+	/**
+	 * Creates a {@link JsonGenerator} to pass into {@link #buildObsResponseContent(org.codehaus.jackson.JsonGenerator, imrcp.web.ObsRequest)}
+	 * 
+	 * @param oResp object that contains the response the servlet sends to the client
+	 * @param oObsRequest object that contains the query parameters for the request
 	 * @throws Exception
 	 */
 	protected void processObsRequest(HttpServletResponse oResp, ObsRequest oObsRequest) throws Exception
@@ -291,6 +222,14 @@ public abstract class LayerServlet extends HttpServlet
 		}
 	}
 
+	
+	/**
+	 * Creates a {@link JsonGenerator} to pass into {@link #buildObsChartResponseContent(org.codehaus.jackson.JsonGenerator, imrcp.web.ObsChartRequest)}
+	 * 
+	 * @param oResp object that contains the response the servlet sends to the client
+	 * @param oObsRequest object that contains the query parameters for the request
+	 * @throws Exception
+	 */
 	protected void processChartRequest(HttpServletResponse oResp, ObsChartRequest oObsRequest) throws Exception
 	{
 
@@ -300,112 +239,20 @@ public abstract class LayerServlet extends HttpServlet
 		}
 	}
 
+	
 	/**
-	 *
-	 * @return
-	 */
-	protected boolean includeDescriptionInDetails()
-	{
-		return true;
-	}
-
-
-	/**
-	 *
-	 * @return
-	 */
-	protected boolean includeSensorsInDetails()
-	{
-		return false;
-	}
-
-
-	/**
-	 *
-	 * @param oReq
-	 * @param oResp
-	 * @param oPlatformRequest
-	 * @throws IOException
-	 * @throws ServletException
-	 * @throws Exception
-	 */
-	protected void processLayerRequest(HttpServletRequest oReq, HttpServletResponse oResp, PlatformRequest oPlatformRequest, String sLayerContext) throws IOException, ServletException, Exception
-	{
-		HttpSession oSession = oReq.getSession(true);
-
-		// Get the previous requests for this servlet
-		String sAttributeName = m_sPreviousRequestsSessionParam + "/" + sLayerContext;
-		HashMap<Integer, PlatformRequest> oZoomLevelRequests = (HashMap<Integer, PlatformRequest>) oSession.getAttribute(sAttributeName);
-
-		if (oZoomLevelRequests == null)
-		{
-			oZoomLevelRequests = new HashMap<>();
-			oSession.setAttribute(sAttributeName, oZoomLevelRequests);
-		}
-
-		try (JsonGenerator oOutputGenerator = m_oJsonFactory.createJsonGenerator(oResp.getOutputStream(), JsonEncoding.UTF8))
-		{
-			oOutputGenerator.writeStartObject();
-
-			Integer nHighestValidZoomIndex = 0;
-			int nZoomIndex = m_nZoomLevels.length;
-			while (--nZoomIndex >= 0)
-			{
-				Integer nZoomLevel = m_nZoomLevels[nZoomIndex];
-
-				PlatformRequest oLastRequest = oZoomLevelRequests.get(nZoomLevel);
-
-				// if obs affect whether or not layer elements ar shown, then do a full
-				// refresh when obstype or time are changed
-				if (hasObs() && oLastRequest != null && (oLastRequest.getRequestObsType() != oPlatformRequest.getRequestObsType() || oLastRequest.getRequestTimestampStart() != oPlatformRequest.getRequestTimestampStart()))
-				{
-					oLastRequest = null;
-					oZoomLevelRequests.remove(nZoomLevel);
-				}
-
-				if (nZoomLevel <= oPlatformRequest.getRequestZoom())
-					nHighestValidZoomIndex = Math.max(nZoomLevel, 0);
-				else
-				{
-					// Only keep one zoom level higher than the highest one actually being displayed
-					if (nZoomIndex - nHighestValidZoomIndex > 1)
-						oZoomLevelRequests.remove(nZoomLevel);
-					continue;
-				}
-
-				LatLngBounds oLastBounds = oLastRequest != null ? oLastRequest.getRequestBounds() : null;
-
-				// Does the last boundary for this zoom level contain the current
-				// request boundary (most likely when zooming in, but could also be due to a resize)
-				if (oLastBounds != null && oLastBounds.containsOrIsEqual(oPlatformRequest.getRequestBounds()))
-					continue;
-
-				oOutputGenerator.writeArrayFieldStart(nZoomLevel.toString());
-
-				buildLayerResponseContent(oOutputGenerator, oLastBounds, oPlatformRequest, nZoomLevel);
-				// m_nZoomLevels
-				oOutputGenerator.writeEndArray();
-
-				oZoomLevelRequests.put(nZoomLevel, oPlatformRequest);
-			}
-			oOutputGenerator.writeEndObject();
-		}
-	}
-
-
-	/**
-	 *
-	 * @param oOutputGenerator
-	 * @param oNumberFormatter
-	 * @param oConfFormat
-	 * @param oObs
+	 * Formats the Obs as a JSON object in the given JsonGenerator.
+	 * 
+	 * @param oOutputGenerator JSON stream
+	 * @param oNumberFormatter Formatting object for converting numbers to Strings
+	 * @param oObs the Obs to serialize into JSON object
 	 * @throws IOException
 	 */
-	protected void serializeObsRecord(JsonGenerator oOutputGenerator, DecimalFormat oNumberFormatter, DecimalFormat oConfFormat, Obs oObs) throws IOException
+	protected void serializeObsRecord(JsonGenerator oOutputGenerator, DecimalFormat oNumberFormatter, Obs oObs) throws IOException
 	{
 		oOutputGenerator.writeStartObject();
 
-		if (ObsType.hasLookup(oObs.m_nObsTypeId))
+		if (ObsType.hasLookup(oObs.m_nObsTypeId)) // enumerated values
 		{
 			String sLookup = ObsType.lookup(oObs.m_nObsTypeId, (int)oObs.m_dValue);
 			if (sLookup == null)
@@ -424,8 +271,8 @@ public abstract class LayerServlet extends HttpServlet
 			String sEnglishUnits = ObsType.getUnits(oObs.m_nObsTypeId, false);
 			String sMetricUnits = ObsType.getUnits(oObs.m_nObsTypeId, true);
 
-			double dEnglishVal = Units.getInstance().convert(sFromUnits, sEnglishUnits, oObs.m_dValue);
-			double dMetricVal = Units.getInstance().convert(sFromUnits, sMetricUnits, oObs.m_dValue);
+			double dEnglishVal = Units.getInstance().convert(sFromUnits, sEnglishUnits, oObs.m_dValue); // convert to english units
+			double dMetricVal = Units.getInstance().convert(sFromUnits, sMetricUnits, oObs.m_dValue); // convert to metric untis
 
 			oOutputGenerator.writeStringField("mv", oNumberFormatter.format(dMetricVal));
 			oOutputGenerator.writeStringField("ev", oNumberFormatter.format(dEnglishVal));
@@ -438,110 +285,48 @@ public abstract class LayerServlet extends HttpServlet
 		oOutputGenerator.writeNumberField("ts1", oObs.m_lObsTime1);
 		oOutputGenerator.writeNumberField("ts2", oObs.m_lObsTime2);
 		oOutputGenerator.writeStringField("src", Integer.toString(oObs.m_nContribId, 36).toUpperCase());
+		if (oObs instanceof CAPObs) // add the url for CAP alerts
+		{
+			oOutputGenerator.writeStringField("url", ((CAPObs)oObs).m_sUrl);
+		}
 		oOutputGenerator.writeEndObject();
 	}
 
-
+	
 	/**
-	 *
-	 * @param oOutputGenerator
-	 * @param oObsRequest
+	 * Child classes implement this method to create the response when an object
+	 * in its layer is clicked on the map.
+	 * 
+	 * @param oOutputGenerator JSON stream
+	 * @param oObsRequest object that contains the query parameters for the request
 	 * @throws Exception
 	 */
 	protected abstract void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest) throws Exception;
 
+	
 	/**
-	 *
-	 * @param oOutputGenerator
-	 * @param oObsRequest
+	 * Child classes implement this method to create the response when a chart is
+	 * requested from the map.
+	 * @param oOutputGenerator JSON stream
+	 * @param oObsRequest object that contains the query parameters for the request
 	 * @throws Exception
 	 */
-	protected  void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
-  {
-
-  }
-
-
-
-	/**
-	 *
-	 * @param oOutputGenerator
-	 * @param oLastBounds
-	 * @param oPlatformRequest
-	 * @param nZoomLevel
-	 * @throws SQLException
-	 * @throws IOException
-	 */
-	protected void buildLayerResponseContent(JsonGenerator oOutputGenerator, LatLngBounds oLastBounds, PlatformRequest oPlatformRequest, int nZoomLevel) throws SQLException, IOException
+	protected void buildObsChartResponseContent(JsonGenerator oOutputGenerator, ObsChartRequest oObsRequest) throws Exception
 	{
-		serializeResult(oOutputGenerator, oLastBounds, oPlatformRequest);
 	}
 
-
+	
 	/**
-	 *
-	 * @param oJsonGenerator
-	 * @param oLastRequestBounds
-	 * @param oCurrentRequest
-	 * @throws SQLException
-	 * @throws IOException
+	 * Used to format the detail string of a response to produce a better
+	 * presentation of it in the observation table on the IMRCP Map UI
+	 * 
+	 * @param sDetail String to format
+	 * @param sInsert String to insert approximately every nStep characters, usually
+	 * "{@literal <br>}" 
+	 * @param nStep Number of characters to skip before inserting sInsert into
+	 * sDetail
+	 * @return sDetail with sInsert added approxiamatemly every nStep characters
 	 */
-	protected abstract void serializeResult(JsonGenerator oJsonGenerator, LatLngBounds oLastRequestBounds, PlatformRequest oCurrentRequest) throws SQLException, IOException;
-
-
-	/**
-	 *
-	 * @return
-	 */
-	protected boolean hasObs()
-	{
-		return m_bHasObs;
-	}
-
-
-	/**
-	 * Handles the HTTP <code>GET</code> method.
-	 *
-	 * @param oRequest servlet request
-	 * @param oResponse servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
-	 */
-	@Override
-	protected void doGet(HttpServletRequest oRequest, HttpServletResponse oResponse)
-	   throws ServletException, IOException
-	{
-		processRequest(oRequest, oResponse);
-	}
-
-
-	/**
-	 * Handles the HTTP <code>POST</code> method.
-	 *
-	 * @param oRequest servlet request
-	 * @param oResponse servlet response
-	 * @throws ServletException if a servlet-specific error occurs
-	 * @throws IOException if an I/O error occurs
-	 */
-	@Override
-	protected void doPost(HttpServletRequest oRequest, HttpServletResponse oResponse)
-	   throws ServletException, IOException
-	{
-		processRequest(oRequest, oResponse);
-	}
-
-
-	/**
-	 *
-	 * @param lTimestamp
-	 * @return
-	 */
-	protected synchronized String getDateObsTableName(long lTimestamp)
-	{
-		return m_oDateTableFormat.format(new Date(lTimestamp));
-	}
-
-
 	protected String formatDetailString(String sDetail, String sInsert, int nStep)
 	{
 		StringBuilder sReturn = new StringBuilder();

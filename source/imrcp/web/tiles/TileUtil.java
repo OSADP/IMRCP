@@ -6,30 +6,62 @@
 package imrcp.web.tiles;
 
 import imrcp.geosrv.Mercator;
+import imrcp.system.Arrays;
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.awt.geom.PathIterator;
 import java.text.DecimalFormat;
 import java.util.BitSet;
+import java.util.Iterator;
 import vector_tile.VectorTile;
 
 /**
- *
+ * Contains methods to aid in the creation of Mapbox Vector Tiles(MVT). See the
+ * Mapbox Vector Tile Specification at https://github.com/mapbox/vector-tile-spec/tree/master/2.1
  * @author Federal Highway Administration
  */
 public abstract class TileUtil
 {
+	/**
+	 * Command id for MoveTo in MVT
+	 */
 	public final static int MOVETO = 1;
-	public final static int LINETO = 2;
-	public final static int CLOSEPATH = 7;
-	public static DecimalFormat DF = new DecimalFormat("#");
+
 	
+	/**
+	 * Command id for LineTo in MVT
+	 */
+	public final static int LINETO = 2;
+
+	
+	/**
+	 * Command id for ClosePath in MVT
+	 */
+	public final static int CLOSEPATH = 7;
+	
+	
+	/**
+	 * Calculates the CommandInteger which indicates the command to be executed
+	 * in the geometry encoding of a MVT based off the given command id and 
+	 * command count.
+	 * @param nId the command ID. 1 = MoveTo, 2 = LineTo, 7 = ClosePath
+	 * @param nCount The command count which indicates the number of times the
+	 * command will be executed.
+	 * @return The CommandInteger
+	 */
 	public static int command(int nId, int nCount)
 	{
 		return (nId & 0x7) | (nCount << 3);
 	}
 	
 	
+	/**
+	 * Calculates the ParameterInteger of the given value. A ParameterInteger is
+	 * a zigzag encoded so that small negative nad positive values are both encoded
+	 * as small integers.
+	 * @param dValue the value to encoded
+	 * @return the ParameterInteger of the value
+	 */
 	public static int parameter(double dValue)
 	{
 		int nVal = (int)Math.round(dValue);
@@ -37,6 +69,18 @@ public abstract class TileUtil
 	}
 	
 	
+	/**
+	 * Gets the position of the given value as a number between 0 and the extent
+	 * based off of the minimum and maximum. This function is used to determine
+	 * where the points of geometries are located inside of a MVT.
+	 * 
+	 * @param dVal coordinate to get the position of
+	 * @param dMin minimum bound
+	 * @param dMax maximum bound
+	 * @param dExtent total number of positions inside of the tile to use
+	 * @param bInvert use true for y axis, false for x axis
+	 * @return Position inside the tile of the coordinate. {@code 0 <= pos < extent}
+	 */
 	public static int getPos(double dVal, double dMin, double dMax, double dExtent, boolean bInvert)
 	{
 		if (bInvert)
@@ -45,7 +89,20 @@ public abstract class TileUtil
 		return (int)Math.round((dVal - dMin) * dExtent / (dMax - dMin));
 	}
 	
-	public static void addPolygon(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent,Area oPoly, int[] nPointBuffer)
+	
+	/**
+	 * Adds the polygon defined by the given Area as a Feature to the FeatureBuilder.
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param dMercBounds bounds in mercator meters of the MVT. [min x, min y, max x, max y]
+	 * @param nExtent number of positions to use along each axis inside the tile
+	 * @param oPoly Polygon with coordinates in mercator meters
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the polygon
+	 */
+	public static void addPolygon(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent, Area oPoly, int[] nPointBuffer)
 	{		
 		double[] dCoords = new double[2];
 		double[] dPrev = new double[2];
@@ -61,13 +118,13 @@ public abstract class TileUtil
 		int nBitIndex = 0;
 		while (!oIt.isDone()) // first determine which parts of multi-path are polygons and holes
 		{
-			switch (oIt.currentSegment(dCoords))
+			switch (oIt.currentSegment(dCoords)) // fills dCoords with the coordinates of the next point
 			{
 				case PathIterator.SEG_MOVETO:
 				{
-					dWinding = 0;
-					System.arraycopy(dCoords, 0, dFirst, 0, 2);
-					System.arraycopy(dCoords, 0, dPrev, 0, 2);
+					dWinding = 0; // init winding number
+					System.arraycopy(dCoords, 0, dFirst, 0, 2); // copy point into dFirst
+					System.arraycopy(dCoords, 0, dPrev, 0, 2); // copy poitn into dPrev
 					break;
 				}
 				case PathIterator.SEG_LINETO:
@@ -105,17 +162,17 @@ public abstract class TileUtil
 				{
 					nPosX = getPos(dCoords[0], dMercBounds[0], dMercBounds[2], nExtent, false);
 					nPosY = getPos(dCoords[1], dMercBounds[1], dMercBounds[3], nExtent, true);
-					if (dCoords[0] != dPrev[0] || dCoords[1] != dPrev[1])
+					if (dCoords[0] != dPrev[0] || dCoords[1] != dPrev[1]) // ignore repeated points
 					{
-						nPointBuffer = addPoint(nPointBuffer, nPosX, nPosY);
+						nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY); // add tile coordinates to the array
 						dTemp = dCoords;
 						dCoords = dPrev;
 						dPrev = dTemp;
 					}
 					oIt.next();
 				}
-				writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, true);
-				nPointBuffer[0] = 1;
+				writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, true); // write the geometry commands to the tile
+				nPointBuffer[0] = 1; // reset insertion point to 1
 				dPrev[0] = -1;
 				dPrev[1] = -1;
 				
@@ -141,16 +198,16 @@ public abstract class TileUtil
 				{
 					nPosX = getPos(dCoords[0], dMercBounds[0], dMercBounds[2], nExtent, false);
 					nPosY = getPos(dCoords[1], dMercBounds[1], dMercBounds[3], nExtent, true);
-					if (dCoords[0] != dPrev[0] || dCoords[1] != dPrev[1])
+					if (dCoords[0] != dPrev[0] || dCoords[1] != dPrev[1]) // ignore repeated points
 					{
-						nPointBuffer = addPoint(nPointBuffer, nPosX, nPosY);
+						nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY); // add tile coordinates to the array
 						dTemp = dCoords;
 						dCoords = dPrev;
 						dPrev = dTemp;
 					}
 					oIt.next();
 				}
-				writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, true);
+				writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, true); // write the geometry commands to the tile
 				nPointBuffer[0] = 1;
 				dPrev[0] = -1;
 				dPrev[1] = -1;
@@ -160,6 +217,20 @@ public abstract class TileUtil
 	}
 	
 	
+	/**
+	 * Adds the linestring defined by the given double array as a Feature to the 
+	 * FeatureBuilder.
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param dMercBounds bounds in mercator meters of the MVT. [min x, min y, max x, max y]
+	 * @param nExtent number of positions to use along each axis inside the tile
+	 * @param dLine array that defines the linestring. [group value, id, value index for highway, value index for bridge, x0, y0, x1, y1... xn, yn]
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the linestring
+	 * @param nTags not implemented
+	 */
 	public static void addLinestring(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent, double[] dLine, int[] nPointBuffer, int... nTags)
 	{
 		int nPosX;
@@ -168,7 +239,7 @@ public abstract class TileUtil
 		double[] dPrev = new double[2];
 		double[] dTemp;
 		nPointBuffer[0] = 1;
-		for (int i = 3; i < dLine.length;)
+		for (int i = 4; i < dLine.length;)
 		{
 			dCoords[0] = dLine[i++];
 			dCoords[1] = dLine[i++];
@@ -176,7 +247,7 @@ public abstract class TileUtil
 			nPosY = getPos(Mercator.latToMeters(dCoords[1]), dMercBounds[1], dMercBounds[3], nExtent, true);
 			if (dCoords[0] != dPrev[0] || dCoords[1] != dPrev[1])
 			{
-				nPointBuffer = addPoint(nPointBuffer, nPosX, nPosY);
+				nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY);
 				dTemp = dCoords;
 				dCoords = dPrev;
 				dPrev = dTemp;
@@ -186,10 +257,24 @@ public abstract class TileUtil
 		oFeatureBuilder.setId((long)dLine[1]);
 		oFeatureBuilder.addTags(0);
 		oFeatureBuilder.addTags((int)dLine[2]);
+		oFeatureBuilder.addTags(1);
+		oFeatureBuilder.addTags((int)dLine[3]);
 		oFeatureBuilder.setType(VectorTile.Tile.GeomType.LINESTRING);
 	}
 	
 	
+	/**
+	 * Adds the point defined by the given longitude and latitude as a Feature to the 
+	 * FeatureBuilder.
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param dMercBounds bounds in mercator meters of the MVT. [min x, min y, max x, max y]
+	 * @param nExtent number of positions to use along each axis inside the tile
+	 * @param dLon longitude of the point in decimal degrees
+	 * @param dLat latitude of the point in decimal degrees
+	 */
 	public static void addPointToFeature(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent, double dLon, double dLat)
 	{
 		int nPosX = getPos(Mercator.lonToMeters(dLon), dMercBounds[0], dMercBounds[2], nExtent, false);
@@ -205,65 +290,35 @@ public abstract class TileUtil
 	}
 	
 	
-//	public static void addLinestring(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent, double[] dLine, int[] nPointBuffer)
-//	{
-//		int[] nPos = new int[2];
-//		int[] nPrev = new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE};
-//
-//		int[] nTemp;
-//		nPointBuffer[0] = 1;
-//		for (int i = 1; i < dLine.length;)
-//		{
-//			nPos[0] = getPos(Mercator.lonToMeters(dLine[i++]), dMercBounds[0], dMercBounds[2], nExtent, false);
-//			nPos[1] = getPos(Mercator.latToMeters(dLine[i++]), dMercBounds[1], dMercBounds[3], nExtent, true);
-//			if (nPos[0] != nPrev[0] || nPos[1] != nPrev[1])
-//			{
-//				nPointBuffer = addPoint(nPointBuffer, nPos[0], nPos[1]);
-//				nTemp = nPos;
-//				nPos = nPrev;
-//				nPrev = nTemp;
-//			}
-//		}
-//		writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, false);
-//	}
-//	
-	
-	public static void writeArea(Area oArea)
-	{
-		PathIterator oIt = oArea.getPathIterator(null);
-		double[] dCoords = new double[2];
-		while (!oIt.isDone()) 
-		{
-			int nType;
-			while ((nType = oIt.currentSegment(dCoords)) != PathIterator.SEG_CLOSE)
-			{
-				System.out.println(String.format("%7.1f %7.1f", dCoords[0], dCoords[1]));
-				oIt.next();
-			}
-			System.out.println();
-			oIt.next();
-		}	
-	}
-	
-	
+	/**
+	 * Writes the tile coordinates in the point buffer to the FeatureBuilder
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the feature
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param bClose flag indicating if the feature needs to be closed. Should be
+	 * true for polygons, otherwise false
+	 */
 	public static void writePointBuffer(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nPointBuffer, int[] nCur, boolean bClose)
 	{
 		int nStart = 1;
 		int nBound = (int)(nPointBuffer[0]);
 		int nInc = 2;
 
-		oFeatureBuilder.addGeometry(command(MOVETO, 1));
+		oFeatureBuilder.addGeometry(command(MOVETO, 1)); // move to the first point
 		int i = nStart;
 		int nPosX = nPointBuffer[i];
 		int nPosY = nPointBuffer[i + 1];
-		int nDeltaX = nPosX - nCur[0];
+		int nDeltaX = nPosX - nCur[0]; // cursor should start at [0, 0]
 		int nDeltaY = nPosY - nCur[1];
-		oFeatureBuilder.addGeometry(parameter(nDeltaX));
+		oFeatureBuilder.addGeometry(parameter(nDeltaX)); // always write the deltas from the cursor tile coordinates = cursor coordinate + delta
 		oFeatureBuilder.addGeometry(parameter(nDeltaY));
 		nCur[0] += nDeltaX;
 		nCur[1] += nDeltaY;
 		i += nInc;
-		oFeatureBuilder.addGeometry(command(LINETO, nPointBuffer[0] / 2 - 1));
+		oFeatureBuilder.addGeometry(command(LINETO, nPointBuffer[0] / 2 - 1)); // calculate the number of line to commands that will be executed
 		for (; i != nBound; i += nInc)
 		{
 			nPosX = nPointBuffer[i];
@@ -280,110 +335,12 @@ public abstract class TileUtil
 	}
 	
 	
-	public static int[] addPoint(int[] nPoints, int nX, int nY)
-	{
-		nPoints = ensureCapacity(nPoints, 2);
-		int nIndex = (int)nPoints[0]; // extra space for hidden point
-		nPoints[nIndex++] = nX;
-		nPoints[nIndex++] = nY;
-		nPoints[0] = nIndex; // track insertion point in array
-		return nPoints;
-	}
-	
-	
-	public static double[] addPoint(double[] dPoints, double[] dPoint)
-	{
-		dPoints = ensureCapacity(dPoints, dPoint.length);
-		int nIndex = (int)dPoints[0]; // extra space for hidden point
-		dPoints[nIndex++] = dPoint[0];
-		dPoints[nIndex++] = dPoint[1];
-		dPoints[0] = nIndex; // track insertion point in array
-		return dPoints;
-	}
-	
-	
-	public static int hash(int nHrz, int nVrt)
-	{
-		return (nHrz << 16) + nVrt;
-	}
-	
-	
-	public static int[] ensureCapacity(int[] nArray, int nMinCapacity)
-    {
-        nMinCapacity += nArray[0];
-        if (nArray.length < nMinCapacity)
-        {
-            int[] dNew = new int[(nMinCapacity * 2)];
-            System.arraycopy(nArray, 0, dNew, 0, nArray.length);
-            return dNew;
-        }
-        return nArray; // no changes were needed
-    }
-
-
-    public static double[] ensureCapacity(double[] dArray, int nMinCapacity)
-    {
-		if ((int)dArray[0] + nMinCapacity < dArray.length)
-	        return dArray; // no changes were needed
-
-		double[] dNew = new double[dArray.length * 2 + nMinCapacity];
-		System.arraycopy(dArray, 0, dNew, 0, (int)dArray[0]);
-		return dNew;
-    }
-	
-	
-	public static void writeOutline(VectorTile.Tile.Feature.Builder oFeature, VectorTile.Tile.Layer.Builder oLayer, VectorTile.Tile.Builder oTile)
-	{
-		oFeature.clear();
-		oLayer.clear();
-		oLayer.setVersion(2);
-		oLayer.setName("tile_outline");
-		oLayer.setExtent(256);
-		oFeature.setType(VectorTile.Tile.GeomType.LINESTRING);
-		oFeature.addGeometry(command(MOVETO, 1));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(command(LINETO, 4));
-		oFeature.addGeometry(parameter(255));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(255));
-		oFeature.addGeometry(parameter(-255));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(-255));
-		oLayer.addFeatures(oFeature.build());
-		oFeature.clear();
-		oTile.addLayers(oLayer.build());
-		oLayer.clear();
-	}
-	
-	public static void writeBox(VectorTile.Tile.Feature.Builder oFeature, VectorTile.Tile.Layer.Builder oLayer, VectorTile.Tile.Builder oTile)
-	{
-		oFeature.clear();
-		oLayer.clear();
-		oLayer.setVersion(2);
-		oLayer.setName("MRMS_RTEPC_10.0");
-		oLayer.setExtent(256);
-		oFeature.setType(VectorTile.Tile.GeomType.POLYGON);
-		oFeature.addGeometry(command(MOVETO, 1));
-		oFeature.addGeometry(parameter(128));
-		oFeature.addGeometry(parameter(128));
-		oFeature.addGeometry(command(LINETO, 3));
-		oFeature.addGeometry(parameter(50));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(parameter(50));
-		oFeature.addGeometry(parameter(-50));
-		oFeature.addGeometry(parameter(0));
-		oFeature.addGeometry(command(CLOSEPATH, 1));
-		oLayer.addFeatures(oFeature.build());
-		oFeature.clear();
-		oTile.addLayers(oLayer.build());
-		oLayer.clear();
-	}
-	
-	
+	/**
+	 * Creates a Path object from the given polygon defined as an exterior ring.
+	 * @param dRing array that defines the polygon [group value, x0, y0, x1, y1, ... xn, yn]
+	 * 
+	 * @return Path2D.Double object that represents the polygon
+	 */
 	static Path2D.Double getPath(double[] dRing)
 	{
 		Path2D.Double oPath = new Path2D.Double();
@@ -393,5 +350,127 @@ public abstract class TileUtil
 		oPath.closePath();
 		
 		return oPath;
+	}
+	
+	
+	/**
+	 * Wrapper for {@link #newAddLinestring(vector_tile.VectorTile.Tile.Feature.Builder, int[], double[], int, int, double[], int[])}
+	 * with a start position of 1.
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param dBounds bounds in mercator meters of the MVT. [min x, min y, max x, max y]
+	 * @param nExtent number of positions to use along each axis inside the tile
+	 * @param dLine growable array that defines the linestring. [group value, id, value index for highway, value index for bridge, x0, y0, x1, y1... xn, yn]
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the linestring
+	 * @return reference to the array that describes nPointBuffer (the reference
+	 * could possibly change if more space needed to be allocated to add the points)
+	 */
+	public static int[] newAddLinestring(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dBounds, int nExtent, double[] dLine, int[] nPointBuffer)
+	{
+		return newAddLinestring(oFeatureBuilder, nCur, dBounds, nExtent, 1, dLine, nPointBuffer);
+	}
+	
+	
+	/**
+	 * Adds the linestring defined by the given double array as a Feature to the 
+	 * FeatureBuilder.
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param dBounds bounds in mercator meters of the MVT. [min x, min y, max x, max y]
+	 * @param nExtent number of positions to use along each axis inside the tile
+	 * @param nStartPos the position in the growable array that the coordinates 
+	 * of the linestring start
+	 * @param dLine growable array that defines the linestring. [group value, id, value index for highway, value index for bridge, x0, y0, x1, y1... xn, yn]
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the linestring
+	 * @return reference to the array that describes nPointBuffer (the reference
+	 * could possibly change if more space needed to be allocated to add the points)
+	 */
+	public static int[] newAddLinestring(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dBounds, int nExtent, int nStartPos, double[] dLine, int[] nPointBuffer)
+	{
+		int nPosX;
+		int nPosY;
+		double[] dCoords = new double[2];
+		nPointBuffer[0] = 1;
+		Iterator<double[]> oIt = Arrays.iterator(dLine, dCoords, nStartPos, 2);
+		while (oIt.hasNext())
+		{
+			oIt.next();
+			nPosX = getPos(Mercator.lonToMeters(dCoords[0]), dBounds[0], dBounds[2], nExtent, false);
+			nPosY = getPos(Mercator.latToMeters(dCoords[1]), dBounds[1], dBounds[3], nExtent, true);
+
+			nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY);
+		}
+		newWritePointBuffer(oFeatureBuilder, nPointBuffer, nCur, false);
+		
+		return nPointBuffer;
+	}
+	
+	
+	/**
+	 * Writes the tile coordinates in the point buffer to the FeatureBuilder. This
+	 * differs from {@link #writePointBuffer(vector_tile.VectorTile.Tile.Feature.Builder, int[], int[], boolean)}
+	 * because it accumulates the deltas of the coordinate in a buffer before
+	 * writign them to the Feature Builder in attempt to avoid invalid geometries
+	 * 
+	 * @param oFeatureBuilder Feature Builder for the VectorTile
+	 * @param nPointBuffer reusable growable array that stores the tile coordinates
+	 * that correspond to the points of the feature
+	 * @param nCur reusable array that contains the position of the cursor which
+	 * is the current position in tile coordinates
+	 * @param bClose flag indicating if the feature needs to be closed. Should be
+	 * true for polygons, otherwise false
+	 */
+	public static void newWritePointBuffer(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nPointBuffer, int[] nCur, boolean bClose)
+	{
+		Iterator<int[]> oIt = Arrays.iterator(nPointBuffer, new int[2], 1, 2);
+		int nInitCurX = nCur[0];
+		int nInitCurY = nCur[1];
+		if (oIt.hasNext())
+		{
+			int[] nPos = oIt.next();
+
+			int nMoveX = nPos[0] - nCur[0];
+			int nMoveY = nPos[1] - nCur[1];	
+			int nDeltaX = nMoveX;
+			int nDeltaY = nMoveY;
+			nCur[0] += nDeltaX;
+			nCur[1] += nDeltaY;
+			int[] nDeltas = Arrays.newIntArray(Arrays.size(nPointBuffer));
+			while (oIt.hasNext())
+			{
+				nPos = oIt.next();
+				nDeltaX = nPos[0] - nCur[0];
+				nDeltaY = nPos[1] - nCur[1];
+				if (nDeltaX != 0 || nDeltaY != 0)
+					nDeltas = Arrays.add(nDeltas, nDeltaX, nDeltaY);
+				nCur[0] += nDeltaX;
+				nCur[1] += nDeltaY;
+			}
+			if (nDeltas[0] / 2 == 0) // there are no points
+			{
+				nCur[0] = nInitCurX; // re initialize the cursor
+				nCur[1] = nInitCurY; 
+				return; // and don't add the invalid geometry to the tile
+			}
+			oFeatureBuilder.addGeometry(command(MOVETO, 1));
+			oFeatureBuilder.addGeometry(parameter(nMoveX));
+			oFeatureBuilder.addGeometry(parameter(nMoveY));
+			oFeatureBuilder.addGeometry(command(LINETO, nDeltas[0] / 2));
+			Iterator<int[]> oDeltaIt = Arrays.iterator(nDeltas, new int[2], 1, 2);
+			while (oDeltaIt.hasNext())
+			{
+				int[] nDelta = oDeltaIt.next();
+				oFeatureBuilder.addGeometry(parameter(nDelta[0]));
+				oFeatureBuilder.addGeometry(parameter(nDelta[1]));
+			}
+			if (bClose)
+				oFeatureBuilder.addGeometry(command(CLOSEPATH, 1));
+		}
 	}
 }

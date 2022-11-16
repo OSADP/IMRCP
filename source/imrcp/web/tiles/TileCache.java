@@ -5,17 +5,17 @@
  */
 package imrcp.web.tiles;
 
-import imrcp.FileCache;
-import imrcp.FilenameFormatter;
+import imrcp.store.FileCache;
+import imrcp.system.FilenameFormatter;
 import imrcp.geosrv.Mercator;
-import imrcp.store.FileWrapper;
+import imrcp.store.GriddedFileWrapper;
+import imrcp.web.Session;
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -24,37 +24,71 @@ import vector_tile.VectorTile;
 import vector_tile.VectorTile.Tile.GeomType;
 
 /**
- *
+ * FileCache implementation that manages {@link TileWrapper}s. It responsible 
+ * for fulfilling IMRCP Map UI requests for the geometries of Area Layer
+ * polygons.
  * @author Federal Highway Administration
  */
 public abstract class TileCache extends FileCache
 {
-	protected abstract FileWrapper getDataWrapper();
-	protected int m_nHashZoom;
-	protected int m_nTileObsType;
-	protected FilenameFormatter[] m_oDataFileFormatters;
-	
-	@Override
-	public void init(ServletConfig oSConfig)
-	{
-		setName(oSConfig.getServletName());
-		setLogger();
-		setConfig();
-		register();
-		startService();
-	}
-	
+	/**
+	 * Child classes implement this to get the correctly configured FileWrapper
+	 * for getting data to generate the polygons grouped by value.
+	 * 
+	 * @param nFormatIndex index to use for {@link #m_oFormatters}
+	 * @return a new GriddedFileWrapper containing the data needed to generate
+	 * polygons grouped by value.
+	 */
+	protected abstract GriddedFileWrapper getDataWrapper(int nFormatIndex);
 
 	
+	/**
+	 * The map zoom level used when creating {@link Tile} objects
+	 */
+	protected int m_nHashZoom;
+
+	
+	/**
+	 * IMRCP observation type id of the data the polygons represent
+	 */
+	protected int m_nTileObsType;
+
+	
+	/**
+	 * Time in milliseconds after loading a file to check if a "better" file 
+	 * exists
+	 */
+	protected int m_nCheckInterval;
+
+	
+	/**
+	 * Time in milliseconds since Epoch to start checking for a "better" file
+	 */
+	protected long m_lCheckTimeout = 0;
+
+	
+	/**
+	 * Value to multiply group values by when creating layer names. Default is 1.
+	 * This is used when multiple group values would be rounded to the same 
+	 * integer since that would yield the same layer name for the tile.
+	 */
+	protected int m_nLayerMultiplier;
+
+	
+	/**
+	 * Loads the given data file into memory to create a {@link TileWrapper} based
+	 * off of the data in that file for the configured observation type.
+	 */
 	@Override
-	public boolean loadFileToMemory(String sFullPath, FilenameFormatter oFormatter)
+	public boolean loadFileToMemory(String sFullPath, int nFormatIndex)
 	{
+		FilenameFormatter oFormatter = m_oFormatters[nFormatIndex];
 		File oFile = new File(sFullPath);
 		try
 		{
 			if (!oFile.exists())
 			{
-				File oGz = new File(sFullPath + ".gz");
+				File oGz = new File(sFullPath + ".gz"); // check for gzipped files
 				if (!oGz.exists())
 				{
 					if (m_lLastFileMissingTime + m_nFileFrequency < System.currentTimeMillis())
@@ -66,16 +100,21 @@ public abstract class TileCache extends FileCache
 				}
 			}
 
-			FileWrapper oDataWrapper = getDataWrapper();
+			GriddedFileWrapper oDataWrapper = getDataWrapper(nFormatIndex);
 			long[] lTimes = new long[3];
 			int nContribId = oFormatter.parse(sFullPath, lTimes);
 			m_oLogger.info("Loading data wrapper " + sFullPath);
-			oDataWrapper.load(lTimes[START], lTimes[END], lTimes[VALID], sFullPath, nContribId);
+			oDataWrapper.load(lTimes[START], lTimes[END], lTimes[VALID], sFullPath, nContribId); // load the data file into memory
 			m_oLogger.info("Finished loading data wrapper " + sFullPath);
-			TileWrapper oTileWrapper = (TileWrapper)getNewFileWrapper();
-			oTileWrapper.set(oDataWrapper, m_nTileObsType, m_nHashZoom);
+			TileWrapper oTileWrapper = (TileWrapper)getNewFileWrapper(); // create and initialize the TileWrapper
+			oTileWrapper.set(oDataWrapper, m_nTileObsType, m_nHashZoom, nFormatIndex);
 			oTileWrapper.load(lTimes[START], lTimes[END], lTimes[VALID], sFullPath, nContribId);
-			addToCache(oTileWrapper);
+			if (m_oCache.size() > m_nLimit) // ensure there is space in the cache.
+				execute();
+			if (m_oCache.size() > m_nLimit)
+				lruClear();
+			int nIndex = Collections.binarySearch(m_oCache, oTileWrapper, TEMPORALFILECOMP);
+			m_oCache.add(~nIndex, oTileWrapper); // add to cache
 			return true;
 		}
 		catch (Exception oException)
@@ -100,13 +139,15 @@ public abstract class TileCache extends FileCache
 		m_nHashZoom = m_oConfig.getInt("zoom", 7);
 		String sObsType = m_oConfig.getString("tileobs", ""); //get the obstypes this block subscribes for
 		m_nTileObsType = Integer.valueOf(sObsType, 36);
-		String[] sDataFileFormatters = m_oConfig.getStringArray("datafiles", null);
-		m_oDataFileFormatters = new FilenameFormatter[sDataFileFormatters.length];
-		for (int i = 0; i < m_oDataFileFormatters.length; i++)
-			m_oDataFileFormatters[i] = new FilenameFormatter(sDataFileFormatters[i]);
+		m_nCheckInterval = m_oConfig.getInt("checkint", 3600000);
+		m_nLayerMultiplier = m_oConfig.getInt("multi", 1);
 	}
 	
 	
+	/**
+	 * Does nothing. Implemented so {@link FileCache#start()} is not called.
+	 * @return true
+	 */
 	@Override
 	public boolean start()
 	{
@@ -114,13 +155,25 @@ public abstract class TileCache extends FileCache
 	}
 	
 	
-	@Override
-	protected void doGet(HttpServletRequest oRequest, HttpServletResponse oResponse)
+	/**
+	 * This method handles requests for .mvt (Mapbox Vector Tile) files by
+	 * generating and caching the polygons that intersect the requested map tile
+	 * 
+	 * @param oRequest object that contains the request the client has made of the servlet
+	 * @param oResponse object that contains the response the servlet sends to the client
+	 * @param oSess object that contains information about the user that made the
+	 * request
+	 * @return HTTP status code to be included in the response.
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public int doMvt(HttpServletRequest oRequest, HttpServletResponse oResponse, Session oSess)
 	   throws ServletException, IOException
 	{
 		String[] sUriParts = oRequest.getRequestURI().split("/");
 		
-		int nRequestType = Integer.valueOf(sUriParts[2], 36);
+		// parse query parameters from request
+		int nRequestType = Integer.valueOf(sUriParts[3], 36);
 		int nZ = Integer.parseInt(sUriParts[sUriParts.length - 3]);
 		int nX = Integer.parseInt(sUriParts[sUriParts.length - 2]);
 		int nY = Integer.parseInt(sUriParts[sUriParts.length - 1]);
@@ -141,17 +194,31 @@ public abstract class TileCache extends FileCache
 		
 		TileWrapper oFile = null;
 		ArrayList<Tile> oTileList = null;
-		synchronized (this)
+		synchronized (this) // synchronize here so that only one thread at a time can attempt to load a file to memory and create the tile list
 		{
 			oFile = (TileWrapper)getFile(lTimestamp, lRefTime);
-			if (oFile == null)
-				return;
+			if (oFile == null) // no file exist that matches the time query parameters
+				return HttpServletResponse.SC_OK;
 			
-			oTileList = oFile.getTileList(lTimestamp);
+			if (System.currentTimeMillis() > m_lCheckTimeout) // if enough time has elapsed, check for a new file
+			{
+				if (m_lCheckTimeout != 0 || oFile.m_nFormatIndex > 0) // only check if this isn't the firs time (m_lCheckTimeout == 0) or if the format index is > 0, if it is 0 then a "better" file won't exist
+				{
+					if (loadFileToCache(lTimestamp, lRefTime, Integer.MIN_VALUE, Integer.MIN_VALUE))
+						oFile = (TileWrapper)getFile(lTimestamp, lRefTime);
+				}
+				
+				m_lCheckTimeout = System.currentTimeMillis() + m_nCheckInterval; // reset the timeout
+			}
+			
+			if (oFile == null)
+				return HttpServletResponse.SC_OK;
+			
+			oTileList = oFile.getTileList(lTimestamp); // get the tiles from the file. if this is the first time this is called for the file, the list has to be generated, otherwise it is cached
 		}
 		
-		if (oTileList == null)
-			return;
+		if (oTileList == null) // no data to display in this tile
+			return HttpServletResponse.SC_OK;
 		
 		double[] dBounds = new double[4];
 		int[] nTiles = new int[2];
@@ -168,7 +235,7 @@ public abstract class TileCache extends FileCache
 
 		ArrayList<TileArea> oAreas = new ArrayList();
 		int[] nSearch = new int[2];
-		for (int nHrz = nStartX; nHrz <= nEndX; nHrz++)
+		for (int nHrz = nStartX; nHrz <= nEndX; nHrz++) // use <= to ensure the loops are executed at least once
 		{
 			for (int nVrt = nStartY; nVrt <= nEndY; nVrt++)
 			{
@@ -179,7 +246,7 @@ public abstract class TileCache extends FileCache
 					continue;
 		
 				Tile oTile = oTileList.get(nIndex);
-				synchronized (oTile)
+				synchronized (oTile) // synchronize here so only one thread can create the areas
 				{
 					if (oTile.m_oAreas == null)
 					{
@@ -228,7 +295,7 @@ public abstract class TileCache extends FileCache
 				oFeatureBuilder.setType(GeomType.POLYGON);
 				oLayerBuilder.clear();
 				oLayerBuilder.setVersion(2);
-				oLayerBuilder.setName(String.format("%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal));
+				oLayerBuilder.setName(String.format("%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal * m_nLayerMultiplier));
 				oLayerBuilder.setExtent(nExtent);
 				oLayerBuilder.addFeatures(oFeatureBuilder.build());
 				oTileBuilder.addLayers(oLayerBuilder.build());
@@ -242,11 +309,15 @@ public abstract class TileCache extends FileCache
 		if (oTileBuilder.getLayersCount() > 0)
 			oTileBuilder.build().writeTo(oResponse.getOutputStream());
 		
+		return HttpServletResponse.SC_OK;
 	}
 	
 	
+	/**
+	 * @return a new {@link TileWrapper}
+	 */
 	@Override
-	public FileWrapper getNewFileWrapper()
+	public GriddedFileWrapper getNewFileWrapper()
 	{
 		return new TileWrapper();
 	}

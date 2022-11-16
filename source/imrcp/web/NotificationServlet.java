@@ -1,7 +1,10 @@
 package imrcp.web;
 
 import imrcp.geosrv.GeoUtil;
-import imrcp.store.AlertObs;
+import imrcp.geosrv.Network;
+import imrcp.geosrv.WayNetworks;
+import imrcp.store.ImrcpObsResultSet;
+import imrcp.store.Obs;
 import imrcp.store.ObsView;
 import imrcp.system.Config;
 import imrcp.system.Directory;
@@ -10,97 +13,74 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.OutputStreamWriter;
-import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.zip.CRC32;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
- *
- *
+ * This servlet manages requests for getting Notifications on the IMRCP Map UI.
+ * @author Federal Highway Administration
  */
-//@WebServlet(name = "NotifyServlet", urlPatterns = {
-//    "/notify/*"
-//})
-public class NotificationServlet extends HttpServlet
+public class NotificationServlet extends SecureBaseBlock
 {
-
-	private static final Logger LOGGER = LogManager.getLogger(NotificationServlet.class);
-
+	/**
+	 * Format string used to create the JSON response.
+	 */
 	private static final String JSON
 	   = "\n\t{\"id\":%d,\"typeName\":\"%s\",\"typeId\":\"%d\"," + "\"start\":%d,\"end\":%d,\"cleared\":%d," + "\"description\":\"%s\"," + "\"issued\":%d," + "\"lat1\":%.6f,\"lon1\":%.6f,\"lat2\":%.6f,\"lon2\":%.6f}";
 
-	private final ObsView m_oObsView = (ObsView) Directory.getInstance().lookup("ObsView");
 
-	private final int[] m_nStudyArea = new int[4];
-
-	private boolean m_bTest;
-
-
-	public NotificationServlet()
+	@Override
+	public void reset()
 	{
-		String[] sBox = Config.getInstance().getStringArray("imrcp.ImrcpBlock", "imrcp.ImrcpBlock", "box", "");
-		m_bTest = Boolean.parseBoolean(Config.getInstance().getString("NotificationServlet", "NotificationServlet", "test", "False"));
-		m_nStudyArea[0] = Integer.MAX_VALUE;
-		m_nStudyArea[1] = Integer.MIN_VALUE;
-		m_nStudyArea[2] = Integer.MAX_VALUE;
-		m_nStudyArea[3] = Integer.MIN_VALUE;
-		for (int i = 0; i < sBox.length;)
-		{
-			int nLon = Integer.parseInt(sBox[i++]);
-			int nLat = Integer.parseInt(sBox[i++]);
-
-			if (nLon < m_nStudyArea[2])
-				m_nStudyArea[2] = nLon;
-
-			if (nLon > m_nStudyArea[3])
-				m_nStudyArea[3] = nLon;
-
-			if (nLat < m_nStudyArea[0])
-				m_nStudyArea[0] = nLat;
-
-			if (nLat > m_nStudyArea[1])
-				m_nStudyArea[1] = nLat;
-		}
+		super.reset();
+		m_bTest = Boolean.parseBoolean(m_oConfig.getString("test", "False"));
 	}
 
-
+	
 	/**
-	 *
-	 * @param iReq
-	 * @param iRep
+	 * Queries the data stores for notifications and adds them to the response.
+	 * 
+	 * @param iReq object that contains the request the client has made of the servlet
+	 * @param iRep object that contains the response the servlet sends to the client
+	 * @param oSession object that contains information about the user that made the
+	 * request
+	 * @return HTTP status code to be included in the response.
 	 */
-	@Override
-	public void doGet(HttpServletRequest iReq, HttpServletResponse iRep)
+	public int doNotify(HttpServletRequest iReq, HttpServletResponse iRep, Session oSession)
 	{
 		if (!m_bTest)
 		{
 			try
 			{
 				iRep.setContentType("application/json");
-				String[] sUriParts = iReq.getRequestURI().split("/");
-
 				long lCurrentTime = System.currentTimeMillis();
 				lCurrentTime = (lCurrentTime / 60000) * 60000;
+				ObsView oOV = (ObsView) Directory.getInstance().lookup("ObsView");
+				ArrayList<Obs> oNotifications = new ArrayList();
+				WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+				for (String sNetwork : oSession.m_oProfile.m_sNetworks) // get notification for each Network the user has access to
+				{
+					Network oNetwork = oWayNetworks.getNetwork(sNetwork);
+					int[] nBb = oNetwork.getBoundingBox();
+					ImrcpObsResultSet oData = (ImrcpObsResultSet)oOV.getData(ObsType.NOTIFY, lCurrentTime, lCurrentTime + 28800000, nBb[1], nBb[3], nBb[0], nBb[2], System.currentTimeMillis());
 
-				ResultSet oData = m_oObsView.getData(ObsType.NOTIFY, lCurrentTime, lCurrentTime + 28800000, m_nStudyArea[0], m_nStudyArea[1], m_nStudyArea[2], m_nStudyArea[3], System.currentTimeMillis());
-				ArrayList<AlertObs> oNotifications = new ArrayList();
-				while (oData.next())
-					oNotifications.add(new AlertObs(oData.getInt(1), oData.getInt(2), oData.getInt(3), oData.getLong(4), oData.getLong(5), oData.getLong(6), oData.getInt(7), oData.getInt(8), oData.getInt(9), oData.getInt(10), oData.getShort(11), oData.getDouble(12), oData.getShort(13), oData.getString(14), oData.getLong(15)));
+					for (Obs oObs : oData)
+					{
+						oNotifications.add(oObs);
+					}
+				}
 
 				try (BufferedWriter oOut = new BufferedWriter(new OutputStreamWriter(iRep.getOutputStream())))
 				{
 					oOut.write("["); // start json array
 					int nMaxIndex = oNotifications.size() - 1;
-					for (int i = 0; i <= nMaxIndex; i++)
+					for (int i = 0; i <= nMaxIndex; i++) // write each notification found to the response
 					{
-						AlertObs oNotification = oNotifications.get(i);
+						Obs oNotification = oNotifications.get(i);
 						oOut.write(format(getId(oNotification), ObsType.lookup(ObsType.NOTIFY, (int)oNotification.m_dValue), (int)oNotification.m_dValue, (oNotification.m_lObsTime1 / 60000) * 60000, (oNotification.m_lObsTime2 / 60000) * 60000, oNotification.m_lClearedTime, oNotification.m_sDetail.replace(";", "<br/>"), oNotification.m_lTimeRecv, oNotification.m_nLat1, oNotification.m_nLon1, oNotification.m_nLat2, oNotification.m_nLon2));
 						if (i < nMaxIndex)
 							oOut.write(",");
@@ -111,10 +91,11 @@ public class NotificationServlet extends HttpServlet
 			}
 			catch (Exception oEx)
 			{
-				LOGGER.info(oEx, oEx);
+				m_oLogger.error(oEx, oEx);
+				return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 			}
 		}
-		else
+		else // test data
 		{
 			iRep.setContentType("application/json");
 			String[] sUriParts = iReq.getRequestURI().split("/");
@@ -196,13 +177,23 @@ public class NotificationServlet extends HttpServlet
 			}
 			catch (Exception oEx)
 			{
-				LOGGER.info(oEx, oEx);
+				m_oLogger.error(oEx, oEx);
+				return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 			}
-
 		}
+		return HttpServletResponse.SC_OK;
 	}
 
-
+	
+	/**
+	 * Formats the given values using the format String {@link #JSON}.
+	 * @param args [id as a long, notification type as String, notification type as integer,
+	 * start time in milliseconds since Epoch as long, end time in milliseconds since Epoch as long,
+	 * cleared time in milliseconds since Epoch as long, location name as String,
+	 * min lat, min lon, max lat, max lon] all geo coordinates are in decimal
+	 * degrees scaled to 7 decimal places.
+	 * @return
+	 */
 	private String format(Object... args)
 	{
 		for (int i = args.length - 4; i < args.length; ++i)
@@ -219,8 +210,14 @@ public class NotificationServlet extends HttpServlet
 		return String.format(JSON, args);
 	}
 
-
-	private long getId(AlertObs oNotification) throws Exception
+	
+	/**
+	 * Creates an Id for the Notification using {@link CRC32}
+	 * @param oNotification The notification to create an id for
+	 * @return an id generate from field of the notification using CRC32
+	 * @throws Exception
+	 */
+	private long getId(Obs oNotification) throws Exception
 	{
 		ByteArrayOutputStream oOutBytes = new ByteArrayOutputStream();
 		DataOutputStream oOutData = new DataOutputStream(oOutBytes);

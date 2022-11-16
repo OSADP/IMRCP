@@ -18,14 +18,27 @@ package imrcp.web;
 import java.util.Comparator;
 
 /**
- *
+ * Object used as a key in Map objects to store Observations by observation type
+ * id and contributor id.
  * @author Federal Highway Administration
  */
 public class ObsInfo implements Comparable<ObsInfo>
 {
+	/**
+	 * IMRCP observation type id
+	 */
 	public int m_nObsType;
+
+	
+	/**
+	 * IMRCP contributor id
+	 */
 	public int m_nContribId;
 	
+	
+	/**
+	 * Compares ObsInfos by observation type id then contributor id
+	 */
 	public static final Comparator<ObsInfo> g_oCOMP = (ObsInfo o1, ObsInfo o2) ->
 	{
 		int nReturn = o1.m_nObsType - o2.m_nObsType;
@@ -35,11 +48,20 @@ public class ObsInfo implements Comparable<ObsInfo>
 		return nReturn;
 	};
 	
+	
+	/**
+	 * Default constructor. Does nothing.
+	 */
 	public ObsInfo()
 	{
-		
 	}
 	
+	
+	/**
+	 * Constructs an ObsInfo with the given parameters
+	 * @param nObsType IMRCP observation type id
+	 * @param nContribId IMRCP contributor id
+	 */
 	public ObsInfo(int nObsType, int nContribId)
 	{
 		m_nObsType = nObsType;
@@ -47,6 +69,9 @@ public class ObsInfo implements Comparable<ObsInfo>
 	}
 
 
+	/**
+	 * Compares ObsInfos by observation type id then contributor id
+	 */
 	@Override
 	public int compareTo(ObsInfo o)
 	{

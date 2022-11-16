@@ -6,19 +6,22 @@
 package imrcp.web.tiles;
 
 import imrcp.store.DataObsWrapper;
-import imrcp.store.FileWrapper;
+import imrcp.store.GriddedFileWrapper;
 
 /**
- *
+ * Tile Cache implementation for caches that use 
+ * {@link imrcp.store.DataObsWrapper}s
  * @author Federal Highway Administration
  */
 public class DataObsTileCache extends TileCache
 {
-
+	/**
+	 * @return a new {@link imrcp.store.DataObsWrapper} with the configured
+	 * observations types
+	 */
 	@Override
-	protected FileWrapper getDataWrapper()
+	protected GriddedFileWrapper getDataWrapper(int nFormatIndex)
 	{
-		return new DataObsWrapper();
+		return new DataObsWrapper(new int[]{m_nTileObsType});
 	}
-	
 }

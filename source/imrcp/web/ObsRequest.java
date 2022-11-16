@@ -16,118 +16,123 @@
 package imrcp.web;
 
 /**
- *
- * @author scot.lange
+ * This class stores the parameters used for observation requests from the IMRCP
+ * Map UI
+ * @author Federal Highway Administration
  */
 public class ObsRequest
 {
+	/**
+	 * Spatial bounds of the request
+	 */
+	private LatLngBounds m_oRequestBounds;
 
-	private LatLngBounds m_sRequestBounds;
-
+	
+	/**
+	 * Query start time in milliseconds since Epoch
+	 */
 	private long m_lRequestTimestampStart;
 
+	
+	/**
+	 * Query end time in milliseconds since Epoch
+	 */
 	private long m_lRequestTimestampEnd;
 
+	
+	/**
+	 * Reference time of the query in milliseconds since Epoch
+	 */
 	private long m_lRequestTimestampRef;
 
-	private int[] m_nPlatformIds;
-
+	
+	/**
+	 * IMRCP contributor Id to use in the query
+	 */
 	private int m_nSourceId;
 
+	
 	/**
-	 *
-	 * @return
+	 * Getter for {@link #m_oRequestBounds}
+	 * 
+	 * @return The spatial extents of the request
 	 */
 	public LatLngBounds getRequestBounds()
 	{
-		return m_sRequestBounds;
+		return m_oRequestBounds;
 	}
 
-
+	
 	/**
-	 *
-	 * @param requestBounds
+	 * Setter for {@link #m_oRequestBounds}
+	 * 
+	 * @param requestBounds The spatial extents of the request
 	 */
 	public void setRequestBounds(LatLngBounds requestBounds)
 	{
-		this.m_sRequestBounds = requestBounds;
+		this.m_oRequestBounds = requestBounds;
 	}
 
-
+	
 	/**
-	 *
-	 * @return
+	 * Getter for {@link #m_lRequestTimestampStart}
+	 * 
+	 * @return Start time of the request in milliseconds since Epoch
 	 */
 	public long getRequestTimestampStart()
 	{
 		return m_lRequestTimestampStart;
 	}
 
-
+	
 	/**
-	 *
-	 * @param lRequestTimestamp
+	 * Setter for {@link #m_lRequestTimestampStart}
+	 * 
+	 * @param lRequestTimestamp Start time of the request in milliseconds since Epoch
 	 */
 	public void setRequestTimestampStart(long lRequestTimestamp)
 	{
 		this.m_lRequestTimestampStart = lRequestTimestamp;
 	}
 
-
+	
 	/**
-	 *
-	 * @return
+	 * Getter for {@link #m_lRequestTimestampRef}
+	 * 
+	 * @return Reference time of the query in milliseconds since Epoch
 	 */
 	public long getRequestTimestampRef()
 	{
 		return m_lRequestTimestampRef;
 	}
 
-
+	
 	/**
-	 *
-	 * @param lRequestTimestamp
+	 * Setter for {@link #m_lRequestTimestampRef}
+	 * 
+	 * @param lRequestTimestamp Reference time of the query in milliseconds since Epoch
 	 */
 	public void setRequestTimestampRef(long lRequestTimestamp)
 	{
 		this.m_lRequestTimestampRef = lRequestTimestamp;
 	}
 
-
+	
 	/**
-	 *
-	 * @return
-	 */
-	public int[] getPlatformIds()
-	{
-		return m_nPlatformIds;
-	}
-
-
-	/**
-	 *
-	 * @param nPlatformIds
-	 */
-	public void setPlatformIds(int... nPlatformIds)
-	{
-		this.m_nPlatformIds = nPlatformIds;
-	}
-
-
-	/**
-	 *
-	 * @return
+	 * Getter for {@link #m_lRequestTimestampEnd}
+	 * 
+	 * @return End time of the request in milliseconds since Epoch
 	 */
 	public long getRequestTimestampEnd()
 	{
 		return m_lRequestTimestampEnd;
 	}
 
-
+	
 	/**
-	 *
-   * @param lRequestTimestampEnd
-	 * @return
+	 * Setter for {@link #m_lRequestTimestampEnd}
+	 * 
+	 * @param lRequestTimestampEnd End time of the request in milliseconds since Epoch
 	 */
 	public long setRequestTimestampEnd(long lRequestTimestampEnd)
 	{
@@ -135,12 +140,20 @@ public class ObsRequest
 	}
 
 	
+	/**
+	 * Getter for {@link #m_nSourceId}
+	 * @return the IMRCP contributor Id of the request
+	 */
 	public int getSourceId()
 	{
 		return m_nSourceId;
 	}
 	
 	
+	/**
+	 * Setter for {@link #m_nSourceId}
+	 * @param nSourceId the IMRCP contributor Id of the request
+	 */
 	public void setSourceId(int nSourceId)
 	{
 		m_nSourceId = nSourceId;

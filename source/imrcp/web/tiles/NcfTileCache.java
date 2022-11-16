@@ -5,8 +5,9 @@
  */
 package imrcp.web.tiles;
 
-import imrcp.store.FileWrapper;
+import imrcp.store.GriddedFileWrapper;
 import imrcp.store.NcfWrapper;
+import imrcp.store.RapNcfWrapper;
 
 /**
  *
@@ -15,40 +16,61 @@ import imrcp.store.NcfWrapper;
 public class NcfTileCache extends TileCache
 {
 	/**
-	 * Array of ObsType Ids used for the file
+	 * Contains the observation type ids that the file provides.
 	 */
 	protected int[] m_nObsTypes;
 
+	
 	/**
-	 * Regular expression used to detect file formats
-	 */
-	protected String m_sFilePattern;
-
-	/**
-	 * Array of titles of ObsTypes used in the NetCDF file
+	 * Contains the observation type labels that correspond to the observation type
+	 * id in {@link #m_nObsTypes}
 	 */
 	protected String[] m_sObsTypes;
 
-	/**
-	 * Title for the horizontal axis in the NetCDF file
-	 */
-	protected String m_sHrz;
-
-	/**
-	 * Title for the vertical axis in the NetCDF file
-	 */
-	protected String m_sVrt;
-
-	/**
-	 * Title for the time axis in the NetCDF file
-	 */
-	protected String m_sTime;
 	
+	/**
+	 * Array that contains the horizontal labels in the files corresponding to
+	 * the different FilenameFormatters in {@link #m_oFormatters}
+	 */
+	protected String[] m_sHrz;
+
+	
+	/**
+	 * Array that contains the vertical labels in the files corresponding to
+	 * the different FilenameFormatters in {@link #m_oFormatters}
+	 */
+	protected String[] m_sVrt;
+
+	
+	/**
+	 * Array that contains the time labels in the files corresponding to
+	 * the different FilenameFormatters in {@link #m_oFormatters}
+	 */
+	protected String[] m_sTime;
+	
+	
+	/**
+	 * Array that contains flags indicated if wind speeds are calculated from
+	 * u and v component vectors corresponding to the different 
+	 * FilenameFormatters in {@link #m_oFormatters}
+	 */
+	protected boolean[] m_bUseUVWind;
+	
+	
+	/**
+	 * @return If {@link #m_bUseUVWind} is not null and for the given format index is true, 
+	 * a new {@link RapNcfWrapper} otherwise a new {@link NcfWrapper} with the 
+	 * configured values
+	 */
 	@Override
-	protected FileWrapper getDataWrapper()
+	protected GriddedFileWrapper getDataWrapper(int nFormatIndex)
 	{
-		return new NcfWrapper(m_nObsTypes, m_sObsTypes, m_sHrz, m_sVrt, m_sTime);
+		if (m_bUseUVWind != null && m_bUseUVWind[nFormatIndex])
+			return new RapNcfWrapper(m_nObsTypes, m_sObsTypes, m_sHrz[nFormatIndex], m_sVrt[nFormatIndex], m_sTime[nFormatIndex]);
+		else
+			return new NcfWrapper(m_nObsTypes, m_sObsTypes, m_sHrz[nFormatIndex], m_sVrt[nFormatIndex], m_sTime[nFormatIndex]);
 	}
+	
 	
 	@Override
 	public void reset()
@@ -59,8 +81,17 @@ public class NcfTileCache extends TileCache
 		for (int i = 0; i < sObsTypes.length; i++)
 			m_nObsTypes[i] = Integer.valueOf(sObsTypes[i], 36);
 		m_sObsTypes = m_oConfig.getStringArray("obs", null);
-		m_sHrz = m_oConfig.getString("hrz", "x");
-		m_sVrt = m_oConfig.getString("vrt", "y");
-		m_sTime = m_oConfig.getString("time", "time");
+		m_sHrz = m_oConfig.getStringArray("hrz", "x");
+		m_sVrt = m_oConfig.getStringArray("vrt", "y");
+		m_sTime = m_oConfig.getStringArray("time", "time");
+		String[] sUseUVWind = m_oConfig.getStringArray("uvwind", null);
+		if (sUseUVWind.length == 0)
+			m_bUseUVWind = null;
+		else
+		{
+			m_bUseUVWind = new boolean[sUseUVWind.length];
+			for (int nIndex = 0; nIndex < m_bUseUVWind.length; nIndex++)
+				m_bUseUVWind[nIndex] = Boolean.parseBoolean(sUseUVWind[nIndex]);
+		}
 	}
 }

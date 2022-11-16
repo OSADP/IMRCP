@@ -5,17 +5,22 @@
  */
 package imrcp.web.tiles;
 
-import imrcp.store.FileWrapper;
+import imrcp.store.GriddedFileWrapper;
 import imrcp.store.GribWrapper;
 import imrcp.store.grib.GribParameter;
 
 /**
- *
+ * TileCache implementation that uses {@link GribWrapper}s
  * @author Federal Highway Administration
  */
 public class GribTileCache extends TileCache
 {
+	/**
+	 * Stores different parameters for {@link imrcp.store.GribWrapper} which
+	 * are used to open MRMS files.
+	 */
 	private GribParameter[] m_nParameters;
+	
 	
 	@Override
 	public void reset()
@@ -28,7 +33,12 @@ public class GribTileCache extends TileCache
 			m_nParameters[nCount++] = new GribParameter(Integer.valueOf(sParameterInfo[i], 36), Integer.parseInt(sParameterInfo[i + 1]), Integer.parseInt(sParameterInfo[i + 2]), Integer.parseInt(sParameterInfo[i + 3]));
 	}
 	
-	protected FileWrapper getDataWrapper()
+	/**
+	 * @return a new {@link imrcp.store.GribWrapper} with the configured 
+	 * observations types and grib parameters
+	 */
+	@Override
+	protected GriddedFileWrapper getDataWrapper(int nFormatIndex)
 	{
 		return new GribWrapper(m_nSubObsTypes, m_nParameters);
 	}

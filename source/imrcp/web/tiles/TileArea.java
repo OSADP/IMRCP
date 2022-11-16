@@ -9,19 +9,33 @@ import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 
 /**
- *
+ * Extends the Area class to include a group value for polygons. This class is
+ * used to aid in clipping polygons with the boundaries of map tiles.
  * @author Federal Highway Administration
  */
 public class TileArea extends Area implements Comparable<TileArea>
 {
+	/**
+	 * Group value of the polygon, used for presentation on the map
+	 */
 	public double m_dGroupValue;
 	
+	
+	/**
+	 * Default constructor. Wrapper for {@link Area#Area()}
+	 */
 	public TileArea()
 	{
 		super();
 	}
 	
 	
+	/**
+	 * Constructs a TileArea with the given group value and the geometry defined 
+	 * by the given Path by calling {@link Area#Area(java.awt.Shape)}
+	 * @param oPath Path object defining the geometry of the polygon
+	 * @param dVal group value
+	 */
 	public TileArea(Path2D.Double oPath, double dVal)
 	{
 		super(oPath);
@@ -29,6 +43,9 @@ public class TileArea extends Area implements Comparable<TileArea>
 	}
 
 
+	/**
+	 * Compares TileAreas by group value and then {@link java.lang.Object#hashCode()}
+	 */
 	@Override
 	public int compareTo(TileArea o)
 	{
