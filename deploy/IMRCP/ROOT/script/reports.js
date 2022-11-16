@@ -1,13 +1,22 @@
+import {minutesToHHmm} from './common.js';
 {
-
-  $(document).ready(function ()
+	let sDeleteId;
+	let sDeleteName;
+  window.g_oRequirements = {'groups': 'imrcp-admin;imrcp-user'};
+  $(document).on('initPage', function ()
   {
-
+	$(document).prop('title', 'IMRCP Reports - ' + sessionStorage.uname);
+	$('#dlgDelete').dialog({autoOpen: false, position: {my: 'center', at: 'center', of: 'body'}, width: 400, modal: true, resizable: false, draggable: false, buttons:
+			[
+				{text: 'Go Back', click: function() {sDeleteId = undefined; $(this).dialog('close');}},
+				{text: 'Confirm Delete', click: deleteSub}
+			]});
+	$('#dlgDelete').html('Are you sure you want to delete this report/subscription? This cannot be undone and all associated data files will not be available for download.');
     var dateFormat = "MMM D HH:mm [UTC]";
     var ulFiles = $('#ulFiles');
 
     $.ajax({
-      url: 'reports',
+      url: 'api/reports/list',
       type: 'get',
       dataType: 'json',
       success: function (subs, status, xhr)
@@ -31,7 +40,7 @@
           {
             newSub += '<a href="';
             if (sub.isReport)
-              newSub += 'reports/' + sub.uuid + '/files/latest';
+              newSub += 'api/reports/download/' + sub.uuid + '/latest';
             else
               newSub += '#';
             newSub += '">' + subName + '</a>';
@@ -40,13 +49,13 @@
             newSub += subName + ' (pending fulfillment)';
 
           newSub += '</h4>';
-
+			newSub += `<h4 id="del_${sub.uuid}" name="${sub.name}" class="w3-right clickable" style="margin-left:10px"><i class="fa fa-trash"></i></h4>`;
           if (sub.lastAccessed)
-            newSub += '		<h4 class="w3-right">Downloaded: ' + moment(sub.lastAccessed).utc().format(dateFormat) + '</h4> ';
-
+            newSub += '         <h4 class="w3-right">Downloaded: ' + moment(sub.lastAccessed).utc().format(dateFormat) + '</h4> ';
+		
           newSub +=
-                  '	</header>' +
-                  '	<div class="w3-container">' +
+                  '     </header>' +
+                  '     <div class="w3-container">' +
                   '    <p class="w3-left sub-date"><span class="sub-date">Created: ' + moment(sub.created).utc().format(dateFormat) + '</span>';
           if (sub.isSubscription)
           {
@@ -56,12 +65,12 @@
           }
           else
           {
-              newSub += '<br/>Start: ' + moment(sub.startMillis).utc().format(dateFormat) + 
+              newSub += '<br/>Start: ' + moment(sub.startMillis).utc().format(dateFormat) +
                     '<br />End: ' + moment(sub.endMillis).utc().format(dateFormat) + '</p>';
             //include report start/end?
           }
           newSub += '</p><p class="w3-right">';
-       
+
           if(sub.elementType)
           {
             newSub +='Elements: ' +  sub.elementCount + (sub.elementType === 2 ? ' segment' : ' detector') ;
@@ -70,7 +79,7 @@
           }
           else
             newSub += 'Area: ' + sub.lat1 + ', ' + sub.lon1 + ', ' + sub.lat2 + ', ' + sub.lon2;
-          
+
           if (sub.obstypes)
           {
             if (sub.obstypes.length === 1)
@@ -115,7 +124,7 @@
               $('#divSubFilesError').hide();
 
               var uuid = $(this).data('uuid');
-              var fileUrlBase = 'reports/' + uuid + '/files/';
+              var fileUrlBase = 'api/reports/files/' + uuid;
               $.ajax({
                 url: fileUrlBase,
                 type: 'get',
@@ -127,7 +136,7 @@
                   for (var i = 0; i < files.length; ++i)
                   {
                     var file = files[i];
-                    items += '<li class="w3-' + (i % 2 === 0 ? 'white' : 'sand') + '"><p class="name"><a href="' + fileUrlBase + file + '">' + file + '</a></p></li>';
+                    items += '<li class="w3-' + (i % 2 === 0 ? 'white' : 'sand') + '"><p class="name"><a href="api/reports/download/' + uuid + '/' + file + '">' + file + '</a></p></li>';
                   }
                   //could re-use existing elements and update text instead of always dumping and recreating
                   ulFiles.empty();
@@ -160,7 +169,7 @@
 
           newSub.appendTo(sub.isReport ? userReports : userSubs);
         }
-
+		$('h4.clickable').on('click', confirmDelete);
       },
       error: function (xhr, status, error)
       {
@@ -169,4 +178,56 @@
       }
     });
   });
+  
+  function confirmDelete()
+  {
+	  sDeleteId = $(this).prop('id');
+	  sDeleteName = $(this).attr('name');
+	  $('#dlgDelete').dialog('option', 'title', 'Delete ' + sDeleteName);
+	  $('#dlgDelete').dialog('open');
+  }
+  
+  function deleteSub()
+  {
+	  showPageoverlay(`Deleting ${sDeleteName}`);
+	$.ajax(
+	{
+		'url': 'api/reports/delete/',
+		'method': 'POST',
+		'dataType': 'text',
+		'data': {'token': sessionStorage.token, 'id': sDeleteId.substring(4)}
+	}).done(function() 
+	{
+		showPageoverlay('Success!');
+		$('#' + sDeleteId).parents('.w3-card').remove();
+	}).fail(function()
+	{
+		showPageoverlay('Delete failed. Try again later');
+	}).always(function()
+	{
+		$('#ulFiles').empty().hide();
+		$('#subFilesHeader').text('');
+		$('#divSubFilesError').hide();
+		sDeleteId = sDeleteName = undefined;
+		$('#dlgDelete').dialog('close');
+		timeoutPageoverlay(2000);
+	});
+	  
+	  
+  }
+  
+  function timeoutPageoverlay(nMillis = 1500)
+{
+	window.setTimeout(function()
+	{
+		$('#pageoverlay').hide();
+	}, nMillis);
+}
+
+
+function showPageoverlay(sContents)
+{
+	$('#pageoverlay p').html(sContents);
+	$('#pageoverlay').css({'opacity': 0.5, 'font-size': 'x-large'}).show();
+}
 }

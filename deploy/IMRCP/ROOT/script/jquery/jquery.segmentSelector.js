@@ -256,7 +256,7 @@ $.widget("sp.segmentSelector", {
     };
 
 
-    const markerDivHtml = iconDivFromSprite(spriteDef['detector-white']);
+    const markerDivHtml = iconDivFromSprite(spriteDef['detector-hover']);
     this._symbolMapClickHandler = ({target, point}) => {
       const features = target.queryRenderedFeatures(pointToPaddedBounds(point))
         .filter(featureInSources(sources));
@@ -428,10 +428,7 @@ $.widget("sp.segmentSelector", {
       const elementIds = [...thisWidget.elements().keys()];
 
       const requestData = {
-        lat1: $('#txtLat1').val(),
-        lon1: $('#txtLng1').val(),
-        lat2: $('#txtLat2').val(),
-        lon2: $('#txtLng2').val(),
+        geo: JSON.stringify(thisWidget.options.map.getSource('report-location')._data.features),
         format: $('#lstFormat').val(),
         offset: offset,
         duration: duration,
@@ -465,9 +462,9 @@ $.widget("sp.segmentSelector", {
       {
         requestData.cycle = $('input[name="interval"]:checked').val();
       }
+	  requestData.token = sessionStorage.token;
 
-
-      $.ajax({url: 'reports',
+      $.ajax({url: 'api/reports/add',
         type: 'post', dataType: 'json',
         data: requestData,
         success: function (data)
