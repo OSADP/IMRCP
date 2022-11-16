@@ -1,1884 +1,2756 @@
 [
-    {
-        "imrcp.system.Directory" : 
-        {
-             "classes" : [
-                             "imrcp.geosrv.NED", "NED",
-                             "imrcp.geosrv.KCScoutDetectorLocations", "KCScoutDetectorLocations",
-                             "imrcp.geosrv.StormwatchLocations", "StormwatchLocations",
-                             "imrcp.geosrv.AHPSLocations", "AHPSLocations",
-                             "imrcp.geosrv.SegmentShps", "SegmentShps",
-                             "imrcp.geosrv.Polygons", "Polygons",
-                             "imrcp.collect.RemoteGrid", "Radar",
-                             "imrcp.collect.RemoteGrid", "RadarPrecip",
-                             "imrcp.collect.RemoteGrid", "PrecipFlag",
-                             "imrcp.store.GribStore", "RadarStore",
-                             "imrcp.store.GribStore", "RadarPrecipStore",
-                             "imrcp.store.PcCatStore", "MRMSPcCatStore", 
-                             "imrcp.store.ObsView", "ObsView",
-                             "imrcp.collect.RemoteGrid", "NDFDTd",
-                             "imrcp.collect.RemoteGrid", "NDFDTemp",
-                             "imrcp.collect.RemoteGrid", "NDFDSky",
-                             "imrcp.collect.RemoteGrid", "NDFDWspd",
-                             "imrcp.store.WeatherStore", "NDFDTdStore",
-                             "imrcp.store.WeatherStore", "NDFDTempStore",
-                             "imrcp.store.WeatherStore", "NDFDSkyStore",
-                             "imrcp.store.WeatherStore", "NDFDWspdStore",
-                             "imrcp.collect.RemoteGrid", "RTMA",
-                             "imrcp.store.WeatherStore", "RTMAStore",
-                             "imrcp.collect.RemoteGrid", "RAP",
-                             "imrcp.store.RAPStore", "RAPStore",
-                             "imrcp.store.PcCatStore", "RAPPcCatStore",
-                             "imrcp.collect.KCScoutDetectors", "KCScoutDetectors",
-                             "imrcp.store.KCScoutDetectorsStore", "KCScoutDetectorsStore",
-                             "imrcp.collect.KCScoutIncidents", "KCScoutIncidents",
-                             "imrcp.comp.KCScoutIncidentsComp", "KCScoutIncidentsComp",
-                             "imrcp.store.KCScoutIncidentsStore", "KCScoutIncidentsStore",
-                             "imrcp.collect.AHPS", "AHPSFcst",
-                             "imrcp.collect.AHPS", "AHPSObs",
-                             "imrcp.store.CsvStore", "AHPSFcstStore",
-                             "imrcp.store.CsvStore", "AHPSObsStore",
-                             "imrcp.comp.Alerts", "AHPSAlerts",
-                             "imrcp.store.AlertsStore", "AHPSAlertsStore",
-                             "imrcp.comp.Alerts", "WeatherAlerts",
-                             "imrcp.store.AlertsStore", "WeatherAlertsStore",
-                             "imrcp.store.AlertsStore","MetroAlertsStore",
-                             "imrcp.comp.Alerts","MetroAlerts",
-                             "imrcp.store.AlertsStore","StormwatchAlertsStore",
-                             "imrcp.comp.Alerts","StormwatchAlerts",
-                             "imrcp.forecast.treps.TrepsCollect", "TrepsCollect",
-                             "imrcp.store.TrepsStore", "TrepsStore",
-                             "imrcp.forecast.treps.RealTimeDetector", "RealTimeDetector",
-                             "imrcp.forecast.treps.RealTimeWeather", "RealTimeWeather",
-                             "imrcp.forecast.treps.RealTimeIncident", "RealTimeIncident",
-                             "imrcp.forecast.treps.RealTimeWorkzone", "RealTimeWorkzone",
-                             "imrcp.forecast.treps.OutputManager", "OutputManager",
-                             "imrcp.collect.PcCat", "PcCat",
-                             "imrcp.forecast.mdss.Metro", "Metro",
-                             "imrcp.store.MetroStore", "MetroStore",
-                             "imrcp.collect.SubSurfaceTemp", "SubSurfaceTemp",
-                             "imrcp.collect.CAP", "CAP",
-                             "imrcp.comp.CAPComp", "CAPComp",
-                             "imrcp.store.CAPStore", "CAPStore",
-                             "imrcp.collect.StormWatch", "StormWatch",
-                             "imrcp.store.MLPStore", "MLPStore",
-                             "imrcp.forecast.mlp.MLPPredict", "MLPPredict",
-                             "imrcp.forecast.mlp.MLPUpdate", "MLPUpdate",
-                             "imrcp.store.StormWatchStore", "StormWatchStore",
-                             "imrcp.route.Routes", "Routes",
-                             "imrcp.store.CsvStore", "TrvlTimeStore",
-                             "imrcp.subs.Subscriptions", "Subscriptions",
-                             "imrcp.comp.Notifications", "WeatherNotifications",
-                             "imrcp.comp.Notifications", "IncidentNotifications",
-                             "imrcp.comp.Notifications", "MetroNotifications",
-                             "imrcp.comp.Notifications", "AHPSNotifications",
-                             "imrcp.comp.Notifications", "StormwatchNotifications",
-                             "imrcp.store.AlertsStore", "WeatherNotificationsStore",
-                             "imrcp.store.AlertsStore", "IncidentNotificationsStore",
-                             "imrcp.store.AlertsStore", "MetroNotificationsStore",
-                             "imrcp.store.AlertsStore", "AHPSNotificationsStore",
-                             "imrcp.store.AlertsStore", "StormwatchNotificationsStore"
-                         ],
-             "prefer" : ["rtma", "ndfd", "rap", "mrms", "mlp", "treps"],
-             "rtma" : 1,
-             "ndfd" : 2,
-             "rap" : 3,
-             "mrms" : 1,
-             "treps" : 1,
-             "mlp" : 2
-        }
-    },
-    {
-        "imrcp.ImrcpBlock" :
-        {
-            "box" : ["-951099309", "386904034", "-940307712", "393772417"],
-            "retryint" : 300000,
-            "retrymax" : 9,
-            "timeout" : "1200000"
-        }
-    },
-    {
-        "NDFDTdStore" :
-        {
-            "subscribe" : ["NDFDTd"],
-            "append" : "False",
-            "period" : 1800,
-            "offset" : 150,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "limit" : 10,
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "obsid" : ["TDEW", "TDEW"],
-            "obs" : ["Dewpoint_temperature_surface", "Dewpoint_temperature_height_above_ground"],
-            "format" : ["<data path>/ndfd/td/%ryM/%ryMd/ndfd_td_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "subobs" : ["TDEW"],
-            "contrib" : "ndfd"
-        }
-    },
-    {
-        "NDFDTempStore" :
-        { 
-            "subscribe" : ["NDFDTemp"],
-            "append" : "False",
-            "period" : 1800,
-            "offset" : 150,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "limit" : 10,
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "obsid" : ["TAIR", "TAIR"],
-            "obs" : ["Temperature_surface", "Temperature_height_above_ground"],
-            "format" : ["<data path>/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "subobs" : ["TAIR"],
-            "contrib" : "ndfd"
-        }
-    },  
-    {
-        "NDFDWspdStore" :
-        {
-            "subscribe" : ["NDFDWspd"],
-            "append" : "False",
-            "period" : 1800,
-            "offset" : 150,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "limit" : 10,
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "obsid" : ["SPDWND", "SPDWND"],
-            "obs" : ["Wind_speed_surface", "Wind_speed_height_above_ground"],
-            "format" : ["<data path>/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "subobs" : ["SPDWND"],
-            "contrib" : "ndfd"
-        }
-    },
-    {
-        "NDFDSkyStore" :
-        {
-            "subscribe" : ["NDFDSky"],
-            "append" : "False",
-            "period" : 1800,
-            "offset" : 150,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "limit" : 10,
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "obsid" : ["COVCLD"],
-            "obs" : ["Total_cloud_cover_surface"],
-            "format" : ["<data path>/ndfd/sky/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "subobs" : ["COVCLD"],
-            "contrib" : "ndfd"
-        }
-    },
-    {
-        "RTMAStore" :
-        {
-            "subscribe" : ["RTMA"],
-            "append" : "False",
-            "period" : 1800,
-            "offest" : 450,
-            "maxfcst" : 3600000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "limit" : 12,
-            "initfiles" : 2,
-            "obsid" : ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
-            "obs" : ["Dewpoint_temperature_height_above_ground", "Pressure_surface", 
+	{
+		"imrcp.system.Directory":
+		{
+			"classes": [
+							"imrcp.geosrv.WayNetworks", "WayNetworks",
+							"imrcp.geosrv.DEM", "DEM",
+							"imrcp.system.Locks", "Locks",
+							"imrcp.collect.BlueToad", "BlueToadLADOTD",
+							"imrcp.collect.BlueToad", "BlueToadLADOTDRoutes",
+							"imrcp.collect.LAc2c", "LAc2c",
+							"imrcp.collect.LAc2c", "LAc2cfEU",
+							"imrcp.comp.LAc2cDetectorsComp", "LAc2cDetectorsComp",
+							"imrcp.store.TrafficSpeedStore", "LaTrafficSpeedStore",
+							"imrcp.comp.LAc2cEventsComp", "LAc2cEventsComp",
+							"imrcp.store.TrafficEventStore", "LaDOTDEventsStore",
+							"imrcp.collect.RemoteGrid", "Radar",
+							"imrcp.collect.RemoteGrid", "RadarPrecip",
+							"imrcp.collect.RemoteGrid", "PrecipFlag",
+							"imrcp.store.GribStore", "RadarStore",
+							"imrcp.store.GribStore", "RadarPrecipStore",
+							"imrcp.store.BinObsStore", "MRMSPcCatStore",
+							"imrcp.collect.WxDESub", "WxDE",
+							"imrcp.store.WxDESubStore", "WxDEStore",
+							"imrcp.store.ObsView", "ObsView",
+							"imrcp.collect.NHCKmz", "NHC",
+							"imrcp.store.NHCStore", "NHCStore",
+							"imrcp.collect.RemoteGrid", "NDFDTd",
+							"imrcp.collect.RemoteGrid", "NDFDTemp",
+							"imrcp.collect.RemoteGrid", "NDFDSky",
+							"imrcp.collect.RemoteGrid", "NDFDWspd",
+							"imrcp.collect.RemoteGrid", "NDFDQpf",
+							"imrcp.collect.RemoteGrid", "ADCIRCEast",
+							"imrcp.collect.RemoteGrid", "ADCIRCWest",
+							"imrcp.collect.GFS", "GFS",
+							"imrcp.store.WeatherStore", "NDFDTdStore",
+							"imrcp.store.WeatherStore", "NDFDTempStore",
+							"imrcp.store.WeatherStore", "NDFDSkyStore",
+							"imrcp.store.WeatherStore", "NDFDWspdStore",
+							"imrcp.store.WeatherStore", "NDFDQpfStore",
+							"imrcp.collect.RemoteGrid", "RTMA",
+							"imrcp.store.WeatherStore", "RTMAStore",
+							"imrcp.store.WeatherStore", "ADCIRCStore",
+							"imrcp.store.RAPStore", "GFSStore",
+							"imrcp.collect.RemoteGrid", "RAP",
+							"imrcp.store.RAPStore", "RAPStore",
+							"imrcp.store.BinObsStore", "RAPPcCatStore",
+							"imrcp.store.BinObsStore", "GFSPcCatStore",
+							"imrcp.store.BinObsStore", "NDFDPcCatStore",
+							"imrcp.collect.AHPS", "AHPSFcst",
+							"imrcp.collect.AHPS", "AHPSObs",
+							"imrcp.store.AHPSStore", "AHPSFcstStore",
+							"imrcp.store.AHPSStore", "AHPSObsStore",
+							"imrcp.comp.PcCat", "PcCat",
+							"imrcp.forecast.mdss.Metro", "Metro",
+							"imrcp.forecast.mdss.Metro", "MetroOnDemand",
+							"imrcp.store.MetroStore", "MetroStore",
+							"imrcp.collect.CAP", "CAP",
+							"imrcp.store.CAPStore", "CAPStore",
+							"imrcp.store.MLPStore", "MLPStoreOH",
+							"imrcp.store.MLPStore", "MLPStoreLA",
+							"imrcp.forecast.mlp.MLPPredict", "MLPPredictOH",
+							"imrcp.forecast.mlp.MLPPredict", "MLPPredictLA",
+							"imrcp.forecast.mlp.MLPUpdate", "MLPUpdateOH",
+							"imrcp.forecast.mlp.MLPUpdate", "MLPUpdateLA",
+							"imrcp.forecast.mlp.MLPUpdate", "MLPUpdateQueue",
+							"imrcp.comp.DataAssimilation", "TPVTDA",
+							"imrcp.store.BinObsStore", "TPVTDAStore",
+							"imrcp.comp.DataAssimilation", "TSSRFDA",
+							"imrcp.store.BinObsStore", "TSSRFDAStore",
+							"imrcp.collect.Inrix", "OhioInrix",
+							"imrcp.comp.InrixComp", "OhioInrixComp",
+							"imrcp.store.TrafficSpeedStore", "OhioTrafficSpeedStore",
+							"imrcp.system.ExtMapping", "ExtMapping",
+							"imrcp.collect.OhGo", "OhGoSigns",
+							"imrcp.collect.OhGo", "OhGoConstruction",
+							"imrcp.comp.OhGoConstruction", "OhGoConstructionComp",
+							"imrcp.store.TrafficEventStore", "OhGoConstructionStore",
+							"imrcp.collect.OhGo", "OhGoIncidents",
+							"imrcp.comp.OhGoIncidents", "OhGoIncidentsComp",
+							"imrcp.store.TrafficEventStore", "OhGoIncidentsStore",
+							"imrcp.collect.LADOTD511", "LADOTD511Point",
+							"imrcp.comp.LADOTD511Point", "LADOTD511PointComp",
+							"imrcp.store.TrafficEventStore", "LADOTD511PointStore",
+							"imrcp.collect.LADOTD511", "LADOTD511Line",
+							"imrcp.comp.LADOTD511Line", "LADOTD511LineComp",
+							"imrcp.store.TrafficEventStore", "LADOTD511LineStore",
+							"imrcp.comp.Alerts", "RAPAlerts",
+							"imrcp.comp.Alerts", "GFSAlerts",
+							"#imrcp.comp.Alerts", "AHPSAlerts",
+							"imrcp.comp.Alerts", "RAPPcCatAlerts",
+							"imrcp.comp.Alerts", "GFSPcCatAlerts",
+							"imrcp.comp.Alerts", "NDFDPcCatAlerts",
+							"imrcp.store.AlertsStore", "RAPAlertsStore",
+							"imrcp.store.AlertsStore", "GFSAlertsStore",
+							"#imrcp.store.AlertsStore", "AHPSAlertsStore",
+							"imrcp.store.AlertsStore", "RAPPcCatAlertsStore",
+							"imrcp.store.AlertsStore", "GFSPcCatAlertsStore",
+							"imrcp.store.AlertsStore", "NDFDPcCatAlertsStore",
+							"imrcp.collect.Geotab", "GeotabMoDOT",
+							"imrcp.store.GeotabStore", "GeotabMoDOTStore",
+							"imrcp.forecast.mlp.MLPHurricane", "MLPHurricane",
+							"imrcp.store.MLPStore", "MLPStoreHurricane"
+						],
+
+			"prefer": ["rtma", "ndfd", "rap", "gfs", "mrms", "mlp", "treps", "ahps", "metro", "mlpo", "mlpb", "mlpa", "mlph", "ladotd", "ohgo"],
+			"rtma": 1,
+			"ndfd": 2,
+			"rap": 3,
+			"gfs": 4,
+			"mrms": 1,
+			"treps": 1,
+			"mlp": 2,
+			"ahps": 1,
+			"metro": 2,
+			"mlpo": 4,
+			"mlpb": 3,
+			"mlpa": 2,
+			"mlph": 1,
+			"latdotd": 1,
+			"ohgo": 1
+		}
+	},
+	{
+		"NDFDTdStore" :
+		{
+			"subscribe": ["NDFDTd"],
+			"append": "False",
+			"period": 1800,
+			"offset": 150,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"limit": 10,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"freq": 3600000,
+			"obsid": ["TDEW", "TDEW"],
+			"obs": ["Dewpoint_temperature_surface", "Dewpoint_temperature_height_above_ground"],
+			"format": ["/opt/imrcp-data-prod/ndfd/td/%ryM/%ryMd/ndfd_td_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"subobs": ["TDEW"],
+			"contrib": "ndfd",
+			"slashes": 3
+		}
+	},
+	{
+		"NDFDTempStore" :
+		{ 
+			"subscribe": ["NDFDTemp"],
+			"append": "False",
+			"period": 1800,
+			"offset": 150,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"limit": 10,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"freq": 3600000,
+			"obsid": ["TAIR", "TAIR"],
+			"obs": ["Temperature_surface", "Temperature_height_above_ground"],
+			"format": ["/opt/imrcp-data-prod/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"subobs": ["TAIR"],
+			"contrib": "ndfd",
+			"slashes": 3
+		}
+	},  
+	{
+		"NDFDWspdStore" :
+		{
+			"subscribe": ["NDFDWspd"],
+			"append": "False",
+			"period": 1800,
+			"offset": 150,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"limit": 10,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"freq": 3600000,
+			"obsid": ["SPDWND", "SPDWND"],
+			"obs": ["Wind_speed_surface", "Wind_speed_height_above_ground"],
+			"format": ["/opt/imrcp-data-prod/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"subobs": ["SPDWND"],
+			"contrib": "ndfd",
+			"slashes": 3
+		}
+	},
+	{
+		"NDFDSkyStore" :
+		{
+			"subscribe": ["NDFDSky"],
+			"append": "False",
+			"period": 1800,
+			"offset": 150,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"limit": 10,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"freq": 3600000,
+			"obsid": ["COVCLD"],
+			"obs": ["Total_cloud_cover_surface"],
+			"format": ["/opt/imrcp-data-prod/ndfd/sky/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"subobs": ["COVCLD"],
+			"contrib": "ndfd",
+			"slashes": 3
+		}
+	},
+	{
+		"NDFDQpfStore" :
+		{
+			"subscribe": ["NDFDQpf"],
+			"append": "False",
+			"period": 1800,
+			"offset": 150,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"limit": 10,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"freq": 3600000,
+			"obsid": ["RTEPC", "RTEPC"],
+			"obs": ["Total_precipitation_surface_6_Hour_Accumulation", "Total_precipitation_surface_6_Minute_Accumulation"],
+			"format": ["/opt/imrcp-data-prod/ndfd/qpf/%ryM/%ryMd/ndfd_qpf_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"subobs": ["RTEPC"],
+			"contrib": "ndfd",
+			"slashes": 3
+		}
+	},
+	{
+		"RTMAStore" :
+		{
+			"subscribe": ["RTMA"],
+			"append": "False",
+			"period": 1800,
+			"offest": 450,
+			"maxfcst": 3600000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 60,
+			"initfiles": 2,
+			"obsid": ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
+			"obs": ["Dewpoint_temperature_height_above_ground", "Pressure_surface", 
 			"Temperature_height_above_ground", "Visibility_surface", 
 			"Wind_direction_from_which_blowing_height_above_ground", 
 			"Wind_speed_gust_height_above_ground", "Wind_speed_height_above_ground",
 			"Total_cloud_cover_entire_atmosphere_single_layer"],
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "subobs" : ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
-            "freq" : 3600000
-        }
-    },
-    {
-        "imrcp.store.RAPStore" :
-        {
-            "subscribe" : ["RAP"],
-            "limit" : 36,
-            "append" : "False",
-            "period" : 1800,
-            "offest" : 450,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "initfiles" : 24,
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "obs" : ["Pressure_surface", "Precipitation_rate_surface", "precipType", "Visibility_surface", "Temperature_height_above_ground", "Categorical_Rain_surface", 
-                     "Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface", "u-component_of_wind_height_above_ground", "v-component_of_wind_height_above_ground"],
-            "obsid" : ["PRSUR", "RTEPC", "TYPPC", "VIS", "TAIR", "1", "2", "3", "4", "5", "6"],
-            "subobs" : ["PRSUR", "TYPPC", "VIS", "SPDWND", "RTEPC"],
-            "freq" : 3600000,
-            "contrib" : "rap"
-        }
-    },
-    {
-        "RAPPcCatStore" :
-        {
-            "subscribe" : ["PcCat"],
-            "format" : ["<data path>/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
-            "limit" : 22,
-            "freq" : 3600000,
-            "subobs" : ["PCCAT"],
-            "append" : "False",
-            "period" : 1800,
-            "offset" : 450,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "initfiles" : 12,
-            "contains" : "rap"
-        }
-    },
-    {
-        "imrcp.store.FileWrapper" :
-        {
-            "fcst" : ["mrms", "rtma", "rap", "ndfd"],
-            "mrms" : 240000,
-            "rtma" : 3600000,
-            "rap" : 3600000,
-            "ndfd" : 3600000,
-            "default" : 3600000
-        }
-    },
-    {
-        "imrcp.store.MetroStore" :
-        {
-            "subscribe" : ["Metro"],
-            "limit" : 33,
-            "format" : ["<data path>/metro/%ryM/%ryMd/metro_seg_%syMdHm_%eyMdHm_%ryMdHm.nc"],
-            "hrz" : "Segment_Ids",
-            "vrt" : "Forecast_Minutes",
-            "time" : "Metro_Start_Time",
-            "keeptime" : "36000000",
-            "obs" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
-            "obsid" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
-            "subobs" : ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
-            "freq" : 1200000,
-            "maxfcst" : 28800000,
-            "timeout" : 300000,
-            "period" : 1800,
-            "offest" : 690,
-            "initfiles" : 3
-        }
-    },
-    {
-        "RadarStore" :
-        {
-            "subscribe" : ["Radar"],
-            "subobs" : ["RDR0"],
-            "format" : ["<data path>/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "parameters" : ["RDR0", "209", "11", "0"],
-            "limit" : 720,
-            "maxfcst" : 240000,
-            "append" : "False",
-            "initfiles" : 30,
-            "timeout" : 300000,
-            "freq" : 120000,
-            "contrib" : "mrms",
-            "period" : 1800,
-            "offest" : 690
-        }
-    },
-    {
-        "RadarPrecipStore" :
-        {
-            "subscribe" : ["RadarPrecip"],
-            "subobs" : ["RTEPC"],
-            "format" : ["<data path>/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "parameters" : ["RTEPC", "209", "6", "1"],
-            "limit" : 720,
-            "maxfcst" : 240000,
-            "append" : "False",
-            "initfiles" : 30,
-            "timeout" : 300000,
-            "hrz" : "lon",
-            "vrt" : "lat",
-            "time" : "time",
-            "freq" : 120000,
-            "contrib" : "mrms",
-            "period" : 1800,
-            "offest" : 810
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"subobs": ["TDEW", "PRSUR", "TAIR", "VIS", "DIRWND", "GSTWND", "SPDWND", "COVCLD"],
+			"freq": 3600000,
+			"contrib": "rtma",
+			"slashes": 3
+		}
+	},
+	{
+		"GFSStore" :
+		{
+			"subscribe": ["GFS"],
+			"append": "False",
+			"period": 1800,
+			"offest": 450,
+			"maxfcst": 604800000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 100,
+			"initfiles": 10,
+			"obsid": ["TDEW", "RTEPC", "PRSUR", "VIS", "RH", "DPHSN", "TAIR", 
+					  "1", "2", "3", "4", "5", "6", "GSTWND"],
+			"obs": ["Dewpoint_temperature_height_above_ground", "Precipitation_rate_surface", "Pressure_surface", "Visibility_surface", 
+					"Relative_humidity_height_above_ground", "Snow_depth_surface", "Temperature_surface", "Categorical_Rain_surface",
+					"Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface", "u-component_of_wind_height_above_ground", "v-component_of_wind_height_above_ground",
+					"Wind_speed_gust_surface"],
+			"hrz": "lon",
+			"vrt": "lat",
+			"time": "time",
+			"subobs": ["TDEW", "RTEPC", "PRSUR", "VIS", "RH", "DPHSN", "TAIR", "GSTWND", "SPDWND", "TYPPC"],
+			"freq": 21600000,
+			"contrib": "gfs"
+		}
+	},
+	{
+		"RAPStore" :
+		{
+			"subscribe": ["RAP"],
+			"limit": 72,
+			"append": "False",
+			"period": 1800,
+			"offest": 450,
+			"maxfcst": 75600000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"initfiles": 24,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"obs": ["Pressure_surface", "Precipitation_rate_surface", "precipType", "Visibility_surface", "Temperature_height_above_ground", "Categorical_Rain_surface", 
+					"Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface", "u-component_of_wind_height_above_ground", "v-component_of_wind_height_above_ground"],
+			"obsid": ["PRSUR", "RTEPC", "TYPPC", "VIS", "TAIR", "1", "2", "3", "4", "5", "6"],
+			"subobs": ["PRSUR", "TYPPC", "VIS", "SPDWND", "RTEPC"],
+			"freq": 3600000,
+			"contrib": "rap",
+			"slashes": 3
+		}
+	},
+	{
+		"ADCIRCStore" :
+		{
+			"subscribe": ["ADCIRCEast"],
+			"limit": 10,
+			"append": "False",
+			"period": 1800,
+			"offest": 450,
+			"maxfcst": 432000000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/adcirc/east/%ryM/%ryMd/adcirc_025_east_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"initfiles": 1,
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"obs": ["Extra_Tropical_Storm_Surge_Combined_Surge_and_Tide_surface"],
+			"obsid": ["SSCST"],
+			"subobs": ["SSCST"],
+			"freq": 21600000,
+			"contrib": "adcirc",
+			"slashes": 3
+		}
+	},
+	{
+		"RAPPcCatStore" :
+		{
+			"subscribe": ["PcCat"],
+			"format": ["/opt/imrcp-data-prod/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 22,
+			"freq": 3600000,
+			"subobs": ["PCCAT"],
+			"append": "False",
+			"period": 1800,
+			"offset": 450,
+			"maxfcst": 75600000,
+			"cachetimeout": 3600000,
+			"initfiles": 12,
+			"contains": "rap"
+		}
+	},
+	{
+		"GFSPcCatStore" :
+		{
+			"subscribe": ["PcCat"],
+			"format": ["/opt/imrcp-data-prod/pccat/gfs/%ryM/%ryMd/gfs_pccat_250_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 22,
+			"freq": 10800000,
+			"subobs": ["PCCAT"],
+			"append": "False",
+			"period": 1800,
+			"offset": 450,
+			"maxfcst": 108000000,
+			"cachetimeout": 3600000,
+			"initfiles": 12,
+			"contains": "gfs"
+		}
+	},
+	{
+		"NDFDPcCatStore" :
+		{
+			"subscribe": ["PcCat"],
+			"format": ["/opt/imrcp-data-prod/pccat/ndfd/%ryM/%ryMd/imrcp_ndfd_030_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 44,
+			"freq": 3600000,
+			"subobs": ["PCCAT"],
+			"append": "False",
+			"period": 1800,
+			"offset": 450,
+			"maxfcst": 10800000,
+			"cachetimeout": 3600000,
+			"initfiles": 12,
+			"contains": "ndfd"
+		}
+	},
+	{
+		"imrcp.store.FileWrapper" :
+		{
+			"fcst": ["mrms", "rtma", "rap", "ndfd", "gfs", "metro", "wxde"],
+			"mrms": 240000,
+			"rtma": 3600000,
+			"rap": 3600000,
+			"ndfd": 3600000,
+			"gfs": 10800000,
+			"metro": 300000,
+			"wxde": 3600000,
+			"default": 3600000
+		}
+	},
+	{
+		"imrcp.store.MetroStore" :
+		{
+			"subscribe": ["Metro"],
+			"limit": 120,
+			"format": ["/opt/imrcp-data-prod/metro/%ryM/%ryMd/%S/%S/metro_%S_%S_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"keeptime": "36000000",
+			"subobs": ["STPVT", "TPVT", "TSSRF", "DPHLIQ", "DPHSN"],
+			"freq": 1200000,
+			"maxfcst": 28800000,
+			"cachetimeout": 3600000,
+			"period": 1800,
+			"offest": 690,
+			"initfiles": 100
+		}
+	},
+	{
+		"RadarStore" :
+		{
+			"subscribe": ["Radar"],
+			"subobs": ["RDR0"],
+			"format": ["/opt/imrcp-data-prod/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"parameters": ["RDR0", "209", "11", "0"],
+			"limit": 720,
+			"maxfcst": 240000,
+			"append": "False",
+			"initfiles": 30,
+			"cachetimeout": 3600000,
+			"freq": 120000,
+			"contrib": "mrms",
+			"period": 1800,
+			"offest": 690
+		}
+	},
+	{
+		"RadarPrecipStore" :
+		{
+			"subscribe": ["RadarPrecip"],
+			"subobs": ["RTEPC"],
+			"format": ["/opt/imrcp-data-prod/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"parameters": ["RTEPC", "209", "6", "1"],
+			"limit": 720,
+			"maxfcst": 240000,
+			"append": "False",
+			"initfiles": 30,
+			"cachetimeout": 3600000,
+			"hrz": "lon",
+			"vrt": "lat",
+			"time": "time",
+			"freq": 120000,
+			"contrib": "mrms",
+			"period": 1800,
+			"offest": 810,
+			"slashes": 3
+		}
+	},
+	{
+		"MRMSPcCatStore" :
+		{
+			"subscribe": ["PcCat"],
+			"format": ["/opt/imrcp-data-prod/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"contains": "mrms",
+			"limit": 60,
+			"freq": 120000,
+			"subobs": ["PCCAT"],
+			"maxfcst": 240000,
+			"append": "False",
+			"initfiles": 30,
+			"cachetimeout": 3600000,
+			"period": 1800,
+			"offest": 810
 
-        }
-    },
-    {
-        "MRMSPcCatStore" :
-        {
-            "subscribe" : ["PcCat"],
-            "format" : ["<data path>/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
-            "contains" : "mrms",
-            "limit" : 60,
-            "freq" : 120000,
-            "subobs" : ["PCCAT"],
-            "maxfcst" : 240000,
-            "append" : "False",
-            "initfiles" : 30,
-            "timeout" : 300000,
-            "period" : 1800,
-            "offest" : 810
-
-        }
-    },
-    {
-        "imrcp.collect.RemoteGrid" :
-        {
-            "conntimeout" : 90000
-        }
-    },
-    {
-        "RTMA" :
-        {
-            "url" : "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/",
-            "offset" : 300,
-            "period" : 600,
-            "dest" : "<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "src" : "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/rtma2p5.%ryyyyMMdd/rtma2p5.t%rHHz.2dvarges_ndfd.grb2_wexp",            "delay" : 300000,
-            "range" : 3600000,
-            "freq" : 3600000,
-            "dirs" : 2,
-            "dirdiff" : 86400000,
-            "urlext" : "rtma2p5.%ryMd/",
-            "start" : "rtma2p5",
-            "end" : "ndfd.grb2_wexp",
-            "initskip" : "rtma",
-            "conskip" : "",
-            "pattern" : "rtma2p5\\.t[\\d]{2}z\\.2dvarges_ndfd\\.grb2_wexp",
-            "usenow" : "False",
-            "recvoffset" : 3300000,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "defbuf" : 83886080
-        }
-    },
-    {
-        "RAP" :
-        {
-            "url" : "ftp://ftpprd.ncep.noaa.gov/pub/data/nccf/com/rap/prod/",
-            "offset" : 300,
-            "period" : 600,
-            "dest" : "<data path>/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "src" : "ftp://ftpprd.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.%ryyyyMMdd/rap.t%rHHz.awp130pgrbf%rnn.grib2",
-            "delay" : -3300000,
-            "range" : 3600000,
-            "freq" : 3600000,
-            "dirs" : 2,
-            "dirdiff" : 86400000,
-            "urlext" : "rap.%ryMd/",
-            "start" : "rap.t",
-            "end" : ".grib2",
-            "initskip" : "rap.t",
-            "conskip" : ".idx",
-            "pattern" : "rap\\.t[\\d]{2}z\\.awp130pgrbf[\\d]{2}\\.grib2",
-            "usenow" : "False",
-            "recvoffset" : 3300000,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "offsetlimit" : 11,
-            "defbuf" : 16777216
-        }
-    },
-    {
-        "imrcp.collect.PcCat" :
-        {
-            "subscribe" : ["RadarPrecip", "RAP", "RTMAStore"],
-            "mrms" : "RadarPrecip",
-            "rap" : "RAP",
-            "rtmastore" : "RTMAStore",
-            "mrmsformat" : "<data path>/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "mrmspccat" : "<data path>/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
-            "rapformat" : "<data path>/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "rappccat" : "<data path>/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "obs" : ["Precipitation_rate_surface", "Categorical_Rain_surface", "Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface"],
-            "obsid" : ["RTEPC", "1", "2", "3", "4"],
-            "parameters" : ["RTEPC", "209", "6", "1"],
-            "subobs" : ["PCCAT"],
-            "period" : 0,
-            "offset" : 0,
-            "queuefile" : ""
-        }
-    },
-    {
-        "Radar" :
-        {
-            "offset" : 0,
-            "period" : 60,
-            "delay" : 0,
-            "range" : 240000,
-            "freq" : 120000,
-            "url" : "https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/",
-            "dest" : "<data path>/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "src" : "https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/MRMS_MergedBaseReflectivityQC_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "MRMS_MergedBaseReflectivityQC",
-            "end" : ".grib2.gz",
-            "initskip" : "MRMS_MergedBaseReflectivityQC.latest.grib2.gz",
-            "conskip" : "</td></tr>",
-            "pattern" : "MRMS_MergedBaseReflectivityQC_00\\.00_[\\d]{8}-[\\d]{6}.grib2.gz",
-            "usenow" : "False",
-            "recvoffset" : 0,
-            "dlperiod" : 0,
-            "dloffset" : 120,
-            "defbuf" : 1048576
-        }
-    },
-    {
-        "RadarPrecip" :
-        {
-            "offset" : 0,
-            "period" : 60,
-            "delay" : 0,
-            "range" : 240000,
-            "freq" : 120000,
-            "url" : "https://mrms.ncep.noaa.gov/data/2D/PrecipRate/",
-            "dest" : "<data path>/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "src" : "https://mrms.ncep.noaa.gov/data/2D/PrecipRate/MRMS_PrecipRate_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "MRMS_PrecipRate",
-            "end" : ".grib2.gz",
-            "initskip" : "MRMS_PrecipRate.latest.grib2.gz",
-            "conskip" : "</td></tr>",
-            "pattern" : "MRMS_PrecipRate_00\\.00_[\\d]{8}-[\\d]{6}.grib2.gz",
-            "usenow" : "False",
-            "recvoffset" : 0,
-            "dlperiod" : 0,
-            "dloffset" : 120,
-            "defbuf" : 1048576
-        }
-    },
-    {
-        "PrecipFlag" :
-        {
-            "offset" : 0,
-            "period" : 60,
-            "delay" : 0,
-            "range" : 240000,
-            "freq" : 120000,
-            "url" : "https://mrms.ncep.noaa.gov/data/2D/PrecipFlag/",
-            "dest" : "<data path>/mrms/pflag/%ryM/%ryMd/mrms_pflag_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "src" : "https://mrms.ncep.noaa.gov/data/2D/PrecipFlag/MRMS_PrecipFlag_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "MRMS_PrecipFlag",
-            "end" : ".grib2.gz",
-            "initskip" : "MRMS_PrecipFlag.latest.grib2.gz",
-            "conskip" : "</td></tr>",
-            "pattern" : "MRMS_PrecipFlag_00\\.00_[\\d]{8}-[\\d]{6}.grib2.gz",
-            "usenow" : "False",
-            "recvoffset" : 0,
-            "dlperiod" : 0,
-            "dloffset" : 120,
-            "defbuf" : 1048576
-        }
-    },
-    {
-        "NDFDSky" :
-        {
-            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
-            "offset" : 300,
-            "period" : 600,
-            "delay" : 3900000,
-            "range" : 36000000,
-            "freq" : 3600000,
-            "src" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.sky.bin",
-            "dest" : "<data path>/ndfd/sky/%ryM/%ryMd/ndfd_sky_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "ds",
-            "end" : ".bin",
-            "initskip" : "ds.sky",
-            "conskip" : "",
-            "pattern" : "ds\\.sky\\.bin",
-            "usenow" : "True",
-            "recvoffset" : 0,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "defbuf" : 26214400
-        }
-    },
-    {
-        "NDFDTd" :
-        {
-            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
-            "offset" : 300,
-            "period" : 600,
-            "delay" : 3900000,
-            "range" : 36000000,
-            "freq" : 3600000,
-            "src" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.td.bin",
-            "dest" : "<data path>/ndfd/td/%ryM/%ryMd/ndfd_td_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "ds",
-            "end" : ".bin",
-            "initskip" : "ds.td",
-            "conskip" : "",
-            "pattern" : "ds\\.td\\.bin",
-            "usenow" : "True",
-            "recvoffset" : 0,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "defbuf" : 47185920
-        }
-    },
-    {
-        "NDFDTemp" :
-        {
-            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
-            "offset" : 300,
-            "period" : 600,
-            "delay" : 3900000,
-            "range" : 36000000,
-            "freq" : 3600000,
-            "src" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.temp.bin",
-            "dest" : "<data path>/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "ds",
-            "end" : ".bin",
-            "initskip" : "ds.temp",
-            "conskip" : "",
-            "pattern" : "ds\\.temp\\.bin",
-            "usenow" : "True",
-            "recvoffset" : 0,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "defbuf" : 52428800
-        }
-    },
-    {
-        "NDFDWspd" :
-        {
-            "url" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
-            "offset" : 300,
-            "period" : 600,
-            "delay" : 3900000,
-            "range" : 36000000,
-            "freq" : 3600000,
-            "src" : "ftp://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.wspd.bin",
-            "dest" : "<data path>/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
-            "dirs" : 1,
-            "dirdiff" : 0,
-            "urlext" : "",
-            "start" : "ds",
-            "end" : ".bin",
-            "initskip" : "ds.wspd",
-            "conskip" : "",
-            "pattern" : "ds\\.wspd\\.bin",
-            "usenow" : "True",
-            "recvoffset" : 0,
-            "dlperiod" : 3600,
-            "dloffset" : 3300,
-            "defbuf" : 83886080
-        }
-    },
-    {
-        "imrcp.collect.KCScoutDetectors" :
-        {
-            "subscribe" :["KCScoutDetectorLocations"],
-            "offset" : 0,
-            "period" : 60,
-            "dest" : "<data path>/detector/%ryM/scout_detectors_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "freq" : 86400000,
-            "user" : [""],
-            "pw" : [""],
-            "url" : "http://www.kcscout.com/TransSuite.DataFeed.WebService/DataFeedService.svc",
-            "delay" : 0,
-            "range" : 86400000
-        }
-    },
-    {
-        "imrcp.collect.KCScoutIncidents" :
-        {
-            "offset" : 0,
-            "period" : 60,
-            "file" : "/<temp file path>/incident.xml"
-        }
-    },
-    {
-        "imrcp.comp.KCScoutIncidentsComp" :
-        {
-            "subscribe" : ["KCScoutIncidents"],
-            "tol" : 5000,
-            "extend" : 450000,
-            "freq" : 86400000,
-            "format" : "<data path>/incident/%ryM/scout_incidents_%syMdHm_%eyMdHm_%ryMdHm.csv" 
-        }
-    },
-    {
-        "imrcp.store.KCScoutDetectorsStore" :
-        {
-            "subscribe" : ["KCScoutDetectors", "KCScoutDetectorLocations"],
-            "dir" : "'/opt/imrcp-data-prod/detector/'yyyyMM/",
-            "format" : ["<data path>/detector/%ryM/scout_detectors_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["SPDLNK", "DNTLNK", "VOLLNK"],
-            "freq" : 86400000,
-            "limit" : 10,
-            "obslength" : 60000,
-            "append" : "True",
-            "period" : 4500,
-            "offset" : 810,
-            "maxfcst" : 0,
-            "timeout" : 300000,
-            "initfiles" : 1
-        }
-    },
-    {
-        "imrcp.store.KCScoutIncidentsStore" :
-        {
-            "subscribe" : ["KCScoutIncidentsComp", "SegmentShps"],
-	    "format" : ["<data path>/incident/%ryM/scout_incidents_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["EVT"],
-            "limit" : 5,
-            "maxfcst" : 86400000,
-            "freq" : 86400000,
-            "offset" : 1050, 
-            "period" : 1800,
-            "append" : "True",
-            "initfiles" : 1,
-            "timeout" : 300000
-        }
-    },
-    {
-        "imrcp.geosrv.SegmentShps" :
-        {
-            "dir" : "<data path>/metadata/",
-            "segment" : "Segments.csv",
-            "mlpmap" : "<data path>/metadata/MLP_LinkId_Map.csv"
-        }
-    },
-    {
-        "imrcp.geosrv.NED" :
-        {
-            "dir" : "<path to national elevation database>"
-        }
-    },
-    {
-        "imrcp.forecast.treps.RealTimeDetector" :
-        {
-            "subscribe" : ["KCScoutDetectorsStore", "KCScoutDetectorLocations"],
-            "output" : "'/<temp file path>/detector.dat'",
-            "period" : 60,
-            "offset" : 10,
-            "rtoffset" : 60000,
-            "minfile" : 15
-        }
-    },
-    {
-        "imrcp.forecast.treps.RealTimeIncident" :
-        {
-            "subscribe" : ["KCScoutIncidentsStore", "AHPSAlertsStore"],
-            "output" : "'/<temp file path>/incident.dat'",
-            "period" : 60,
-            "offset" : 0
-        }
-    },
-    {
-        "imrcp.forecast.treps.RealTimeWorkzone" :
-        {
-            "subscribe" : ["KCScoutIncidentsStore"],
-            "output" : "'/<temp file path>/workzone.dat'",
-            "period" : 60,
-            "offset" : 0,
-            "rate" : 1500
-        }
-    },
-    {
-        "imrcp.forecast.treps.RealTimeWeather" :
-        {
-            "subscribe" : ["RAPStore"],
-            "output" : "'/<temp file path>/weather.dat'",
-            "period" : 3600,
-            "interval" : 4 
-        }
-    },
-    {
-        "ObsType" :
-        {
-            "rules" : ["PCCAT", "RDR0", "SPDWND", "TAIR", "TRFLNK", "GSTWND", "VIS", "TDNLNK", "VOLLNK", "SPDLNK", "STPVT", "TPVT", "DPHSN", "DPHLNK", "EVT", "TIMERT", "RTEPC"],
-            "lrain" : "0.0007055556",
-            "mrain" : "0.0021166667",
-            "lsnow" : "0.0000705556",
-            "msnow" : "0.0007055556",
-            "raintemp" : "273.65",
-            "snowtemp" : "272.65",
-            "lightrainmm" : "2.6",
-            "medrainmm" : "7.6",
-            "lightsnowmm" : "0.26",
-            "medsnowmm" : "0.76"
-        }
-    },
-    {
-        "SourceUnits" :
-        {
-            "file" : "<data path>/metadata/SourceUnits.csv"
-        }
-    },
-    {
-        "imrcp.forecast.mdss.Metro" :
-        {
-            "subscribe" : ["RAPStore", "RTMAStore", "SegmentShps"],
-            "fcsthrs" : 10,
-            "obshrs" : 8,
-            "format" : "<data path>/metro/%ryM/%ryMd/metro_seg_%syMdHm_%eyMdHm_%ryMdHm.nc",
-            "threads" : 5,
-            "offset" : 0,
-            "period" : 600,
-            "maxqueue" : 504
-        }
-    },
-    {
-        "Metro" :
-        {
-            "runs" : 1,
-            "queuefile" : "/<temp file path>/realtime_metroqueue.txt",
-            "realtime" : "True"
-        }
-    },
-    {
-        "DoMetroWrapper" :
-        {
-            "roadmin" : -50,
-            "roadmax" : 80,
-            "ssmin" : -40,
-            "ssmax" : 80,
-            "airmin" : -60,
-            "airmax" : 50,
-            "windmax" : 90,
-            "prmin" : 60000,
-            "prdef" : 101325,
-            "prmax" : 110000,
-            "initrc" : ["1", "1", "1", "1", "1", "1", "1", "1"],
-            "initrt" : ["3.88", "3.88", "3.88", "3.88", "3.88", "3.88", "3.88", "3.88"],
-            "initsub" : ["7", "7", "7", "7", "7", "7", "7", "7"],
-            "initsn" : "0",
-            "initliq" : "0",
-            "dir" : "/<temp file path>/",
-            "precip" : 3600000,
-            "raincut" : "0.01",
-            "snowcut" : "0.2"
-        }
-    },
-    {
-        "imrcp.subs.Subscriptions" :
-        {
-            "subsRoot" : "<data path>/subs",
-            "offset" : 0,
-            "period" : 300
-        }
-    },
-    {
-        "imrcp.comp.Alerts" :
-        {
-            "freq" : 86400000
-        }
-     },
-     {
-        "WeatherAlerts" :
-        {
-            "subscribe" : ["RAPPcCatStore", "RAPStore", "RTMAStore", "SegmentShps"],
-            "rules" : ["light-winter-precip-snow", "light-winter-precip-ice-pellets", "light-winter-precip-freezing-rain", "moderate-winter-precip-snow", "moderate-winter-precip-ice-pellets",
-                       "moderate-winter-precip-freezing-rain", "heavy-winter-precip-snow", "heavy-winter-precip-ice-pellets", "heavy-winter-precip-freezing-rain", "light-precip",
-                       "moderate-precip", "heavy-precip", "low-visibility"],
-            "light-winter-precip-snow" : ["light-winter-precip", "PCCAT", "light-snow", "light-snow", ""],
-            "light-winter-precip-ice-pellets" : ["light-winter-precip", "PCCAT", "light-ice", "light-ice", ""],
-            "light-winter-precip-freezing-rain" : ["light-winter-precip", "PCCAT", "light-freezing-rain", "light-freezing-rain", ""],
-            "moderate-winter-precip-snow" : ["moderate-winter-precip", "PCCAT", "moderate-snow", "moderate-snow", ""],
-            "moderate-winter-precip-ice-pellets" : ["moderate-winter-precip", "PCCAT", "moderate-ice", "moderate-ice", ""],
-            "moderate-winter-precip-freezing-rain" : ["moderate-winter-precip", "PCCAT", "moderate-freezing-rain", "moderate-freezing-rain", ""],
-            "heavy-winter-precip-snow" : ["heavy-winter-precip", "PCCAT", "heavy-snow", "heavy-snow", ""],
-            "heavy-winter-precip-ice-pellets" : ["heavy-winter-precip", "PCCAT", "heavy-ice", "heavy-ice", ""],
-            "heavy-winter-precip-freezing-rain" : ["heavy-winter-precip", "PCCAT", "heavy-freezing-rain", "heavy-freezing-rain", ""],
-            "light-precip" : ["light-precip", "PCCAT", "light-rain", "light-rain", ""],
-            "moderate-precip" : ["moderate-precip", "PCCAT", "moderate-rain", "moderate-rain", ""],
-            "heavy-precip" : ["heavy-precip" , "PCCAT", "heavy-rain", "heavy-rain", ""],
-            "low-visibility" : ["low-visibility", "VIS", "0", "322", "m"],
-            "format" : "<data path>/alert/weather/%ryM/imrcp_weatheralerts_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "obs" : ["PCCAT", "VIS"]
-        }
-     },
-     {
-        "TrafficAlerts" :
-        {
-            "subscribe" : ["TrepsStore"],
-            "rules" : ["slow-traffic", "very-slow-traffic", "lengthy-queue"],
-            "slow-traffic" : ["slow-traffic", "TRFLNK", "20", "40", ""],
-            "very-slow-traffic" : ["very-slow-traffic", "TRFLNK", "0", "20", ""],
-            "lengthy-queue" : ["lengthy-queue", "QPRLNK", "0.3", "", ""],
-            "format" : "<data path>/alert/traffic/%ryM/imrcp_trafficalerts_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "obs" : ["TRFLNK", "QPRLNK"]
-        }
-     },
-     {
-        "MetroAlerts" :
-        {
-            "subscribe" : ["MetroStore"],
-            "rules" : ["dew-on-roadway", "frost-on-roadway"],
-            "dew-on-roadway" : ["dew-on-roadway", "STPVT", "dew", "dew", ""],
-            "frost-on-roadway" : ["frost-on-roadway", "STPVT", "frost", "frost", ""],
-            "format" : "<data path>/alert/metro/%ryM/imrcp_metroalerts_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "obs" : ["STPVT"]
-        }
-     },
-     {
-        "AHPSAlerts" :
-        {
-            "subscribe" : ["AHPSStore"],
-            "rules" : ["action", "flood", "flooded-road"],
-            "action" : ["flood-stage-action", "STG", "action", "action", ""],
-            "flood" : ["flood-stage-flood", "STG", "flood", "flood", ""],
-            "flooded-road" : ["flooded-road", "DPHLNK", "0.00000000001", "", "ft"],
-            "format" : "<data path>/alert/ahps/%ryM/imrcp_ahspalerts_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "obs" : ["DPHLNK", "STG"]
-        }
-     },
-     {
-        "StormwatchAlerts" :
-        {
-            "subscribe" : ["StormWatchStore"],
-            "rules" : ["action", "flood"],
-            "action" : ["action", "STG", "action", "action", ""],
-            "flood" : ["flood", "STG", "flood", "flood", ""],
-            "format" : "<data path>/alert/stormw/%ryM/imrcp_stormwalerts_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "obs" : ["STG"]
-        }
-     },
-     {
-        "imrcp.comp.SpeedStatsAlerts" :
-        {
-            "subscribe" : ["SegmentShps", "TrepsStore", "KCScoutDetectorLocations"],
-            "rule" : "0.7",
-            "array" : 7,
-            "file" : "/<temp file path>/speed_alerts.csv"
-        }
-     },
-     {
-        "imrcp.store.AlertsStore" :
-        {
-            "subobs" : ["EVT"],
-            "freq" : 86400000,
-            "limit" : 2,
-            "period" : 1800,
-            "timeout" : 3600000,
-            "initfiles" : 1,
-            "append" : "True"
-        }
-     },
-     {
-        "WeatherAlertsStore" :
-        {
-            "subscribe" : ["WeatherAlerts"],
-            "format" : ["<data path>/alert/weather/%ryM/imrcp_weatheralerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 3600000,
-            "maxfcst" : 28800000,
-            "offset" : 1050
-        }
-     },
-     {
-        "TrafficAlertsStore" :
-        {
-            "subscribe" : ["TrafficAlerts"],
-            "format" : ["<data path>/alert/traffic/%ryM/imrcp_trafficalerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 300000,
-            "maxfcst" : 7200000,
-            "offset" : 1050
-        }
-     },
-     {
-        "MetroAlertsStore" :
-        {
-            "subscribe" : ["MetroAlerts"],
-            "format" : ["<data path>/alert/metro/%ryM/imrcp_metroalerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 1200000,
-            "maxfcst" : 28800000,
-            "offset" : 1170
-        }
-     },
-     {
-        "SpeedStatsAlertsStore" :
-        {
-            "subscribe" : ["SpeedStatsAlerts"],
-            "format" : ["<data path>/alert/speed/%ryM/imrcp_speedalerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 3600000,
-            "maxfcst" : 7200000,
-            "offset" : 1170
-        }
-     },
-     {
-        "AHPSAlertsStore" :
-        {
-            "subscribe" : ["AHPSAlerts"],
-            "format" : ["<data path>/alert/ahps/%ryM/imrcp_ahpsalerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 3600000,
-            "maxfcst" : 28800000,
-            "offset" : 1170
-        }
-     },
-     {
-        "StormwatchAlertsStore" :
-        {
-            "subscribe" : ["StormwatchAlerts"],
-            "format" : ["<data path>/alert/stormw/%ryM/imrcp_stormwalerts_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 600000,
-            "maxfcst" : 28800000,
-            "offset" : 1290
-        }
-     },
-     {
-        "imrcp.system.Units" :
-        {
-            "file" : "<data path>/metadata/UnitConversions.csv"
-        }
-     },
-     {
-        "imrcp.forecast.treps.OutputManager" :
-        {
-            "subscribe" : ["TrepsCollect"],
-            "offset" : 50,
-            "period" : 900,
-            "dir" : "/<temp file path>/",
-            "network" : "network.dat",
-            "format" : ["<data path>/treps/results/%ryM/%ryMd/treps_%syMdHm_%eyMdHm_%ryMdHm.csv",
-                        "<data path>/treps/dat/%ryM/%ryMd/treps_LinkVolume_%syMdHm_%eyMdHm_%ryMdHm.csv",
-                        "<data path>/treps/dat/%ryM/%ryMd/treps_OutLinkSpeedAll_%syMdHm_%eyMdHm_%ryMdHm.csv",
-                        "<data path>/treps/dat/%ryM/%ryMd/treps_OutLinkDent_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "date" : "'Date 'MM/dd/yy'; Time 'HH:mm:ss",
-            "time" : "OutLinkDent.dat",
-            "#mapping" : ["VOLLNK", "LinkVolume.dat", "GENLNK", "OutLinkGen.dat", "VEHLNK", "OutLinkVeh.dat", "QUELNK", "OutLinkQue.dat",
-                         "SPDLNK", "OutLinkSpeedAll.dat", "DNTLNK", "OutLinkDent.dat", "SPFLNK", "OutLinkSpeedFree.dat", "DNFLNK", "OutLinkDentFree.dat",
-                         "CTLEFT", "OutLeftFlow.dat", "DURGRN", "OutGreen.dat", "CTTHRU", "OutFlow.dat", "CTMID", "OutAccuVol.dat"],
-            "mapping" : ["VOLLNK", "LinkVolume.dat", "SPDLNK", "OutLinkSpeedAll.dat", "DNTLNK", "OutLinkDent.dat"]
-        }
-     },
-     {
-        "imrcp.store.TrepsStore" :
-        {
-            "subscribe" : ["OutputManager", "SegmentShps"],
-            "subobs" : ["VOLLNK", "GENLNK", "VEHLNK", "QUELNK", "SPDLNK", "DNTLNK", "SPFLNK", "DNFLNK", "CTLEFT", "DURGRN", "CTTHRU", "CTMID", "TRFLNK", "TDNLNK", "QPRLNK"],
-            "offset" : 1290,
-            "period" : 1800,
-            "maxfcst" : 7260000,
-            "timeout" : 300000,
-            "format" : ["<data path>/treps/results/%ryM/%ryMd/treps_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "freq" : 900000,
-            "limit" : 50,
-            "initfiles" : 2
-        }
-     },
-     {
-        "imrcp.forecast.treps.TrepsCollect" :
-        {
-            "period" : 30,
-            "ftp" : "",
-            "user" : "",
-            "pw" : "",
-            "dir" : "/<temp file path>/",
-            "timeout" : 5000,
-            "delay" : 840000,
-            "offset" : 0,
-            "files" : ["LinkVolume.dat", "OutFlow.dat", "OutLinkDent.dat", "OutLinkSpeedAll.dat", "VehTrajectory.dat"]
-        }
-     },
-     {
-        "imrcp.collect.AHPS" :
-        {
-            "subscribe" : ["SegmentShps", "AHPSLocations"],
-            "offset" : 119,
-            "period" : 300,
-            "url" : "https://water.weather.gov/ahps/download.php",
-            "file" : "<data path>/metadata/ahps.csv",
-            "metadata" : "<data path>/metadata/ahps_stages.csv",
-            "freq" : 3600000
-        }
-     },
-     {
-        "AHPSFcst" :
-        {
-            "download" : "https://water.weather.gov/ahps/download.php?data=tgz_fcst_f024",
-            "tgz" : "'/opt/imrcp-data-prod/ahps/forecast/'yyyyMM/yyyyMMdd/'ahps_forecast_'yyyyMMdd'_'HHmm'.tgz'",
-            "dest" : "<data path>/ahps/forecast/%ryM/%ryMd/ahps_forecast_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "field" : "Forecast",
-            "search" : "Shapefile (Maximum Forecast 1-Day)",
-            "delay" : 0,
-            "range" : 86400000,
-            "hourint" : 24
-        }
-     },
-     {
-        "AHPSObs" :
-        {
-            "download" : "https://water.weather.gov/ahps/download.php?data=tgz_obs",
-            "tgz" : "'/opt/imrcp-data-prod/ahps/observation/'yyyyMM/yyyyMMdd/'ahps_observation_'yyyyMMdd'_'HHmm'.tgz'",
-            "dest" : "<data path>/ahps/observation/%ryM/%ryMd/ahps_observation_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "field" : "Observed",
-            "search" : "Shapefile (Observed)",
-            "delay" : 0,
-            "range" : 3600000,
-            "hourint" : 1
-        }
-     },
-     {
-        "AHPSFcstStore" :
-        {
-            "subscribe" : ["AHPSFcst"],
-            "append" : "True",
-            "freq" : 3600000,
-            "limit" : 10,
-            "format" : ["<data path>/ahps/forecast/%ryM/%ryMd/ahps_forecast_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["DPHLNK", "STG"],
-            "maxfcst" : 86400000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "period" : 4500,
-            "offset" : 105
-        }
-     },
-     {
-        "AHPSObsStore" :
-        {
-            "subscribe" : ["AHPSObs"],
-            "append" : "True",
-            "freq" : 3600000,
-            "limit" : 10,
-            "format" : ["<data path>/ahps/observation/%ryM/%ryMd/ahps_observation_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["DPHLNK", "STG"],
-            "maxfcst" : 3600000,
-            "timeout" : 300000,
-            "initfiles" : 1,
-            "period" : 4500,
-            "offset" : 105
-        }
-     },
-     {
-        "imrcp.collect.SubSurfaceTemp" :
-        {
-            "file" : "<data path>/subsurftemp/SubSurfaceTemp.csv",
-            "id" : 123014,
-            "user" : "",
-            "pw" : "",
-            "offset" : 0,
-            "period" : 300,
-            "ftp" : "",
-            "init" : "12.7"
-        }
-     },
-     {
-        "imrcp.collect.CAP" :
-        {
-            "offset" : 0,
-            "period" : 300,
-            "states" : ["ks", "mo"],
-            "url" : "https://alerts.weather.gov/cap/%s.php?x=1",
-            "output" : "/<temp file path>/cap.xml"
-        }
-     },
-     {
-        "imrcp.comp.CAPComp" :
-        {
-            "subscribe" : ["CAP", "Polygons"],
-            "format" : "<data path>/cap/%ryM/cap_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "freq" : 86400000
-        }
-     },
-     {
-        "imrcp.store.CAPStore" :
-        {
-            "subscribe" : ["CAPComp"],
-            "format" : ["<data path>/cap/%ryM/cap_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "freq" : 86400000,
-            "maxfcst" : 86400000,
-            "keeptime" : 86400000,
-            "subobs" : ["EVT"],
-            "limit" : 2,
-            "initfiles" : 1,
-            "period" : 3600,
-            "offset" : 105,
-            "timeout" : 300000,
-            "append" : "True"
-        }
-     },
-     {
-        "imrcp.geosrv.Polygons" :
-        {
-            "file" : "<data path>/metadata/Polygons.csv"
-        }
-     },
-     {
-        "imrcp.collect.StormWatch" :
-        {
-            "subscribe" : ["StormwatchLocations"],
-            "pattern" : "/export/file/?site_id=%d&site=%s&device_id=%d&device=%s&data_start=%s&data_end=%s&tz=US%%2FCentral&mime=txt&delimiter=comma",
-            "format" : "MM/dd/yyyy hh:mm:ss aa",
-            "offset" : 600,
-            "period" : 1200,
-            "fileformat" : "<data path>/stormwatch/%ryM/stormw_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "file" : "<data path>/metadata/Stormwatch_Devices_Filtered.csv",
-            "stages" : "<data path>/metadata/stormwatch_stages.csv",
-            "timeout" : 5000,
-            "wait" : 2000
-        }
-     },
-     {
-        "imrcp.store.StormWatchStore" :
-        {
-            "subscribe" : ["StormWatch"],
-            "format" : ["<data path>/stormwatch/%ryM/stormw_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "freq" : 86400000,
-            "maxfcst" : 1200000,
-            "limit" : 2,
-            "subobs" : ["STPVT", "TPVT", "DPHLNK", "STG", "CONPVT", "DIRWND", "GSTWND", "PRBAR", "RH", "SPDWND", "TAIR"],
-            "append" : "True",
-            "period" : 1800,
-            "offset" : 1410,
-            "timeout" : 300000,
-            "initfiles" : 2
-        }
-     },
-     {
-        "TrvlTimeStore" :
-        {
-            "subscribe" : ["Routes"],
-            "format" : ["<data path>/treps/timert/%ryM/treps_timert_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "freq" : 86400000,
-            "maxfcst" : 7260000,
-            "limit" : 2,
-            "subobs" : ["TIMERT"],
-            "append" : "True",
-            "period" : 1800,
-            "offset" : 1410,
-            "timeout" : 300000,
-            "initfiles" : 2
-        }
-     },
-     {
-        "imrcp.route.Routes" :
-        {
-            "subscribe" : ["TrepsCollect", "SegmentShps", "OutputManager"],
-            "format" : "<data path>/treps/timert/%ryM/treps_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "file" : "<data path>/metadata/Routing_Nodes.csv",
-            "source" : "/<temp file path>/VehTrajectory.dat",
-            "fcstmin" : 121,
-            "timeout" : 120000,
-            "freq" : 86400000
-        }
-     },
-     {
-        "route" :
-        {
-            "tol" : 2500
-        }
-     },
-     {
-        "rangerules_TIMERT" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "15",
-                        "15", "30",
-                        "30", "45",
-                        "45", "60",
-                        "60", "Infinity"]
-        }
-     },
-     {
-        "rangerules_EVT" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "101"],
-            "ranges" : ["101", "102",
-                        "102", "103",
-                        "103", "104",
-                        "104", "105",
-                        "105", "106",
-                        "106", "107",
-                        "107", "108",
-                        "108", "109",
-                        "109", "110",
-                        "201", "202",
-                        "202", "203",
-                        "203", "204",
-                        "204", "205",
-                        "301", "302",
-                        "302", "303",
-                        "303", "304",
-                        "304", "305",
-                        "305", "306",
-                        "306", "307",
-                        "307", "308",
-                        "1000", "1004",
-                        "1004", "1007",
-                        "1007", "1014",
-                        "1014", "1023",
-                        "1023", "1025",
-                        "1025", "1029",
-                        "1029", "1043",
-                        "1043", "1052",
-                        "1052", "1057",
-                        "1057", "1066",
-                        "1066", "1096",
-                        "1096", "1110",
-                        "1110", "1112",
-                        "1112", "1123"]
-        }
-     },
-     {
-        "rangerules_DPHLNK" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0.01"],
-            "ranges" : ["0.01", "1",
-                        "1", "Infinity"]
-        }
-     },
-     {
-        "rangerules_DPNSN" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0.254"],
-            "ranges" : ["0.254", "25.4",
-                        "25.4", "76.2",
-                        "76.2", "Infinity"]
-        }
-     },
-     {
-        "rangerules_TPVT" :
-        {
-            "nan" : "-999",
-            "delete" : [],
-            "ranges" : ["-Infinity", "-6.666667",
-                        "-6.666667", "-1.666667",
-                        "-1.666667", "1.666667",
-                        "1.666667", "48.88889",
-                        "48.88889", "Infinity",
-                        "21", "22",
-                        "22", "23",
-                        "23", "24"]
-        }
-     },
-     {
-        "rangerules_STPVT" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["3", "4",
-                        "5", "6",
-                        "12", "13",
-                        "13", "14",
-                        "20", "21",
-                        "21", "22",
-                        "22", "23",
-                        "23", "24"]
-        }
-     },
-     {
-        "rangerules_SPDLNK" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "15",
-                        "15", "30",
-                        "30", "45",
-                        "45", "60",
-                        "60", "Infinity"]
-        }
-     },
-     {
-        "rangerules_TDNLNK" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "25",
-                        "25", "50",
-                        "50", "75",
-                        "75", "Infinity"]
-        }
-     },
-     {
-        "rangerules_VOLLNK" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "40",
-                        "40", "80",
-                        "80", "120",
-                        "120", "Infinity"]
-        }
-     },
-     {
-        "rangerules_TRFLNK" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "20",
-                        "20", "40",
-                        "40", "60",
-                        "60", "80",
-                        "80", "Infinity"]
-        }
-     },
-     {
-        "rangerules_VIS" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0"],
-            "ranges" : ["0", "321.8688",
-                        "321.8688", "965.6064",
-                        "965.6064", "Infinity"]
-        }
-     },
-     {
-        "rangerules_RDR0" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0", "100", "Infinity"],
-            "ranges" : ["0" , "5",
-                        "5", "10",
-                        "10", "15",
-                        "15", "20",
-                        "20", "25",
-                        "25", "30",
-                        "30", "35",
-                        "35", "40",
-                        "40", "45",
-                        "45", "50",
-                        "50", "55",
-                        "55", "60",
-                        "60", "65",
-                        "65", "70",
-                        "70", "75",
-                        "75", "100"]
-        }
-     },
-     {
-        "rangerules_PCCAT" : 
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "1", "13", "Infinity"],
-            "ranges" : ["1", "2",
-                        "2", "3",
-                        "3", "4",
-                        "4", "5",
-                        "5", "6",
-                        "6", "7",
-                        "7", "8",
-                        "8", "9",
-                        "9", "10",
-                        "10", "11",
-                        "11", "12",
-                        "12", "13"]
-        }
-     },
-     {
-        "rangerules_RTEPC" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0.01"],
-            "ranges" : ["0.01", "2.5",
-                        "2.5", "5.0",
-                        "5.0", "7.5",
-                        "7.5", "10.0",
-                        "10.0", "12.5",
-                        "12.5", "15.0",
-                        "15.0", "17.5",
-                        "17.7", "20.0",
-                        "20.0", "20.0",
-                        "25.0", "Infinity"]
-        }
-     },
-     {
-        "rangerules_TAIR" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0", "350", "Infinity"],
-            "ranges" : ["200" , "266.4833",
-                        "266.4833", "273.7056",
-                        "273.7056", "277.5944",
-                        "277.5944", "288.7056",
-                        "288.7056", "299.8167",
-                        "299.8167", "308.7056",
-                        "308.7056", "350"]
-        }
-     },
-     {
-        "rangerules_SPDWND" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "0", "55.88", "Infinity"],
-            "ranges" : ["0" , "2.2352",
-                        "2.2352", "6.7056",
-                        "6.7056", "11.176",
-                        "11.176", "55.88"]
-        }
-     },
-     {
-        "rangerules_GSTWND" :
-        {
-            "nan" : "-999",
-            "delete" : ["-Infinity", "-0.0000001", "55.88", "Infinity"],
-            "ranges" : ["0" , "2.2352",
-                        "2.2352", "6.7056",
-                        "6.7056", "11.176",
-                        "11.176", "55.88"]
-        }
-     },
-     {
-        "imrcp.comp.SpeedStats" :
-        {
-            "subscribe" : ["KCScoutDetectorsStore", "RAPStore", "KCScoutDetectorLocations", "SegmentShps"],
-            "file" : "<data path>/metadata/SpeedStats.csv",
-            "months" : 1,
-            "period" : 604800000,
-            "dest" : "'/opt/imrcp-data-prod/speeds/'yyyyMM/yyyyMMdd'_NormalSpeeds.csv'",
-            "fcst" : 8,
-            "tol" : 100
-        }
-     },
-     {
-        "imrcp.comp.Notifications" :
-        {
-            "types" : ["moderate-winter-precip", "heavy-winter-precip", "low-visibility", "incident", "flooded-road", "unusual-congestion", "heavy-precip", "test", "action", "flood"],
-            "tol" : 10000,
-            "freq" : 86400000
-        }
-     },
-     {
-        "TrafficNotifications" :
-        {
-            "subscribe" : ["TrafficAlertsStore"],
-            "format" : "<data path>/notification/traffic/%ryM/imrcp_trafficnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 2
-        }
-     },
-     {
-        "WeatherNotifications" :
-        {
-            "subscribe" : ["WeatherAlertsStore"],
-            "format" : "<data path>/notification/weather/%ryM/imrcp_weathernotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 8
-
-        }
-     },
-     {
-        "SpeedStatsNotifications" :
-        {
-            "subscribe" : ["SpeedStatsAlertsStore"],
-            "format" : "<data path>/notification/speed/%ryM/imrcp_speednotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 2
-        }
-     },
-     {
-        "IncidentNotifications" :
-        {
-            "subscribe" : ["KCScoutIncidentsStore"],
-            "format" : "<data path>/notification/incident/%ryM/imrcp_incidentnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 8
-        }
-     },
-     {
-        "AHPSNotifications" :
-        {
-            "subscribe" : ["AHPSAlertsStore"],
-            "format" : "<data path>/notification/ahps/%ryM/imrcp_ahpsnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 8
-        }
-     },
-     {
-        "MetroNotifications" :
-        {
-            "subscribe" : ["MetroAlertsStore"],
-            "format" : "<data path>/notification/metro/%ryM/imrcp_metronotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 8
-        }
-     },
-     {
-        "StormwatchNotifications" :
-        {
-            "subscribe" : ["StormwatchAlertsStore"],
-            "format" : "<data path>/notification/stormwatch/%ryM/imrcp_stormwatchnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcst" : 8
-        }
-     },
-     {
-        "WeatherNotificationsStore" :
-        {
-            "subscribe" : ["WeatherNotifications"],
-            "format" : ["<data path>/notification/weather/%ryM/imrcp_weathernotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 3600000,
-            "maxfcst" : 28800000,
-            "subobs" : ["NOTIFY"],
-            "offset" : 1410
-        }
-     },
-     {
-        "TrafficNotificationsStore" :
-        {
-            "subscribe" : ["TrafficNotifications"],
-            "format" : ["<data path>/notification/traffic/%ryM/imrcp_trafficnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 300000,
-            "maxfcst" : 7200000,
-            "subobs" : ["NOTIFY"],
-            "offset" : 1665
-        }
-     },
-     {
-        "SpeedStatsNotificationsStore" :
-        {
-            "subscribe" : ["SpeedStatsNotifications"],
-            "format" : "'/opt/imrcp-data-prod/notification/speed/'yyyyMM'/notification_'yyyyMMdd'.csv'",
-            "subobs" : ["NOTIFY"],
-            "offset" : 1665
-        }
-     },
-     {
-        "IncidentNotificationsStore" :
-        {
-            "subscribe" : ["IncidentNotifications"],
-            "format" : ["<data path>/notification/incident/%ryM/imrcp_incidentnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["NOTIFY"],
-            "maxfcst" : 86400000,
-            "fcstint" : 60000,
-            "offset" : 1665
-        }
-     },
-     {
-        "AHPSNotificationsStore" :
-        {
-            "subscribe" : ["AHPSNotifications"],
-            "format" : ["<data path>/notification/ahps/%ryM/imrcp_ahpsnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 3600000,
-            "maxfcst" : 28800000,
-            "subobs" : ["NOTIFY"],
-            "offset" : 1755
-        }
-     },
-     {
-        "MetroNotificationsStore" :
-        {
-            "subscribe" : ["MetroNotifications"],
-            "format" : ["<data path>/notification/metro/%ryM/imrcp_metronotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 1200000,
-            "maxfcst" : 28800000,
-            "subobs" : ["NOTIFY"],
-            "offset" : 1755
-        }
-     },
-     {
-        "StormwatchNotificationsStore" :
-        {
-            "subscribe" : ["StormwatchNotifications"],
-            "format" : ["<data path>/notification/stormw/%ryM/imrcp_stormwnotifications_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "fcstint" : 600000,
-            "maxfcst" : 28800000,
-            "subobs" : ["NOTIFY"],
-            "offset" : 1755
-        }
-     },
-     {
-        "NotificationServlet" :
-        {
-            "test" : "False"
-        }
-     },
-     {
-        "imrcp.geosrv.KCScoutDetectorLocations" :
-        {
-            "subscribe" : ["NED"],
-            "file" : "<data path>/metadata/Detector_Locations.csv",
-            "mapvalue" : "scout"
-        }
-     },
-     {
-        "imrcp.geosrv.StormwatchLocations" :
-        {
-            "subscribe" : ["NED"],
-            "file" : "<data path>/metadata/Stormwatch_Locations.csv",
-            "mapvalue" : "stormw"
-        }
-     },
-     {
-        "imrcp.geosrv.AHPSLocations" :
-        {
-            "subscribe" : ["NED"],
-            "file" : "<data path>/metadata/AHPS_Locations.csv",
-            "mapvalue" : "ahps"
-        }
-     },
-     {
-        "SpeedStatsStore" :
-        {
-            "subscribe" : ["SpeedStats"],
-            "subobs" : ["TRFLNK"],
-            "freq" : 86400000,
-            "delay" : 0,
-            "range" : 86400000,
-            "limit" : 2,
-            "keeptime" : 86400000,
-            "dest" : "'/opt/imrcp-data-prod/speeds/'yyyyMM/yyyyMMdd'_NormalSpeeds.csv'",
-            "lrulim" : 5,
-            "contrib" : "imrcp"
-        }
-     },
-     {
-        "imrcp.collect.CollectRetry" :
-        {
-            "subscribe" : ["RTMA", "RAP"],
-            "offset" : 0,
-            "period" : 3600
-        }
-     },
-     {
-        "SensorLocations" :
-        {
-            "sensors" : ["KCScoutDetectorLocations", "StormwatchLocations", "AHPSLocations"]
-        }
-     },
-     {
-        "MLPBlock" :
-        {
-            "rdata" : "/<temp file path>/nfs-export/imrcp/mlp/mlp_11_16_2019.R",
-            "robj" : "/<temp file path>/nfs-export/imrcp/mlp/objects.RData",
-            "markov" : "/<temp file path>/nfs-export/imrcp/mlp/markovchains",
-            "host" : "192.168.5.203",
-            "metadata" : "<data path>/metadata/MLPDetectorMetadata.csv",
-            "downstream" : "<data path>/metadata/DownstreamLinks.csv",
-            "linkmap" : "<data path>/metadata/MLP_Upstream_Links.csv",
-            "tmcmap" : "<data path>/metadata/tmc_linkid_map.csv",
-            "raintemp" : "273.65",
-            "snowtemp" : "272.65",
-            "segdetmap" : "<data path>/metadata/Segment_Detector_Map.csv"
-        }
-     },
-     {
-        "MLPPredict" :
-        {
-            "subscribe" : ["KCScoutDetectorsStore", "KCScoutIncidentsStore", "RTMAStore", "RAPStore", "KCScoutDetectorLocations"],
-            "offset" : 0,
-            "period" : 900,
-            "locdir" : "/mnt/nfs/rserve/imrcp/mlp/",
-            "hostdir" : "/<temp file path>/nfs-export/imrcp/mlp/",
-            "loctsdir" : "/mnt/nfs/rserve/imrcp/mlp/monthly/",
-            "hosttsdir" : "/<temp file path>/nfs-export/imrcp/mlp/monthly/",
-            "tmclocdir" : "/mnt/nfs/rserve/imrcp/mlp/monthly/tmc/",
-            "tmchostdir" : "/<temp file path>/nfs-export/imrcp/mlp/monthly/tmc/",
-            "format" : "<data path>/mlp/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv",
-            "fcstmin" : 120,
-            "upstreamfile" : "/<temp file path>/nfs-export/imrcp/mlp/MLP_Segments_Upstream.csv",
-            "realtime" : "True",
-            "threads" : 15
-        }
-     },
-     {
-        "MLPUpdate" :
-        {
-            "subscribe" : ["KCScoutDetectorsStore", "KCScoutIncidentsStore", "RTMAStore", "RAPStore", "KCScoutDetectorLocations"],
-            "offset" : 0,
-            "period" : 604800000,
-            "locdir" : "/mnt/nfs/rserve/imrcp/mlp/monthly/",
-            "hostdir" : "/<temp file path>/nfs-export/imrcp/mlp/monthly/",
-            "inrixdata" : "<data path>/metadata/Inrix1810.csv",
-            "threads" : 15,
-            "realtime" : "True",
-            "tmclocdir" : "/mnt/nfs/rserve/imrcp/mlp/monthly/tmc/",
-            "tmchostdir" : "/<temp file path>/nfs-export/imrcp/mlp/monthly/tmc/"
-        }
-     },
-     {
-        "imrcp.store.MLPStore" :
-        {
-            "subscribe" : ["KCScoutDetectorLocations", "SegmentShps",  "MLPPredict"],
-            "freq" : 900000,
-            "maxfcst" : 7200000,
-            "format" : ["<data path>/mlp/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv"],
-            "subobs" : ["SPDLNK", "TRFLNK"],
-            "limit" : 4,
-            "offset" : 375,
-            "period" : 1800,
-            "append" : "False",
-            "timeout" : 300000,
-            "initfiles" : 1
-        }
-     },
-     {
-        "RadarTileCache" :
-        {
-            "format" : ["<data path>/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "parameters" : ["RDR0", "209", "11", "0"],
-            "limit" : 720,
-            "maxfcst" : 240000,
-            "append" : "False",
-            "initfiles" : 0,
-            "timeout" : 300000,
-            "freq" : 120000,
-            "zoom" : 7,
-            "period" : 1800,
-            "offset" : 375,
-            "tileobs" : "RDR0"
-        }
-     },
-     {
-        "TairTileCache" :
-        {
-            "append" : "False",
-            "period" : 3600,
-            "offest" : 2475,
-            "maxfcst" : 3600000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "<data path>/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "limit" : 12,
-            "initfiles" : 0,
-            "obsid" : ["TAIR", "TAIR"],
-            "obs" : ["Temperature_surface", "Temperature_height_above_ground"],
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "zoom" : 7,
-            "tileobs" : "TAIR"
-        }
-     },
-     {
-        "spdwndvt" :
-        {
-            "append" : "False",
-            "period" : 3600,
-            "offest" : 2475,
-            "maxfcst" : 28800000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "<data path>/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "limit" : 12,
-            "initfiles" : 0,
-            "obsid" : ["SPDWND", "SPDWND"],
-            "obs" : ["Wind_speed_surface", "Wind_speed_height_above_ground"],
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "zoom" : 7,
-            "tileobs" : "SPDWND"
-        }
-     },
-     {
-        "gstwndvt" :
-        {
-            "append" : "False",
-            "period" : 3600,
-            "offest" : 1590,
-            "maxfcst" : 3600000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "limit" : 12,
-            "initfiles" : 0,
-            "obsid" : ["GSTWND"],
-            "obs" : ["Wind_speed_gust_height_above_ground"],
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "zoom" : 7,
-            "tileobs" : "GSTWND"
-        }
-     },
-     {
-        "visvt" :
-        {
-            "append" : "False",
-            "period" : 3600,
-            "offest" : 1590,
-            "maxfcst" : 36000000,
-            "timeout" : 300000,
-            "format" : ["<data path>/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "<data path>/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
-            "limit" : 12,
-            "initfiles" : 0,
-            "obsid" : ["VIS"],
-            "obs" : ["Visibility_surface"],
-            "hrz" : "x",
-            "vrt" : "y",
-            "time" : "time",
-            "freq" : 3600000,
-            "zoom" : 7,
-            "tileobs" : "VIS"
-        }
-     },
-     {
-        "PcCatTileCache" :
-        {
-            "append" : "False",
-            "period" : 3600,
-            "offest" : 1590,
-            "maxfcst" : 240000,
-            "timeout" : 300000,
-            "format" : ["<data path>/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz", "<data path>/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
-            "limit" : 720,
-            "initfiles" : 0,
-            "tileobs" : "PCCAT",
-            "freq" : 120000,
-            "zoom" : 7
-        }
-     },
-     {
-        "imrcp.web.tiles.TileServlet" :
-        {
-            "points" : ["EVT", "SCOUT", "STORMW", "AHPS"],
-            "sensors" : ["KCScoutDetectorLocations", "StormwatchLocations", "AHPSLocations"],
-            "keys" : ["roadtype"],
-            "values" : ["H", "A"],
-            "artzoom" : 10
-        }
-     },
-     {
-        "MonitorServlet" :
-        {
-            "blocks" : ["Metro", "MetroOnDemand", "MLPUpdate", "MLPPredict", "KCScoutDetectors", "KCScoutIncidents", "RTMA", "RAP", "Radar", "RadarPrecip", "NDFDTd", "NDFDWspd",
-                        "NDFDTemp", "NDFDSky", "TrepsCollect"],
-            "Metro": 600000,
-            "MetroOnDemand" : 900000,
-            "MLPUpdate" : 10800000, 
-            "MLPPredict" : 600000,
-            "KCScoutDetectors" : 30000,
-            "KCScoutIncidents" : 30000,
-            "RTMA" : 120000,
-            "RAP" : 180000,
-            "Radar" : 120000,
-            "RadarPrecip" : 120000,
-            "NDFDTd" : 120000,
-            "NDFDTemp" : 120000,
-            "NDFDSky" : 120000,
-            "TrepsCollect" : 30000,
-            "period" : 60,
-            "offset" : 0,
-            "file" : "/<temp file path>/blockmonitor.txt"
-        }
-     }
+		}
+	},
+	{
+		"NHC" :
+		{
+			"files": ["CONE", "TRACK", "WW"],
+			"dest": "/opt/imrcp-data-prod/nhc/%ry/nhc_%S_%syMdHm_%eyMdHm_%ryMdHm.zip",
+			"baseurl": "https://www.nhc.noaa.gov",
+			"urlformat": "https://www.nhc.noaa.gov/gis/archive_forecast.php?year=%d",
+			"startyr": 2021,
+			"offset": 0,
+			"period": 1800
+		}
+	},
+	{
+		"NHCStore" :
+		{
+			"subscribe": ["NHC"],
+			"append": "False",
+			"period": 7200,
+			"offest": 35,
+			"maxfcst": 432000000,
+			"cachetimeout": 86400000,
+			"format": ["/opt/imrcp-data-prod/nhc/%ry/nhc_%S_%syMdHm_%eyMdHm_%ryMdHm.zip"],
+			"limit": 50,
+			"initfiles": 0,
+			"subobs": ["TRSCAT", "TRSTRK", "TRSCNE"],
+			"freq": 3600000
+		}
+	},
+	{
+		"imrcp.collect.RemoteGrid" :
+		{
+			"conntimeout": 90000
+		}
+	},
+	{
+		"RTMA" : 
+		{
+			"url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/",
+			"#url": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/",
+			"offset": 300,
+			"period": 600,
+			"dest": "/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/rtma2p5.%ryyyyMMdd/rtma2p5.t%rHHz.2dvarges_ndfd.grb2_wexp",
+			"#src": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rtma/prod/rtma2p5.%ryyyyMMdd/rtma2p5.t%rHHz.2dvarges_ndfd.grb2_wexp",
+			"delay": 300000,
+			"range": 3600000,
+			"freq": 3600000,
+			"dirs": 2,
+			"dirdiff": 86400000,
+			"urlext": "rtma2p5.%ryMd/",
+			"start": "rtma2p5",
+			"end": "ndfd.grb2_wexp",
+			"initskip": "rtma",
+			"conskip": "",
+			"pattern": "rtma2p5\\.t[\\d]{2}z\\.2dvarges_ndfd\\.grb2_wexp",
+			"usenow": "False",
+			"recvoffset": 3300000,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 83886080
+		}
+	},
+	{
+		"RAP" :
+		{
+			"url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rap/prod/",
+			"#url": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rap/prod/",
+			"offset": 300,
+			"period": 600,
+			"dest": "/opt/imrcp-data-prod/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.%ryyyyMMdd/rap.t%rHHz.awp130pgrbf%rnn.grib2",
+			"#src": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/rap/prod/rap.%ryyyyMMdd/rap.t%rHHz.awp130pgrbf%rnn.grib2",
+			"delay": -3300000,
+			"range": 3600000,
+			"freq": 3600000,
+			"dirs": 2,
+			"dirdiff": 86400000,
+			"urlext": "rap.%ryMd/",
+			"start": "rap.t",
+			"end": ".grib2",
+			"initskip": "rap.t",
+			"conskip": ".idx",
+			"pattern": "rap\\.t[\\d]{2}z\\.awp130pgrbf[\\d]{2}\\.grib2",
+			"usenow": "False",
+			"recvoffset": 3300000,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"offsetlimit": 21,
+			"defbuf": 16777216
+		}
+	},
+	{
+		"ADCIRCEast" :
+		{
+			"url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/",
+			"#url": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/",
+			"offset": 0,
+			"period": 1800,
+			"dest": "/opt/imrcp-data-prod/adcirc/east/%ryM/%ryMd/adcirc_025_east_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/estofs.%ryyyyMMdd/estofs.t%rHHz.conus.east.f%rnnn.grib2",
+			"#src": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/estofs.%ryyyyMMdd/estofs.t%rHHz.conus.east.f%rnnn.grib2",
+			"delay": 0,
+			"range": 3600000,
+			"freq": 3600000,
+			"dirs": 2,
+			"dirdiff": 86400000,
+			"urlext": "estofs.%ryMd/",
+			"start": "estofs.t",
+			"end": ".grib2",
+			"initskip": "estofs.t",
+			"conskip": "",
+			"pattern": "estofs\\.t[\\d]{2}z\\.conus\\.east\\.f[\\d]{3}\\.grib2",
+			"usenow": "False",
+			"recvoffset": 0,
+			"dlperiod": 21600000,
+			"dloffset": 1800000,
+			"offsetlimit": 120,
+			"offsetstart": 6,
+			"defbuf": 3145728
+		}
+	},
+	{
+		"ADCIRCWest" :
+		{
+			"url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/",
+			"#url": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/",
+			"offset": 0,
+			"period": 1800,
+			"dest": "/opt/imrcp-data-prod/adcirc/west/%ryM/%ryMd/adcirc_025_west_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/estofs.%ryyyyMMdd/estofs.t%rHHz.conus.west.f%rnnn.grib2",
+			"#src": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/estofs/prod/estofs.%ryyyyMMdd/estofs.t%rHHz.conus.west.f%rnnn.grib2",
+			"delay": 0,
+			"range": 3600000,
+			"freq": 3600000,
+			"dirs": 2,
+			"dirdiff": 86400000,
+			"urlext": "estofs.%ryMd/",
+			"start": "estofs.t",
+			"end": ".grib2",
+			"initskip": "estofs.t",
+			"conskip": "",
+			"pattern": "estofs\\.t[\\d]{2}z\\.conus\\.west\\.f[\\d]{3}\\.grib2",
+			"usenow": "False",
+			"recvoffset": 0,
+			"dlperiod": 21600000,
+			"dloffset": 1800000,
+			"offsetlimit": 120,
+			"offsetstart": 6,
+			"defbuf": 3145728
+		}
+	},
+	{
+		"imrcp.comp.PcCat" :
+		{
+			"subscribe": ["RadarPrecip", "RAP", "RTMAStore", "GFS", "NDFDTemp", "NDFDQpf"],
+			"mrms": "RadarPrecip",
+			"rap": "RAP",
+			"rtmastore": "RTMAStore",
+			"mrmsformat": "/opt/imrcp-data-prod/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"mrmspccat": "/opt/imrcp-data-prod/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
+			"rapformat": "/opt/imrcp-data-prod/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"rappccat": "/opt/imrcp-data-prod/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
+			"gfsformat": "/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"gfspccat": "/opt/imrcp-data-prod/pccat/gfs/%ryM/%ryMd/gfs_pccat_250_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
+			"ndfdtemp": "/opt/imrcp-data-prod/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"ndfdqpf": "/opt/imrcp-data-prod/ndfd/qpf/%ryM/%ryMd/ndfd_qpf_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"ndfdpccat": "/opt/imrcp-data-prod/pccat/ndfd/%ryM/%ryMd/imrcp_ndfd_030_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
+			"hrz": "x",
+			"vrt": "y",
+			"time": "time",
+			"gfshrz": "lon",
+			"gfsvrt": "lat",
+			"gfstime": "time",
+			"ndfdtempobsid": ["TAIR", "TAIR"],
+			"tempobs": ["Temperature_surface", "Temperature_height_above_ground"],
+			"ndfdqpfobsid": ["RTEPC", "RTEPC"],
+			"qpfobs": ["Total_precipitation_surface_6_Hour_Accumulation", "Total_precipitation_surface_6_Minute_Accumulation"],
+			"obs": ["Precipitation_rate_surface", "Categorical_Rain_surface", "Categorical_Snow_surface", "Categorical_Ice_Pellets_surface", "Categorical_Freezing_Rain_surface"],
+			"obsid": ["RTEPC", "1", "2", "3", "4"],
+			"parameters": ["RTEPC", "209", "6", "1"],
+			"subobs": ["PCCAT"],
+			"period": 0,
+			"offset": 0,
+			"runs": 45,
+			"maxqueue": 984,
+			"queuefile": ""
+		}
+	},
+	{
+		"pccatqueue" :
+		{
+			"pccatblock": "PcCatQueue"
+		}
+	},
+	{
+		"Radar" :
+		{
+			"offset": 0,
+			"period": 60,
+			"delay": 0,
+			"range": 240000,
+			"freq": 120000,
+			"url": "https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/",
+			"dest": "/opt/imrcp-data-prod/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://mrms.ncep.noaa.gov/data/2D/MergedBaseReflectivityQC/MRMS_MergedBaseReflectivityQC_00.50_%ryyyyMMdd-%rHHmm00.grib2.gz",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "MRMS_MergedBaseReflectivityQC",
+			"end": ".grib2.gz",
+			"initskip": "MRMS_MergedBaseReflectivityQC.latest.grib2.gz",
+			"conskip": "</td></tr>",
+			"pattern": "MRMS_MergedBaseReflectivityQC_00\\.50_[\\d]{8}-[\\d]{6}.grib2.gz",
+			"usenow": "False",
+			"recvoffset": 0,
+			"dlperiod": 0,
+			"dloffset": 120,
+			"defbuf": 1048576
+		}
+	},
+	{
+		"RadarPrecip" :
+		{
+			"offset": 0,
+			"period": 60,
+			"delay": 0,
+			"range": 240000,
+			"freq": 120000,
+			"url": "https://mrms.ncep.noaa.gov/data/2D/PrecipRate/",
+			"dest": "/opt/imrcp-data-prod/mrms/precip/%ryM/%ryMd/mrms_precip_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://mrms.ncep.noaa.gov/data/2D/PrecipRate/MRMS_PrecipRate_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "MRMS_PrecipRate",
+			"end": ".grib2.gz",
+			"initskip": "MRMS_PrecipRate.latest.grib2.gz",
+			"conskip": "</td></tr>",
+			"pattern": "MRMS_PrecipRate_00\\.00_[\\d]{8}-[\\d]{6}.grib2.gz",
+			"usenow": "False",
+			"recvoffset": 0,
+			"dlperiod": 0,
+			"dloffset": 120,
+			"defbuf": 1048576
+		}
+	},
+	{
+		"PrecipFlag" :
+		{
+			"offset": 0,
+			"period": 60,
+			"delay": 0,
+			"range": 240000,
+			"freq": 120000,
+			"url": "https://mrms.ncep.noaa.gov/data/2D/PrecipFlag/",
+			"dest": "/opt/imrcp-data-prod/mrms/pflag/%ryM/%ryMd/mrms_pflag_010_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "https://mrms.ncep.noaa.gov/data/2D/PrecipFlag/MRMS_PrecipFlag_00.00_%ryyyyMMdd-%rHHmm00.grib2.gz",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "MRMS_PrecipFlag",
+			"end": ".grib2.gz",
+			"initskip": "MRMS_PrecipFlag.latest.grib2.gz",
+			"conskip": "</td></tr>",
+			"pattern": "MRMS_PrecipFlag_00\\.00_[\\d]{8}-[\\d]{6}.grib2.gz",
+			"usenow": "False",
+			"recvoffset": 0,
+			"dlperiod": 0,
+			"dloffset": 120,
+			"defbuf": 1048576
+		}
+	},
+	{
+		"NDFDSky" :
+		{
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+			"offset": 300,
+			"period": 600,
+			"delay": 3900000,
+			"range": 208800000,
+			"freq": 3600000,
+			"src": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.sky.bin",
+			"dest": "/opt/imrcp-data-prod/ndfd/sky/%ryM/%ryMd/ndfd_sky_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "ds",
+			"end": ".bin",
+			"initskip": "ds.sky",
+			"conskip": "",
+			"pattern": "ds\\.sky\\.bin",
+			"usenow": "True",
+			"recvoffset": 0,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 26214400
+		}
+	},
+	{
+		"NDFDTd" :
+		{
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+			"offset": 300,
+			"period": 600,
+			"delay": 3900000,
+			"range": 208800000,
+			"freq": 3600000,
+			"src": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.td.bin",
+			"dest": "/opt/imrcp-data-prod/ndfd/td/%ryM/%ryMd/ndfd_td_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "ds",
+			"end": ".bin",
+			"initskip": "ds.td",
+			"conskip": "",
+			"pattern": "ds\\.td\\.bin",
+			"usenow": "True",
+			"recvoffset": 0,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 47185920
+		}
+	},
+	{
+		"NDFDTemp" :
+		{
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+			"offset": 300,
+			"period": 600,
+			"delay": 3900000,
+			"range": 208800000,
+			"freq": 3600000,
+			"src": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.temp.bin",
+			"dest": "/opt/imrcp-data-prod/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "ds",
+			"end": ".bin",
+			"initskip": "ds.temp",
+			"conskip": "",
+			"pattern": "ds\\.temp\\.bin",
+			"usenow": "True",
+			"recvoffset": 0,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 52428800
+		}
+	},
+	{
+		"NDFDWspd" :
+		{
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+			"offset": 300,
+			"period": 600,
+			"delay": 3900000,
+			"range": 208800000,
+			"freq": 3600000,
+			"src": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.wspd.bin",
+			"dest": "/opt/imrcp-data-prod/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "ds",
+			"end": ".bin",
+			"initskip": "ds.wspd",
+			"conskip": "",
+			"pattern": "ds\\.wspd\\.bin",
+			"usenow": "True",
+			"recvoffset": 0,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 83886080
+		}
+	},
+	{
+		"NDFDQpf" :
+		{
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/",
+			"offset": 300,
+			"period": 600,
+			"delay": 3900000,
+			"range": 208800000,
+			"freq": 3600000,
+			"src": "https://tgftp.nws.noaa.gov/SL.us008001/ST.opnl/DF.gr2/DC.ndfd/AR.conus/VP.001-003/ds.qpf.bin",
+			"dest": "/opt/imrcp-data-prod/ndfd/qpf/%ryM/%ryMd/ndfd_qpf_030_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"dirs": 1,
+			"dirdiff": 0,
+			"urlext": "",
+			"start": "ds",
+			"end": ".bin",
+			"initskip": "ds.qpf",
+			"conskip": "",
+			"pattern": "ds\\.qpf\\.bin",
+			"usenow": "True",
+			"recvoffset": 0,
+			"dlperiod": 3600,
+			"dloffset": 3300,
+			"defbuf": 83886080
+		}
+	},
+	{
+		"ObsType" :
+		{
+			"rules": ["DPHLIQ", "PCCAT", "RDR0", "SPDWND", "TAIR", "TRFLNK", "GSTWND", "VIS", "TDNLNK", "VOLLNK", "SPDLNK", "STPVT", "TPVT", "DPHSN", "DPHLNK", "EVT", "TIMERT", "RTEPC", "KRTPVT", "KTSSRF", "SSCST"],
+			"lrain": "0.0007055556",
+			"mrain": "0.0021166667",
+			"lsnow": "0.0000705556",
+			"msnow": "0.0007055556",
+			"raintemp": "273.65",
+			"snowtemp": "272.65",
+			"lightrainmm": "2.6",
+			"medrainmm": "7.6",
+			"lightsnowmm": "0.26",
+			"medsnowmm": "0.76"
+		}
+	},
+	{
+		"SourceUnits" :
+		{
+			"file": "/opt/imrcp-data-prod/metadata/SourceUnits.csv"
+		}
+	},
+	{
+		"imrcp.forecast.mdss.Metro" :
+		{
+			"subscribe": ["RAPStore", "RTMAStore", "WayNetworks", "RadarPrecipStore", "NDFDTempStore"],
+			"fcsthrs": 14,
+			"obshrs": 8,
+			"format": "/opt/imrcp-data-prod/metro/%ryM/%ryMd/%S/%S/metro_%S_%S_%syMdHm_%eyMdHm_%ryMdHm.bin.gz",
+			"threads": 38,
+			"offset": 0,
+			"period": 600,
+			"maxqueue": 60000,
+			"zoom": 9,
+			"contribs": ["mrms", "rtma", "ndfd", "rap"],
+			"logff": "/mnt/sdc1/prodmetrolog/%ryM/%ryMd/metrolog_%S.csv"
+		}
+	},
+	{
+		"Metro" :
+		{
+			"runs": 1,
+			"queuefile": "/dev/shm/imrcp-prod/realtime_metroqueue.txt",
+			"realtime": "True",
+			"logtrigger": "/dev/shm/imrcp-prod/metrologtrigger"
+		}
+	},
+	{
+		"MetroOnDemand" :
+		{
+			"threads": 5,
+			"runs": 1000,
+			"queuefile": "/dev/shm/imrcp-prod/ondemand_metroqueue.txt",
+			"offset": 300,
+			"period": 600,
+			"realtime": "False"
+		}
+	},
+	{
+		"metroqueue" :
+		{
+			"metroblock": "MetroOnDemand"
+		}
+	},
+	{
+		"DoMetroWrapper" :
+		{
+			"roadmin": -50,
+			"roadmax": 80,
+			"ssmin": -40,
+			"ssmax": 80,
+			"airmin": -60,
+			"airmax": 50,
+			"windmax": 90,
+			"prmin": 60000,
+			"prdef": 101325,
+			"prmax": 110000,
+			"initrc": ["1", "1", "1", "1", "1", "1", "1", "1"],
+			"initrt": ["26.0", "26.0", "26.0", "26.0", "26.0", "26.0", "26.0", "26.0"],
+			"initsub": ["19", "19", "19", "19", "19", "19", "19", "19"],
+			"initsn": "0",
+			"initliq": "0",
+			"precip": 3600000,
+			"raincut": "0.01",
+			"snowcut": "0.2"
+		}
+	},
+	{
+		"imrcp.web.Subscriptions" :
+		{
+			"basedir": "/opt/imrcp-data-prod/subs/",
+			"subff": "%s/config.bin",
+			"dataff": "%s/%s_%s%s",
+			"dlff": "%s/%s",
+			"sensors": ["AHPSLocations"],
+			"offset": 0,
+			"period": 300
+		}
+	},
+	{
+		"RAPAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 75600000,
+			"subscribe": ["WayNetworks", "RAPStore"],
+			"rules": ["low-visibility"],
+			"low-visibility": ["low-visibility", "VIS", "0", "322", "m"],
+			"format": "/opt/imrcp-data-prod/alert/rap/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"GFSAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 604800000,
+			"subscribe": ["WayNetworks", "GFSStore"],
+			"rules": ["low-visibility"],
+			"low-visibility": ["low-visibility", "VIS", "0", "322", "m"],
+			"format": "/opt/imrcp-data-prod/alert/gfs/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"AHPSAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 86400000,
+			"subscribe": ["WayNetworks", "AHPSFcstStore"],
+			"rules": ["action", "flood"],
+			"action": ["flood-stage-action", "STG", "action", "action", ""],
+			"flood": ["flood-stage-flood", "STG", "flood", "flood", ""],
+			"format": "/opt/imrcp-data-prod/alert/ahps/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"RAPPcCatAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 75600000,
+			"subscribe": ["WayNetworks", "RAPPcCatStore"],
+			"rules": ["moderate-winter-precip-snow", "moderate-winter-precip-ice-pellets",
+					  "moderate-winter-precip-freezing-rain", "heavy-winter-precip-snow", "heavy-winter-precip-ice-pellets", "heavy-winter-precip-freezing-rain",
+					  "moderate-precip", "heavy-precip"],
+			"moderate-winter-precip-snow": ["moderate-winter-precip", "PCCAT", "moderate-snow", "moderate-snow", ""],
+			"moderate-winter-precip-ice-pellets": ["moderate-winter-precip", "PCCAT", "moderate-ice", "moderate-ice", ""],
+			"moderate-winter-precip-freezing-rain": ["moderate-winter-precip", "PCCAT", "moderate-freezing-rain", "moderate-freezing-rain", ""],
+			"heavy-winter-precip-snow": ["heavy-winter-precip", "PCCAT", "heavy-snow", "heavy-snow", ""],
+			"heavy-winter-precip-ice-pellets": ["heavy-winter-precip", "PCCAT", "heavy-ice", "heavy-ice", ""],
+			"heavy-winter-precip-freezing-rain": ["heavy-winter-precip", "PCCAT", "heavy-freezing-rain", "heavy-freezing-rain", ""],
+			"moderate-precip": ["moderate-precip", "PCCAT", "moderate-rain", "moderate-rain", ""],
+			"heavy-precip": ["heavy-precip" , "PCCAT", "heavy-rain", "heavy-rain", ""],
+			"format": "/opt/imrcp-data-prod/alert/rappccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"GFSPcCatAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 604800000,
+			"subscribe": ["WayNetworks", "GFSPcCatStore"],
+			"rules": ["moderate-winter-precip-snow", "moderate-winter-precip-ice-pellets",
+					  "moderate-winter-precip-freezing-rain", "heavy-winter-precip-snow", "heavy-winter-precip-ice-pellets", "heavy-winter-precip-freezing-rain",
+					  "moderate-precip", "heavy-precip"],
+			"moderate-winter-precip-snow": ["moderate-winter-precip", "PCCAT", "moderate-snow", "moderate-snow", ""],
+			"moderate-winter-precip-ice-pellets": ["moderate-winter-precip", "PCCAT", "moderate-ice", "moderate-ice", ""],
+			"moderate-winter-precip-freezing-rain": ["moderate-winter-precip", "PCCAT", "moderate-freezing-rain", "moderate-freezing-rain", ""],
+			"heavy-winter-precip-snow": ["heavy-winter-precip", "PCCAT", "heavy-snow", "heavy-snow", ""],
+			"heavy-winter-precip-ice-pellets": ["heavy-winter-precip", "PCCAT", "heavy-ice", "heavy-ice", ""],
+			"heavy-winter-precip-freezing-rain": ["heavy-winter-precip", "PCCAT", "heavy-freezing-rain", "heavy-freezing-rain", ""],
+			"moderate-precip": ["moderate-precip", "PCCAT", "moderate-rain", "moderate-rain", ""],
+			"heavy-precip": ["heavy-precip" , "PCCAT", "heavy-rain", "heavy-rain", ""],
+			"format": "/opt/imrcp-data-prod/alert/gfspccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"NDFDPcCatAlerts" :
+		{
+			"freq": 3600000,
+			"maxfcst": 219600000,
+			"subscribe": ["WayNetworks", "NDFDPcCatStore"],
+			"rules": ["moderate-winter-precip-snow", "moderate-winter-precip-ice-pellets",
+					  "moderate-winter-precip-freezing-rain", "heavy-winter-precip-snow", "heavy-winter-precip-ice-pellets", "heavy-winter-precip-freezing-rain",
+					  "moderate-precip", "heavy-precip"],
+			"moderate-winter-precip-snow": ["moderate-winter-precip", "PCCAT", "moderate-snow", "moderate-snow", ""],
+			"moderate-winter-precip-ice-pellets": ["moderate-winter-precip", "PCCAT", "moderate-ice", "moderate-ice", ""],
+			"moderate-winter-precip-freezing-rain": ["moderate-winter-precip", "PCCAT", "moderate-freezing-rain", "moderate-freezing-rain", ""],
+			"heavy-winter-precip-snow": ["heavy-winter-precip", "PCCAT", "heavy-snow", "heavy-snow", ""],
+			"heavy-winter-precip-ice-pellets": ["heavy-winter-precip", "PCCAT", "heavy-ice", "heavy-ice", ""],
+			"heavy-winter-precip-freezing-rain": ["heavy-winter-precip", "PCCAT", "heavy-freezing-rain", "heavy-freezing-rain", ""],
+			"moderate-precip": ["moderate-precip", "PCCAT", "moderate-rain", "moderate-rain", ""],
+			"heavy-precip": ["heavy-precip" , "PCCAT", "heavy-rain", "heavy-rain", ""],
+			"format": "/opt/imrcp-data-prod/alert/ndfdpccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz",
+			"offsetstart": 22,
+			"offsetend": 48
+		}
+	},
+	{
+		"MetroAlerts" :
+		{
+			"freq": 300000,
+			"maxfcst": 3600000,
+			"subscribe": ["WayNetworks", "MetroStore"],
+			"rules": ["icy-bridge-slush", "icy-bridge-melting-snow", "icy-bridge-ice/snow"],
+			"icy-bridge-slush": ["icy-roadway", "STPVT", "slush", "slush", ""],
+			"icy-bridge-melting-snow": ["icy-roadway", "STPVT", "melting-snow", "melting-snow", ""],
+			"icy-bridge-ice/snow": ["icy-roadway", "STPVT", "ice/snow", "ice/snow", ""],
+			"format": "/opt/imrcp-data-prod/alert/metro/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"
+		}
+	},
+	{
+		"RAPAlertsStore" :
+		{
+			"subscribe": ["RAPAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/rap/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 75600000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"GFSAlertsStore" :
+		{
+			"subscribe": ["GFSAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/gfs/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 604800000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"AHPSAlertsStore" :
+		{
+			"subscribe": ["AHPSAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/ahps/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 86400000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"RAPPcCatAlertsStore" :
+		{
+			"subscribe": ["RAPPcCatAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/rappccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 75600000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"GFSPcCatAlertsStore" :
+		{
+			"subscribe": ["GFSPcCatAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/gfspccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 604800000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"NDFDPcCatAlertsStore" :
+		{
+			"subscribe": ["NDFDPcCatAlerts"],
+			"subobs": ["EVT", "0"],
+			"format": ["/opt/imrcp-data-prod/alert/ndfdpccat/%ryM/%ryMd/imrcp_alerts_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 219600000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"imrcp.system.Units" :
+		{
+			"file": "/opt/imrcp-data-prod/metadata/UnitConversions.csv"
+		}
+	},
+	{
+		"imrcp.collect.WxDESub" :
+		{
+			"period": 600,
+			"offset": 60,
+			"coloffset": 60,
+			"url": "https://wxde.fhwa.dot.gov/downloadSubscription?",
+			"src": "uuid=%S&file=%ryMd_%rHHmm.csv",
+			"delay": 0,
+			"range": 7200000,
+			"freq": 3600000,
+			"conntimeout": 60000,
+			"dest": "/opt/imrcp-data-prod/wxde/%ryM/%ryMd/wxde_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"uuid": "a2ba2f6d-bb62-428d-97ca-14e2fd72f21d"
+		}
+	},
+	{
+		"WxDEObs" :
+		{
+			"wxdeobs": ["5101", "51138", "51139", "5733", "207", "511310", "51137", "51165", "554", "56104", "56105", "56108", "575", "581", "587", "589"],
+			"imrcpobs": ["VIS", "TPVT", "TPVT", "TAIR", "TYPPC", "DPHLNK", "STPVT", "TSSRF", "PRSUR", "SPDWND", "DIRWND", "GSTWND", "TDEW", "RH", "RTEPC", "PCCAT"],
+			"wxdemapped": ["TYPPC", "STPVT", "PCCAT"],
+			"TYPPC": ["1", "5", "2", "6", "3", "0", "4", "1", "5", "2", "6", "3"],
+			"STPVT": ["1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", "7", "7", "8", "8",
+				"9", "9", "10", "10", "11", "11", "12", "12", "13", "13", "14", "14", "15", "1"],
+			"PCCAT": ["1", "101", "2", "102", "3", "0", "4", "104", "5", "105", "6", "106", "7", "7",
+				"8", "8", "9", "9", "10", "1", "11", "2", "12", "3", "13", "10", "14", "11", "15", "12"]
+		}
+	},
+	{
+		"WxDEStore" :
+		{
+			"subscribe": ["WxDE"],
+			"append": "True",
+			"freq": 3600000,
+			"limit": 60,
+			"format": ["/opt/imrcp-data-prod/wxde/%ryM/%ryMd/wxde_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["TPVT", "TAIR", "VIS", "0"],
+			"maxfcst": 7200000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"period": 4500,
+			"offset": 105
+		}
+	},
+	{
+		"imrcp.collect.AHPS" :
+		{
+			"offset": 119,
+			"period": 300,
+			"url": "https://water.weather.gov/ahps/download.php",
+			"freq": 3600000
+		}
+	},
+	{
+		"AHPSFcst" :
+		{
+			"download": "https://water.weather.gov/ahps/download.php?data=tgz_fcst_f024",
+			"dest": "/opt/imrcp-data-prod/ahps/forecast/%ryM/%ryMd/ahps_forecast_%syMdHm_%eyMdHm_%ryMdHm.tgz",
+			"search": "Shapefile (Maximum Forecast 1-Day)",
+			"delay": 0,
+			"range": 86400000,
+			"hourint": 24
+		}
+	},
+	{
+		"AHPSObs" :
+		{
+			"download": "https://water.weather.gov/ahps/download.php?data=tgz_obs",
+			"dest": "/opt/imrcp-data-prod/ahps/observation/%ryM/%ryMd/ahps_observation_%syMdHm_%eyMdHm_%ryMdHm.tgz",
+			"search": "Shapefile (Observed)",
+			"delay": 0,
+			"range": 3600000,
+			"hourint": 1
+		}
+	},
+	{
+		"imrcp.store.AHPSStore" :
+		{
+			"mapfile": "/opt/imrcp-data-prod/metadata/ahpsmapping.csv",
+			"polygons": "/opt/imrcp-data-prod/metadata/ahpspolygons.json"
+		}
+	},
+	{
+		"AHPSFcstStore" :
+		{
+			"subscribe": ["AHPSFcst"],
+			"append": "False",
+			"freq": 3600000,
+			"limit": 10,
+			"format": ["/opt/imrcp-data-prod/ahps/forecast/%ryM/%ryMd/ahps_forecast_%syMdHm_%eyMdHm_%ryMdHm.tgz"],
+			"subobs": ["DPHLNK", "STG", "EVT", "STPVT", "0"],
+			"maxfcst": 86400000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"period": 4500,
+			"offset": 105
+		}
+	},
+	{
+		"AHPSObsStore" :
+		{
+			"subscribe": ["AHPSObs"],
+			"append": "False",
+			"freq": 3600000,
+			"limit": 10,
+			"format": ["/opt/imrcp-data-prod/ahps/observation/%ryM/%ryMd/ahps_observation_%syMdHm_%eyMdHm_%ryMdHm.tgz"],
+			"subobs": ["DPHLNK", "STG", "EVT", "STPVT", "0"],
+			"maxfcst": 3600000,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"period": 4500,
+			"offset": 105
+		}
+	},
+	{
+		"imrcp.collect.CAP" :
+		{
+			"offset": 0,
+			"period": 300,
+			"url": "https://tgftp.nws.noaa.gov/SL.us008001/DF.sha/DC.cap/DS.WWA/",
+			"file": "current_all.tar.gz",
+			"dest": "/opt/imrcp-data-prod/cap/%ryM/cap_%syMdHm_%eyMdHm_%ryMdHm.tar.gz"
+		}
+	},
+	{
+		"imrcp.store.CAPStore" :
+		{
+			"subscribe": ["CAP"],
+			"format": ["/opt/imrcp-data-prod/cap/%ryM/cap_%syMdHm_%eyMdHm_%ryMdHm.tar.gz"],
+			"freq": 300000,
+			"maxfcst": 259200000,
+			"subobs": ["EVT"],
+			"limit": 288,
+			"initfiles": 1,
+			"period": 3600,
+			"offset": 105,
+			"cachetimeout": 3600000
+		}
+	},
+	{
+		"rangerules_SSCST" :
+		{
+			"nan": "NaN",
+			"delete": [],
+			"ranges": ["-Infinity", "0.09144",
+					"0.09144", "0.18288",
+					"0.18288", "0.27432",
+					"0.27432", "0.36576",
+					"0.36576", "0.45720",
+					"0.45720", "0.54864",
+					"0.54864", "0.64008",
+					"0.64008", "0.73152",
+					"0.73152", "0.82296",
+					"0.82296", "0.91440",
+					"0.91440", "1.00584",
+					"1.00584", "1.09728",
+					"1.09728", "1.18872",
+					"1.18872", "Infinity"]
+		}
+	},
+	{
+		"rangerules_KRTPVT" :
+		{
+			"nan": "NaN",
+			"delete": ["-Infinity", "-273.15"],
+			"ranges": ["-273.15", "-10",
+						"-10", "-9",
+						"-9", "-8",
+						"-8", "-7",
+						"-7", "-6",
+						"-6", "-5",
+						"-5", "-4",
+						"-4", "-3",
+						"-3", "-2",
+						"-2", "-1",
+						"-1", "0",
+						"0", "2",
+						"2", "4",
+						"4", "6",
+						"6", "8",
+						"8", "10",
+						"10", "12",
+						"12", "14",
+						"14", "16",
+						"16", "18",
+						"18", "20",
+						"20", "Infinity"]
+		}
+	},
+	{
+		"rangerules_KTSSRF" :
+		{
+			"nan": "NaN",
+			"delete": ["-Infinity", "-273.15"],
+			"ranges": ["-273.15", "-10",
+						"-10", "-9",
+						"-9", "-8",
+						"-8", "-7",
+						"-7", "-6",
+						"-6", "-5",
+						"-5", "-4",
+						"-4", "-3",
+						"-3", "-2",
+						"-2", "-1",
+						"-1", "0",
+						"0", "2",
+						"2", "4",
+						"4", "6",
+						"6", "8",
+						"8", "10",
+						"10", "12",
+						"12", "14",
+						"14", "16",
+						"16", "18",
+						"18", "20",
+						"20", "Infinity"]
+		}
+	},
+	{
+		"rangerules_TIMERT" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "15",
+						"15", "30",
+						"30", "45",
+						"45", "60",
+						"60", "Infinity"]
+		}
+	},
+	{
+		"rangerules_EVT" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "101"],
+			"ranges": ["101", "102",
+						"102", "103",
+						"103", "104",
+						"104", "105",
+						"105", "106",
+						"106", "107",
+						"107", "108",
+						"108", "109",
+						"109", "110",
+						"201", "202",
+						"202", "203",
+						"203", "204",
+						"204", "205",
+						"301", "302",
+						"302", "303",
+						"303", "304",
+						"304", "305",
+						"305", "306",
+						"306", "307",
+						"307", "308",
+						"1000", "1004",
+						"1004", "1007",
+						"1007", "1014",
+						"1014", "1023",
+						"1023", "1025",
+						"1025", "1029",
+						"1029", "1043",
+						"1043", "1052",
+						"1052", "1057",
+						"1057", "1066",
+						"1066", "1096",
+						"1096", "1110",
+						"1110", "1112",
+						"1112", "1123"]
+		}
+	},
+	{
+		"rangerules_DPHLNK" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0.01"],
+			"ranges": ["0.01", "1",
+						"1", "Infinity"]
+		}
+	},
+	{
+		"rangerules_DPHSN" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0.0254"],
+			"ranges": ["0.0254", "2.54",
+						"2.54", "7.62",
+						"7.62", "Infinity"]
+		}
+	},
+	{
+		"rangerules_TPVT" :
+		{
+			"nan": "-999",
+			"delete": [],
+                        "ranges": ["-Infinity", "-17.7777778",
+					"-17.7777778", "-6.6666667",
+					"-6.6666667", "-1.1111111",
+					"-1.1111111", "1.1111111",
+					"1.1111111", "7.222222",
+					"7.222222", "13.333333",
+					"13.33333", "20.00000",
+					"20.0000000", "30.0000000",
+					"30.0000000", "40.0000000",
+					"40.0000000", "Infinity"]
+		}
+	},
+	{
+		"rangerules_STPVT" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["3", "4",
+						"5", "6",
+						"12", "13",
+						"13", "14",
+						"20", "21",
+						"21", "22",
+						"22", "23",
+						"23", "24",
+						"30", "31"]
+		}
+	},
+	{
+		"rangerules_SPDLNK" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "15",
+						"15", "30",
+						"30", "45",
+						"45", "60",
+						"60", "Infinity"]
+		}
+	},
+	{
+		"rangerules_TDNLNK" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "25",
+						"25", "50",
+						"50", "75",
+						"75", "Infinity"]
+		}
+	},
+	{
+		"rangerules_VOLLNK" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "40",
+						"40", "80",
+						"80", "120",
+						"120", "Infinity"]
+		}
+	},
+	{
+		"rangerules_TRFLNK" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "20",
+						"20", "40",
+						"40", "60",
+						"60", "80",
+						"80", "Infinity"]
+		}
+	},
+	{
+		"rangerules_VIS" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0"],
+			"ranges": ["0", "321.8688",
+						"321.8688", "965.6064",
+						"965.6064", "Infinity"]
+		}
+	},
+	{
+		"rangerules_RDR0" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0", "100", "Infinity"],
+			"ranges": ["0" , "5",
+						"5", "10",
+						"10", "15",
+						"15", "20",
+						"20", "25",
+						"25", "30",
+						"30", "35",
+						"35", "40",
+						"40", "45",
+						"45", "50",
+						"50", "55",
+						"55", "60",
+						"60", "65",
+						"65", "70",
+						"70", "75",
+						"75", "100"]
+		}
+	},
+	{
+		"rangerules_DPHLIQ" :
+		{
+			"nan": "-99999",
+			"delete": ["-Infinity", "0.1", "100", "Infinity"],
+			"ranges":
+			[
+				"0.1", "3.6",
+				"3.6", "7.2",
+				"7.2", "10.8",
+				"10.8", "14.4",
+				"14.4", "18.0",
+				"18.0", "21.6",
+				"21.6", "25.2",
+				"25.2", "28.8",
+				"28.8", "32.4",
+				"32.4", "36.0",
+				"36.0", "39.6",
+				"39.6", "43.2",
+				"43.2", "46.8",
+				"46.8", "Infinity"
+			]
+		}
+	},
+	{
+		"rangerules_PCCAT": 
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "1", "13", "Infinity"],
+			"ranges": ["1", "2",
+						"2", "3",
+						"3", "4",
+						"4", "5",
+						"5", "6",
+						"6", "7",
+						"7", "8",
+						"8", "9",
+						"9", "10",
+						"10", "11",
+						"11", "12",
+						"12", "13"]
+		}
+	},
+	{
+		"rangerules_RTEPC" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "0.01"],
+			"ranges": ["0.01", "2.5",
+						"2.5", "5.0",
+						"5.0", "7.5",
+						"7.5", "10.0",
+						"10.0", "12.5",
+						"12.5", "15.0",
+						"15.0", "17.5",
+						"17.7", "20.0",
+						"20.0", "20.0",
+						"25.0", "Infinity"]
+		}
+	},
+	{
+		"rangerules_TAIR" :
+		{
+			"nan": "-999",
+			"delete": [],
+			"ranges": ["-Infinity", "255.3722222",
+					"255.3722222", "266.4833333",
+					"266.4833333", "272.03888889",
+					"272.03888889", "274.2611111",
+					"274.2611111", "280.3722",
+					"280.3722", "286.4833",
+					"286.4833", "293.15",
+					"293.15", "303.15",
+					"303.15", "313.15",
+					"313.15", "Infinity"]
+		}
+	},
+	{
+		"rangerules_SPDWND" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "-0.0000001"],
+			"ranges": ["0" , "2.2352000",
+					"2.2352000", "6.7056000",
+					"6.7056000", "11.1760000",
+					"11.1760000", "17.4345600",
+					"17.4345600", "25.4812800",
+					"25.4812800", "33.0809600",
+					"33.0809600", "37.9984000",
+					"37.9984000", "42.9158400",
+					"42.9158400", "49.6214400",
+					"49.6214400", "58.1152000",
+					"58.1152000", "64.3737600",
+					"64.3737600", "70.1852800",
+					"70.1852800", "Infinity"]
+		}
+	},
+	{
+		"rangerules_GSTWND" :
+		{
+			"nan": "-999",
+			"delete": ["-Infinity", "-0.0000001"],
+			"ranges": ["0" , "2.2352000",
+					"2.2352000", "6.7056000",
+					"6.7056000", "11.1760000",
+					"11.1760000", "17.4345600",
+					"17.4345600", "25.4812800",
+					"25.4812800", "33.0809600",
+					"33.0809600", "37.9984000",
+					"37.9984000", "42.9158400",
+					"42.9158400", "49.6214400",
+					"49.6214400", "58.1152000",
+					"58.1152000", "64.3737600",
+					"64.3737600", "70.1852800",
+					"70.1852800", "Infinity"]
+		}
+	},
+	{
+		"Notification" :
+		{
+			"test": "False",
+			"groups": ["imrcp-user", "imrcp-admin"],
+			"metidx": 2
+		}
+	},
+	{
+		"imrcp.geosrv.AHPSLocations" :
+		{
+			"subscribe": ["NED"],
+			"file": "/opt/imrcp-data-prod/metadata/AHPS_Locations.csv",
+			"mapvalue": "ahps"
+		}
+	},
+	{
+		"SensorLocations" :
+		{
+			"sensors": ["AHPSLocations"]
+		}
+	},
+	{
+		"MLPBlock" :
+		{
+			"rdata": "/dev/shm/imrcp-prod/mlp/latest_mlp.R",
+			"robj": "/dev/shm/imrcp-prod/mlp/ohio_imrcp.RData",
+			"host": "127.0.0.1",
+			"raintemp": "273.65",
+			"snowtemp": "272.65",
+			"longtsff": "%slong_ts_pred_%s.csv"
+		}
+	},
+	{
+		"MLPPredictOH" :
+		{
+			"subscribe": ["OhioTrafficSpeedStore", "OhioEventStore", "RTMAStore", "RAPStore", "ExtMapping", "WayNetworks"],
+			"offset": 0,
+			"period": 900,
+			"threads": 23,
+			"locdir": "/dev/shm/imrcp-prod/mlp/oh/",
+			"hostdir": "/dev/shm/imrcp-prod/mlp/oh/",
+			"loctsdir": "/dev/shm/imrcp-prod/mlp/oh/longts/",
+			"hosttsdir": "/dev/shm/imrcp-prod/mlp/oh/longts/",
+			"format": "/opt/imrcp-data-prod/mlp/oh/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"fcstmin": 120,
+			"realtime": "True",
+			"disttol": 480000,
+			"tz": "America/New_York",
+			"network": "eGnb-qnc-mWJI-QDAzUxcA",
+			"inputfile": "%shistdat%03d.csv"
+		}
+	},
+	{
+		"MLPPredictLA" :
+		{
+			"subscribe": ["LaTrafficSpeedStore", "LaDOTDEventsStore", "RTMAStore", "RAPStore", "ExtMapping", "WayNetworks"],
+			"offset": 0,
+			"period": 900,
+			"threads": 23,
+			"locdir": "/dev/shm/imrcp-prod/mlp/la/",
+			"hostdir": "/dev/shm/imrcp-prod/mlp/la/",
+			"loctsdir": "/dev/shm/imrcp-prod/mlp/la/longts/",
+			"hosttsdir": "/dev/shm/imrcp-prod/mlp/la/longts/",
+			"format": "/opt/imrcp-data-prod/mlp/la/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"fcstmin": 120,
+			"realtime": "True",
+			"disttol": 480000,
+			"tz": "America/Chicago",
+			"network": "KRaN77RTMG4Kmz77UyAsHg",
+			"inputfile": "%shistdat%03d.csv"
+		}
+	},
+	{
+		"MLPUpdateOH" :
+		{
+			"subscribe": ["OhioTrafficSpeedStore", "OhGoIncidentsStore", "OhGoConstructionStore", "RTMAStore", "RAPStore", "ExtMapping"],
+			"offset": 0,
+			"period": 604800000,
+			"threads": 23,
+			"locdir": "/dev/shm/imrcp-prod/mlp/oh/",
+			"hostdir": "/dev/shm/imrcp-prod/mlp/oh/",
+			"loctsdir": "/dev/shm/imrcp-prod/mlp/oh/longts/",
+			"hosttsdir": "/dev/shm/imrcp-prod/mlp/oh/longts/",
+			"realtime": "True",
+			"tz": "America/New_York",
+			"network": "eGnb-qnc-mWJI-QDAzUxcA",
+			"inputfile": "%shistpast%03d.csv.gz",
+			"weeks": 1
+		}
+	},
+	{
+		"MLPUpdateLA" :
+		{
+			"subscribe": ["LaTrafficSpeedStore", "LaDOTDEventsStore", "RTMAStore", "RAPStore", "RTMAStore", "RAPStore", "ExtMapping"],
+			"offset": 0,
+			"period": 604800000,
+			"threads": 23,
+			"locdir": "/dev/shm/imrcp-prod/mlp/la/",
+			"hostdir": "/dev/shm/imrcp-prod/mlp/la/",
+			"loctsdir": "/dev/shm/imrcp-prod/mlp/la/longts/",
+			"hosttsdir": "/dev/shm/imrcp-prod/mlp/la/longts/",
+			"realtime": "True",
+			"tz": "America/Chicago",
+			"network": "KRaN77RTMG4Kmz77UyAsHg",
+			"inputfile": "%shistpast%03d.csv.gz",
+			"weeks": 1
+		}
+	},
+	{
+		"imrcp.store.MLPStore" :
+		{
+			"freq": 900000,
+			"maxfcst": 7200000,
+			"subobs": ["SPDLNK", "TRFLNK"],
+			"limit": 48,
+			"offset": 375,
+			"period": 1800,
+			"append": "False",
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"MLPStoreOH" :
+		{
+			"subscribe": ["WayNetworks",  "MLPPredictOH"],
+			"format": ["/opt/imrcp-data-prod/mlp/oh/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv"]
+		}
+	},
+	{
+		"MLPStoreLA" :
+		{
+			"subscribe": ["WayNetworks",  "MLPPredictLA"],
+			"format": ["/opt/imrcp-data-prod/mlp/la/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv"]
+		}
+	},
+	{
+		"imrcp.web.tiles.TileServlet" :
+		{
+			"groups": ["imrcp-user"],
+			"metidx": 2,
+			"minzoom": 6,
+			"obstypes": ["TRSCNE"],
+			"TRSCNE": 4,
+			"points": ["EVT", "0"],
+			"sensors": ["AHPSLocations"],
+			"keys": ["roadtype", "bridge"],
+			"roadtype": ["H", "A"],
+			"bridge": ["N", "Y"],
+			"artzoom": 10
+		}
+	},
+	{
+		"imrcp.web.tiles.GribTileCache" :
+		{
+			"groups": ["imrcp-user"],
+			"metidx": 2
+		}
+	},
+	{
+		"imrcp.web.tiles.DataObsTileCache" :
+		{
+			"groups": ["imrcp-user"],
+			"metidx": 2
+		}
+	},
+	{
+		"imrcp.web.tiles.NcfTileCache" :
+		{
+			"groups": ["imrcp-user"],
+			"metidx": 2
+		}
+	},
+	{
+		"RadarTileCache" :
+		{
+			"format": ["/opt/imrcp-data-prod/mrms/radar/%ryM/%ryMd/mrms_radar_010_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"parameters": ["RDR0", "209", "11", "0"],
+			"limit": 720,
+			"maxfcst": 240000,
+			"append": "False",
+			"initfiles": 0,
+			"cachetimeout": 3600000,
+			"freq": 120000,
+			"zoom": 7,
+			"period": 1800,
+			"offset": 375,
+			"tileobs": "RDR0"
+		}
+	},
+	{
+		"TairTileCache" :
+		{
+			"append": "False",
+			"period": 3600,
+			"offest": 2475,
+			"maxfcst": 208800000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/ndfd/temp/%ryM/%ryMd/ndfd_temp_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 12,
+			"initfiles": 0,
+			"obsid": ["TAIR", "TAIR"],
+			"obs": ["Temperature_surface", "Temperature_height_above_ground"],
+			"hrz": ["x", "x", "lon"],
+			"vrt": ["y", "y", "lat"],
+			"time": ["time", "time", "time"],
+			"freq": 3600000,
+			"zoom": 7,
+			"tileobs": "TAIR"
+		}
+	},
+	{
+		"SscstTileCache" :
+		{
+			"append": "False",
+			"period": 3600,
+			"offest": 2475,
+			"maxfcst": 648000000,
+			"cachetimeout": 3600000,
+			"format": ["/opt/imrcp-data-prod/adcirc/east/%ryM/%ryMd/adcirc_025_east_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 12,
+			"initfiles": 0,
+			"obsid": ["SSCST"],
+			"obs": ["Extra_Tropical_Storm_Surge_Combined_Surge_and_Tide_surface"],
+			"hrz": ["x"],
+			"vrt": ["y"],
+			"time": ["time"],
+			"freq": 21600000,
+			"zoom": 7,
+			"tileobs": "SSCST",
+			"multi": 10000
+		}
+},
+	{
+		"Scenarios" :
+		{
+			"groups": ["imrcp-user"],
+			"basedir": "/opt/imrcp-data-prod/scenarios/",
+			"period": 300
+		}
+	},
+	{
+		"NetworkGeneration" :
+		{
+			"groups": ["imrcp-user"],
+			"statefile": "/opt/imrcp-data-prod/metadata/state_polygons.shp",
+			"osm": "http://download.geofabrik.de/north-america/us/%s-latest.osm.bz2",
+			"osmdir": "/opt/imrcp-data-prod/osm/",
+			"root": "/opt/imrcp-data-prod/",
+			"geolines": "/opt/imrcp-data-prod/networks/%s/geo.bin",
+			"detfile": "/opt/imrcp-data-prod/networks/%s/dets.csv",
+			"detfilemap": "/opt/imrcp-data-prod/networks/%s/det_map.csv"
+		}
+	},
+	{
+		"LanesServlet" :
+		{
+			"groups": ["imrcp-user"],
+			"metidx": 2,
+			"file": "/opt/imrcp-data-prod/networks/lalanes.csv"
+		}
+	},
+	{
+		"imrcp.comp.DataAssimilation" :
+		{
+			"hrz": 7000,
+			"vrt": 3500,
+			"startx": -129.995,
+			"starty": 54.995,
+			"stepx": 0.01,
+			"stepy": -0.01,
+			"bias": 10000,
+			"kernel": 50,
+			"minval": -273.15,
+			"range": 3600000,
+			"period": 1200,
+			"offset": 90
+		}
+	},
+	{
+		"TPVTDA" :
+		{
+			"subscribe": ["WxDEStore"],
+			"store": "WxDEStore",
+			"srcobstype": "TPVT",
+			"destobstype": "KRTPVT",
+			"dest": "/opt/imrcp-data-prod/da/krtpvt/%ryM/%ryMd/imrcp_krtpvt_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"
+		}
+	},
+	{
+		"TSSRFDA" :
+		{
+			"subscribe": ["WxDEStore"],
+			"store": "WxDEStore",
+			"srcobstype": "TSSRF",
+			"destobstype": "KTSSRF",
+			"dest": "/opt/imrcp-data-prod/da/ktssrf/%ryM/%ryMd/imrcp_ktssrf_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"
+		}
+	},
+	{
+		"KTSSRFTileCache" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 1590,
+			"maxfcst": 600000,
+			"format": ["/opt/imrcp-data-prod/da/ktssrf/%ryM/%ryMd/imrcp_ktssrf_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 100,
+			"initfiles": 0,
+			"tileobs": "KTSSRF",
+			"freq": 1200000,
+			"zoom": 7
+		}
+	},
+	{
+		"KRTPVTTileCache" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 1590,
+			"maxfcst": 600000,
+			"format": ["/opt/imrcp-data-prod/da/krtpvt/%ryM/%ryMd/imrcp_krtpvt_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 100,
+			"initfiles": 0,
+			"tileobs": "KRTPVT",
+			"freq": 600000,
+			"zoom": 7
+		}
+	},
+	{
+		"TPVTDAStore" :
+		{
+			"subscribe": ["TPVTDA"],
+			"format": ["/opt/imrcp-data-prod/da/krtpvt/%ryM/%ryMd/imrcp_krtpvt_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 50,
+			"freq": 1200000,
+			"subobs": ["KRTPVT"],
+			"append": "False",
+			"period": 1800,
+			"offset": 450,
+			"maxfcst": 3600000,
+			"cachetimeout": 3600000,
+			"initfiles": 24,
+			"contains": "krtpvt"
+		}
+	},
+	{
+		"TSSRFDAStore" :
+		{
+			"subscribe": ["TSSRFDA"],
+			"format": ["/opt/imrcp-data-prod/da/ktssrf/%ryM/%ryMd/imrcp_ktssrf_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 50,
+			"freq": 1200000,
+			"subobs": ["KTSSRF"],
+			"append": "False",
+			"period": 1800,
+			"offset": 450,
+			"maxfcst": 3600000,
+			"cachetimeout": 3600000,
+			"initfiles": 24,
+			"contains": "ktssrf"
+		}
+	},
+	{
+		"DataObsWrapper" :
+		{
+			"floatobs": ["KRTPVT", "KTSSRF"]
+		}
+	},
+	{
+		"spdwndvt" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 477,
+			"maxfcst": 208800000,
+			"format": ["/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/ndfd/wspd/%ryM/%ryMd/ndfd_wspd_030_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 100,
+			"initfiles": 0,
+			"obsid": ["SPDWND", "SPDWND"],
+			"obs": ["Wind_speed_surface", "Wind_speed_height_above_ground"],
+			"hrz": ["x", "x"],
+			"vrt": ["y", "y"],
+			"time": ["time", "time"],
+			"freq": 3600000,
+			"zoom": 7,
+			"tileobs": "SPDWND",
+			"uvwind": ["false", "false", "true"]
+		}
+	},
+	{
+		"gstwndvt" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 1590,
+			"maxfcst": 3600000,
+			"format": ["/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 100,
+			"initfiles": 0,
+			"obsid": ["GSTWND", "GSTWND"],
+			"obs": ["Wind_speed_gust_height_above_ground", "Wind_speed_gust_surface"],
+			"hrz": ["x", "lon"],
+			"vrt": ["y", "lat"],
+			"time": ["time", "time"],
+			"freq": 3600000,
+			"zoom": 7,
+			"tileobs": "GSTWND"
+		}
+	},
+	{
+		"visvt" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 1590,
+			"maxfcst": 36000000,
+			"format": ["/opt/imrcp-data-prod/rtma/%ryM/%ryMd/rtma_030_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/rap/%ryM/%ryMd/rap_130_%syMdHm_%eyMdHm_%ryMdHm.grb2", "/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2"],
+			"limit": 100,
+			"initfiles": 0,
+			"obsid": ["VIS"],
+			"obs": ["Visibility_surface"],
+			"hrz": ["x", "x", "lon"],
+			"vrt": ["y", "y", "lat"],
+			"time": ["time", "time", "time"],
+			"freq": 3600000,
+			"zoom": 7,
+			"tileobs": "VIS"
+		}
+	},
+	{
+		"PcCatTileCache" :
+		{
+			"append": "False",
+			"period": 1800,
+			"offest": 1590,
+			"maxfcst": 604800000,
+			"format": ["/opt/imrcp-data-prod/pccat/mrms/%ryM/%ryMd/imrcp_mrms_010_%syMdHm_%eyMdHm_%ryMdHm.bin.gz", "/opt/imrcp-data-prod/pccat/rap/%ryM/%ryMd/rap_pccat_130_%syMdHm_%eyMdHm_%ryMdHm.bin.gz", "/opt/imrcp-data-prod/pccat/ndfd/%ryM/%ryMd/imrcp_ndfd_030_%syMdHm_%eyMdHm_%ryMdHm.bin.gz", "/opt/imrcp-data-prod/pccat/gfs/%ryM/%ryMd/gfs_pccat_250_%syMdHm_%eyMdHm_%ryMdHm.bin.gz"],
+			"limit": 100,
+			"initfiles": 0,
+			"tileobs": "PCCAT",
+			"freq": 120000,
+			"zoom": 7,
+			"checkint": 120000
+		}
+	},
+	{
+		"UserSettingsServlet" :
+		{
+			"groups": ["imrcp-user", "imrcp-admin"],
+			"file": "/opt/imrcp-prod-v4/webapps/IMRCP/users/%s/settings.json"
+		}
+	},
+	{
+		"RoadLayerServlet" :
+		{
+			"groups": ["imrcp-user", "imrcp-admin"],
+			"snaptol": 400,
+			"roadobs": ["TPVT", "STPVT", "DPHLNK", "DPHSN", "VOLLNK", "SPDLNK", "DNTLNK", "TRFLNK", "TDNLNK"]
+		}
+	},
+	{
+		"AreaLayerServlet" :
+		{
+			"groups": ["imrcp-user", "imrcp-admin"],
+			"areaobs": ["PCCAT", "VIS", "GSTWND", "SPDWND", "RDR0", "TAIR", "KRTPVT", "KTSSRF", "EVT", "TRSCNE", "SSCST"]
+		}
+	},
+	{
+		"PointsLayerServlet" :
+		{
+			"groups": ["imrcp-user", "imrcp-admin"]
+		}
+	},
+	{
+		"MonitorServlet" :
+		{
+			"blocks": ["Metro", "MLPPredictOH", "MLPPredictLA", "RTMA", "RAP", "Radar", "RadarPrecip", "NDFDTd", "NDFDWspd",
+						"NDFDTemp", "NDFDSky", "OhioInrix"],
+			"Metro": 600000,
+			"MLPPredictOH": 5400000,
+			"MLPPredictLA": 5400000,
+			"RTMA": 120000,
+			"RAP": 180000,
+			"Radar": 120000,
+			"RadarPrecip": 120000,
+			"NDFDTd": 120000,
+			"NDFDTemp": 120000,
+			"NDFDSky": 120000,
+			"NDFDWspd": 120000,
+			"OhioInrix": 120000,
+			"period": 60,
+			"offset": 0,
+			"file": "/dev/shm/imrcp-prod/blockmonitor.txt",
+			"groups": ["imrcp-admin"],
+			"metidx": 2,
+			"token": "6887a68da17e348fd899ec188c0d514f"
+		}
+	},
+	{
+		"imrcp.collect.GFS" :
+		{
+			"url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/",
+			"#url": "ftp://ftp.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/",
+			"offset": 18000,
+			"period": 21600,
+			"dest": "/dev/shm/imrcp-prod/gfs/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"src": "gfs.%ryMd/%rH/atmos/gfs.t%rHz.pgrb2.0p25.f%rnnn",
+			"delay": 0,
+			"range": 10800000,
+			"freq": 21600000,
+			"conntimeout": 120000,
+			"retrydelay": 1200000,
+			"indices": ["54", "57", "60", "63", "66", "69", "72", "75", "78", "81", "84", "87", "90", "93", "96", "99", "102", "105", "108", "111", "114", "117", "120", "123", "126", "129", "132", "135", "138", "141", "144", "147", "150", "153", "156", "159", "162", "165", "168"],
+			"filter": "/opt/imrcp-data-prod/gfs/%ryM/%ryMd/gfs_250_%syMdHm_%eyMdHm_%ryMdHm.grb2",
+			"gribvars": [
+						"0","19","1","1","8",
+						"0","1","193","1","0",
+						"0","1","194","1","0",
+						"0","1","192","1","0",
+						"0","1","195","1","0",
+						"0","16","196","200","0",
+						"0","1","37","1","0",
+						"0","1","196","1","8",
+						"0","0","6","103","0",
+						"0","1","32","105","0",
+						"0","1","32","105","0",
+						"10","2","0","1","0",
+						"0","19","234","100","0",
+						"0","0","4","103","0",
+						"0","0","5","103","0",
+						"0","1","39","1","0",
+						"0","1","7","1","0",
+						"0","1","7","1","8",
+						"0","3","0","103","0",
+						"0","3","0","1","0",
+						"0","3","0","7","0",
+						"0","1","1","103","0",
+						"0","1","11","1","0",
+						"2","0","2","106","0",
+						"0","0","0","1","0",
+						"0","6","1","200","8",
+						"0","1","8","1","8",
+						"0","2","2","102","0",
+						"0","2","2","103","0",
+						"0","2","3","102","0",
+						"0","2","3","103","0",
+						"0","19","0","1","0",
+						"0","1","13","1","0",
+						"2","0","5","1","8",
+						"0","2","22","1","0"
+						]
+		}
+	},
+	{
+		"GFSCatchUp" :
+		{
+			"catchup": ["20210613"]
+		}
+	},
+	{
+		"DashboardServlet" :
+		{
+			"subscribe": ["TSSRFDAStore", "TPVTDAStore", "GFSStore", "MetroStore"],
+			"datafile": "/dev/shm/imrcp-prod/dashboard/%s_%s.csv",
+			"graphfile": "/opt/imrcp-data-prod/metadata/graphobs.csv",
+			"timefile": "/opt/imrcp-data-prod/metadata/timeranges.txt",
+			"profile": "/opt/imrcp-prod-v4/webapps/IMRCP/users/%s/%s.%s",
+			"groups": ["imrcp-user","imrcp-admin"]
+		}
+	},
+	{
+		"BlueToadLADOTD" :
+		{
+			"url": "https://bluetoad.trafficcast.com/",
+			"offset": 0,
+			"period": 300,
+			"dest": "/opt/imrcp-data-prod/btoad/ladotd/%ryM/%ryMd/btoad_pairs_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "xml/bt_pairs/live",
+			"delay": 0,
+			"range": 300000,
+			"freq": 300000,
+			"user": "ladotduser",
+			"pw": "Fall2019"
+		}
+	},
+	{
+		"BlueToadLADOTDRoutes" :
+		{
+			"url": "https://bluetoad.trafficcast.com/",
+			"offset": 10,
+			"period": 300,
+			"dest": "/opt/imrcp-data-prod/btoad/ladotd/%ryM/%ryMd/btoad_routes_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "xml/bt_routes/live",
+			"delay": 0,
+			"range": 300000,
+			"freq": 300000,
+			"user": "ladotduser",
+			"pw": "Fall2019"
+		}
+	},
+	{
+		"LAc2c" :
+		{
+			"url": "http://98.171.146.150/c2c/",
+			"#url": "http://76.165.4.228/c2c/",
+			"offset": 0,
+			"period": 60,
+			"dest": "/opt/imrcp-data-prod/lac2c/%ryM/%ryMd/ladotd_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "detectorDataResponse.xml",
+			"delay": 120000,
+			"range": 60000,
+			"freq": 60000
+		}
+	},
+	{
+		"LAc2cfEU" :
+		{
+			"url": "http://98.171.146.150/c2c/",
+			"#url": "http://76.165.4.228/c2c/",
+			"offset": 20,
+			"period": 60,
+			"dest": "/opt/imrcp-data-prod/lac2cfeu/%ryM/%ryMd/ladotd_feu_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "fEUMsg.xml",
+			"delay": 120000,
+			"range": 60000,
+			"freq": 60000
+		}
+	},
+	{
+		"LAc2cDetectorsComp" :
+		{
+			"subscribe": ["LAc2c"],
+			"freq": 3600000,
+			"range": 3600000,
+			"dest": "/opt/imrcp-data-prod/trafficspeed/la/%ryM/%ryMd/ladotd_%syMdHm_%eyMdHm_%ryMdHm.bin",
+			"src": "/opt/imrcp-data-prod/lac2c/%ryM/%ryMd/ladotd_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"rollup": 300000,
+			"offset": 120000,
+			"srcrange": 60000
+		}
+	},
+	{
+		"LaTrafficSpeedStore" :
+		{
+			"subscribe": ["ExtMapping", "LAc2cDetectorsComp"],
+			"format": ["/opt/imrcp-data-prod/trafficspeed/la/%ryM/%ryMd/ladotd_%syMdHm_%eyMdHm_%ryMdHm.bin"],
+			"subobs": ["SPDLNK"],
+			"freq": 3600000,
+			"limit": 48,
+			"append": "True",
+			"period": 4500,
+			"offset": 810,
+			"maxfcst": 0,
+			"cachetimeout": 3600000,
+			"initfiles": 2
+		}
+	},
+	{
+		"LAc2cEventsComp" :
+		{
+			"subscribe": ["LAc2cfEU"],
+			"freq": 86400000,
+			"dest": "/opt/imrcp-data-prod/ladotdevents/%ryM/ladotd_events_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dateformat": "yyyyMMddHHmmssZ"
+		}
+	},
+	{
+		"LaDOTDEventsStore" :
+		{
+			"subscribe": ["LAc2cEventsComp", "WayNetworks"],
+			"format": ["/opt/imrcp-data-prod/ladotdevents/%ryM/ladotd_events_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["EVT", "0"],
+			"freq": 86400000,
+			"limit": 10,
+			"append": "True",
+			"period": 4500,
+			"offset": 810,
+			"maxfcst": 172800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"WayNetworks" :
+		{
+			"subscribe": ["DEM"],
+			"geolines": "/opt/imrcp-data-prod/networks/%s/geo.bin",
+			"networkfile": "/opt/imrcp-data-prod/networks/networks.json",
+			"tzs": ["eGnb-qnc-mWJI-QDAzUxcA", "America/New_York", "KRaN77RTMG4Kmz77UyAsHg", "America/Chicago", "P-YYgmP3AMQ-dgqsTltLAw", "America/Chicago"]
+		}
+	},
+	{
+		"DEM" :
+		{
+			"url": "https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/%d/%d/%d.png?sku=%s&access_token=%s",
+			"token": "pk.eyJ1Ijoia3J1ZWdlcmIiLCJhIjoiY2l6ZDl4dTlwMjJvaDJ3bW44bXFkd2NrOSJ9.KXqbeWgASgEUYQu0oi7Hbg",
+			"dir": "/opt/imrcp-data-prod/dem/",
+			"cachelimit": 1000
+		}
+	},
+        {
+                "OhioInrix" :
+                {
+			"dest": "/opt/imrcp-data-prod/inrix/oh/%ryM/%ryMd/inrix_%syMdHm_%eyMdHm_%ryMdHm.json.gz",
+			"url": "http://segment-api.inrix.com/v1/segments/speed",
+			"offset": 0,
+			"period": 300,
+			"delay": -300000,
+ 			"range": 300000,
+			"freg": 300000,
+			"appid": "fcd6f53c-a978-4c06-b25e-618a586dbf4e",
+ 			"apptoken": "9dfcb40f3453518cef51fed18835413e66c923f8",
+			"tokenurl": "https://uas-api.inrix.com/v1/appToken?appId=%s&hashToken=%s",
+			"zoom": 9,
+			"xs": ["135", "136", "137", "138", "139", "140", "141"],
+			"135": ["190", "191", "192", "194", "195"],
+			"136": ["190", "191", "192", "193", "194", "195"],
+			"137": ["190", "191", "192", "193", "194"],
+			"138": ["190", "191", "192", "193", "194"],
+			"139": ["190", "191", "192", "193", "194"],
+			"140": ["190", "191", "192", "193", "194"],
+			"141": ["190", "191", "192", "193"],
+			"query": ["Coverage", "8", "SpeedOutputFields", "Speed", "RoadSegmentType", "XDS"],
+			"emails": ["aaron.cherney@synesis-partners.com", "acherney07@gmail.com"]
+                }
+        },
+        {
+                "ALInrix" :
+                {
+			"dest": "/opt/imrcp-data-prod/inrix/al/%ryM/%ryMd/inrix_%syMdHm_%eyMdHm_%ryMdHm.json.gz",
+			"url": "http://segment-api.inrix.com/v1/segments/speed",
+			"offset": 0,
+			"period": 300,
+			"delay": -300000,
+ 			"range": 300000,
+			"freg": 300000,
+			"appid": "fcd6f53c-a978-4c06-b25e-618a586dbf4e",
+ 			"apptoken": "9dfcb40f3453518cef51fed18835413e66c923f8",
+			"tokenurl": "https://uas-api.inrix.com/v1/appToken?appId=%s&hashToken=%s",
+			"zoom": 9,
+			"xs": ["130","131","132","133","134","135"],
+			"130": ["202","203","204","205","206","207","208","209","210","211"],
+			"131": ["202","203","204","205","206","207","208","209","210"],
+			"132": ["202","203","204","205","206","207","208","209"],
+			"133": ["202","203","204","205","206","207","208","209"],
+			"134": ["202","203","204","205","206","207","208","209"],
+			"135": ["206","207","208","209"],
+			"query": ["Coverage", "8", "SpeedOutputFields", "Speed", "RoadSegmentType", "XDS"],
+			"emails": ["aaron.cherney@synesis-partners.com", "acherney07@gmail.com"]
+                }
+        },
+        {
+                "MSInrix" :
+                {
+			"dest": "/opt/imrcp-data-prod/inrix/ms/%ryM/%ryMd/inrix_%syMdHm_%eyMdHm_%ryMdHm.json.gz",
+			"url": "http://segment-api.inrix.com/v1/segments/speed",
+			"offset": 0,
+			"period": 300,
+			"delay": -300000,
+ 			"range": 300000,
+			"freg": 300000,
+			"appid": "fcd6f53c-a978-4c06-b25e-618a586dbf4e",
+ 			"apptoken": "9dfcb40f3453518cef51fed18835413e66c923f8",
+			"tokenurl": "https://uas-api.inrix.com/v1/appToken?appId=%s&hashToken=%s",
+			"zoom": 9,
+			"xs": ["125","126","127","128","129","130"],
+			"125": ["208","209"],
+			"126": ["203","204","205","206","207","208","209"],
+			"127": ["202","203","204","205","206","207","208","209"],
+			"128": ["202","203","204","205","206","207","208","209","210"],
+			"129": ["202","203","204","205","206","207","208","209","210","211"],
+			"130": ["202","203","204","205","206","207","208","209","210"],
+			"query": ["Coverage", "8", "SpeedOutputFields", "Speed", "RoadSegmentType", "XDS"],
+			"emails": ["aaron.cherney@synesis-partners.com", "acherney07@gmail.com"]
+                }
+        },
+	{
+		"imrcp.web.USCenPlaceLookup" :
+		{
+			"censusdir": "/opt/census",
+			"statefile": "/opt/census/tl_2019_us_state.zip"
+		}
+	},
+	{
+		"OhioInrixComp" :
+		{
+			"subscribe": ["OhioInrix", "ExtMapping"],
+			"freq": 3600000,
+			"srcfreq": 300000,
+			"dest": "/opt/imrcp-data-prod/trafficspeed/oh/%ryM/%ryMd/odot_%syMdHm_%eyMdHm_%ryMdHm.bin",
+			"src": "/opt/imrcp-data-prod/inrix/oh/%ryM/%ryMd/inrix_%syMdHm_%eyMdHm_%ryMdHm.json.gz"
+		}
+	},
+	{
+		"OhioTrafficSpeedStore" :
+		{
+			"subscribe": ["ExtMapping", "OhioInrixComp"],
+			"format": ["/opt/imrcp-data-prod/trafficspeed/oh/%ryM/%ryMd/odot_%syMdHm_%eyMdHm_%ryMdHm.bin"],
+			"subobs": ["SPDLNK"],
+			"freq": 3600000,
+			"limit": 48,
+			"append": "True",
+			"period": 4500,
+			"offset": 810,
+			"maxfcst": 0,
+			"cachetimeout": 3600000,
+			"initfiles": 2
+		}
+	},
+	{
+		"ExtMapping" :
+		{
+			"contribs": ["odot", "ladotd"],
+			"odot": "/opt/imrcp-data-prod/metadata/xd_to_imrcp_oh.csv",
+			"ladotd": "/opt/imrcp-data-prod/metadata/ladotd_to_imrcp.csv"
+		}
+	},
+	{
+		"imrcp.collect.OhGo" :
+		{
+			"url": "https://publicapi.ohgo.com/api/v1/",
+			"period": 300,
+			"delay": 0,
+			"range": 300000,
+			"freq": 300000,
+			"key": "b65aaf45-43ce-4004-a254-6afa4ea05e38"
+		}
+	},
+	{
+		"OhGoSigns" :
+		{
+			"offset": 20,
+			"dest": "/opt/imrcp-data-prod/ohgo/signs/%ryM/%ryMd/ohgo_signs_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "digital-signs"
+		}
+	},
+	{
+		"OhGoConstruction" :
+		{
+			"offset": 10,
+			"dest": "/opt/imrcp-data-prod/ohgo/construction/%ryM/%ryMd/ohgo_construction_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "construction"
+		}
+	},
+	{
+		"OhGoConstructionComp" :
+		{
+			"subscribe": ["OhGoConstruction"],
+			"dest": "/opt/imrcp-data-prod/events/ohgoconstruction/%ryM/ohgo_construction_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dateformat": "yyyy-MM-dd'T'HH:mm:ss"
+		}
+	},
+	{
+		"OhGoConstructionStore" :
+		{
+			"subscribe": ["OhGoConstructionComp", "WayNetworks"],
+			"format": ["/opt/imrcp-data-prod/events/ohgoconstruction/%ryM/ohgo_construction_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["EVT", "0"],
+			"freq": 86400000,
+			"limit": 10,
+			"append": "True",
+			"period": 4500,
+			"offset": 830,
+			"maxfcst": 172800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"OhGoIncidents" :
+		{
+			"offset": 0,
+			"dest": "/opt/imrcp-data-prod/ohgo/incidents/%ryM/%ryMd/ohgo_incidents_%syMdHm_%eyMdHm_%ryMdHm.xml.gz",
+			"src": "incidents"
+		}
+	},
+	{
+		"OhGoIncidentsComp" :
+		{
+			"subscribe": ["OhGoIncidents"],
+			"dest": "/opt/imrcp-data-prod/events/ohgoincidents/%ryM/ohgo_incidents_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dateformat": "yyyy-MM-dd'T'HH:mm:ss"
+		}
+	},
+	{
+		"OhGoIncidentsStore" :
+		{
+			"subscribe": ["OhGoIncidentsComp", "WayNetworks"],
+			"format": ["/opt/imrcp-data-prod/events/ohgoincidents/%ryM/ohgo_incidents_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["EVT", "0"],
+			"freq": 86400000,
+			"limit": 10,
+			"append": "True",
+			"period": 4500,
+			"offset": 835,
+			"maxfcst": 172800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"imrcp.collect.LADOTD511" :
+		{
+			"url": "https://gis.511la.org/geoserver/",
+			"period": 300,
+			"offset": 0,
+			"user": "imrcp",
+			"pw": "X94zog?~NU"
+		}
+	},
+	{
+		"LADOTD511Point" :
+		{
+			"src": "Louisiana/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=Louisiana%3AErsEventPoint&maxFeatures=50&outputFormat=csv",
+			"dest": "/dev/shm/imrcp-prod/La511Points.csv"
+		}
+	},
+	{
+		"LADOTD511PointComp" :
+		{
+			"subscribe": ["LADOTD511Point"],
+			"dest": "/opt/imrcp-data-prod/events/ladotd511pt/%ryM/ladotd_511pt_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dateformat": "yyyy-MM-dd'T'HH:mm:ss",
+			"rolling": "/opt/imrcp-data-prod/events/ladotd511pt/ErsEventPoint.csv"
+		}
+	},
+	{
+		"LADOTD511PointStore" :
+		{
+			"subscribe": ["LADOTD511PointComp", "WayNetworks"],
+			"format": ["/opt/imrcp-data-prod/events/ladotd511pt/%ryM/ladotd_511pt_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["EVT", "0"],
+			"freq": 86400000,
+			"limit": 10,
+			"append": "True",
+			"period": 4500,
+			"offset": 820,
+			"maxfcst": 172800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"LADOTD511Line" :
+		{
+			"src": "ows?service=WFS&version=2.0.0&request=GetFeature&typeName=Louisiana%3AErsEventLine&maxFeatures=50&outputFormat=csv",
+			"dest": "/dev/shm/imrcp-prod/La511Lines.csv",
+			"offset": 10
+		}
+	},
+	{
+		"LADOTD511LineComp" :
+		{
+			"subscribe": ["LADOTD511Line"],
+			"dest": "/opt/imrcp-data-prod/events/ladotd511line/%ryM/ladotd_511line_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dateformat": "yyyy-MM-dd'T'HH:mm:ss",
+			"rolling": "/opt/imrcp-data-prod/events/ladotd511line/ErsEventLine.csv"
+		}
+	},
+	{
+		"LADOTD511LineStore" :
+		{
+			"subscribe": ["LADOTD511LineComp", "WayNetworks"],
+			"format": ["/opt/imrcp-data-prod/events/ladotd511line/%ryM/ladotd_511line_%syMdHm_%eyMdHm_%ryMdHm.csv"],
+			"subobs": ["EVT"],
+			"freq": 86400000,
+			"limit": 10,
+			"append": "True",
+			"period": 4500,
+			"offset": 845,
+			"maxfcst": 172800000,
+			"cachetimeout": 3600000,
+			"initfiles": 1
+		}
+	},
+	{
+		"GeotabMoDOT" :
+		{
+			"url": "https://gov16.geotab.com/apiv1",
+			"dest": "/opt/imrcp-data-prod/geotab/%ryM/%ryMd/geotab_%syMdHm_%eyMdHm_%ryMdHm.csv.gz",
+			"offset": 0,
+			"period": 60,
+			"delay": 0,
+			"range": 7200000,
+			"freq": 3600000,
+			"user": "api_synesis_partners",
+			"pw": "Synesis1234",
+			"db": "missouri_dept_of_transportation",
+			"metadata": ["DiagnosticSolidMaterialRateId", "RTSLDM", "0.1", "0", "DiagnosticLiquidMaterialRateId","RTLIQM", "0.1", "0", "DiagnosticPreWetMaterialRateId", "RTPREM", "0.1", "0", "DiagnosticSolidMaterialTypeId", "TPSLDM", "1", "0", "DiagnosticLiquidMaterialTypeId", "TPLIQM", "1", "0", "DiagnosticPreWetMaterialTypeId", "TPPREM", "1", "0", "aM0H1VUuFh0q4IRENBPM7iw", "MPLOW", "1", "0", "aaoPFopZlkkmx9AHXtHdFhA", "WPLOW", "1", "0", "aROBo6GnFGkW1iTcolJncjg", "TPLOW", "1", "0", "ahgyBYkGfHU6xwWblC3qCnA", "TPVT", "0.1", "-50", "adJbC4Y-Spkimw43Ezh1Zmw", "TPVT", "1.38889", "0", "arAJS7l3mvEiQ35y4Quon7g", "TPVT", "0.03125", "-273"],
+			"orifile": "/opt/imrcp-data-prod/geotab/json/%ryM/%ryMd/geotab_%ryMdHm.json.gz",
+			"obsfile": "/opt/imrcp-data-prod/geotab/obsfounds.csv"
+		}
+	},
+	{
+		"GeotabMoDOTStore" :
+		{
+			"subscribe": ["GeotabMoDOT"],
+			"subobs": ["SPDVEH", "RTSLDM", "RTLIQM", "TPSLDM", "TPLIQM", "TPPREM", "MPLOW", "WPLOW", "TPLOW", "TPVT", "0"],
+			"format": ["/opt/imrcp-data-prod/geotab/%ryM/%ryMd/geotab_%syMdHm_%eyMdHm_%ryMdHm.csv.gz"],
+			"fcstint": 3600000,
+			"maxfcst": 7200000,
+			"offset": 1050,
+			"freq": 3600000,
+			"limit": 2,
+			"period": 1800,
+			"cachetimeout": 3600000,
+			"initfiles": 1,
+			"append": "True"
+		}
+	},
+	{
+		"MLPStoreHurricane" :
+		{
+			"subscribe": ["WayNetworks", "MLPHurricane"],
+			"freq": 3600000,
+			"maxfcst": 604800000,
+			"format": ["/opt/imrcp-data-prod/mlp/hurricane/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv"]
+		}
+	},
+	{
+		"MLPHurricane" :
+		{
+			"subscribe": ["WayNetworks", "LaTrafficSpeedStore", "NHC", "NHCStore"],
+			"network": "KRaN77RTMG4Kmz77UyAsHg",
+			"nhcfile": "/opt/imrcp-data-prod/nhc/%ry/nhc_%S_%syMdHm_%eyMdHm_%ryMdHm.zip",
+			"svmff": "/dev/shm/imrcp-prod/mlp/hurricane/%s_%s_%d.csv",
+			"svmmarkov": "/dev/shm/imrcp-prod/mlp/svm_markov.RData",
+			"script": "/dev/shm/imrcp-prod/mlp/hurricane/hurricane.R",
+			"dest": "/opt/imrcp-data-prod/mlp/hurricane/%ryM/%ryMd/mlp_%syMdHm_%eyMdHm_%ryMdHm.csv",
+			"dir": "/dev/shm/imrcp-prod/mlp/hurricane/",
+			"oneshot": "/dev/shm/imrcp-prod/mlp/hurricane/%s/%s.csv",
+			"storminfo": "/dev/shm/imrcp-prod/mlp/hurricane/%s/%s.info",
+			"threads": 39,
+			"horizon": 12,
+			"period": 1800,
+			"offset": 0
+		}
+	}
 ]
-
