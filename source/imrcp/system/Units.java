@@ -27,24 +27,28 @@ import java.util.Collections;
  */
 public class Units extends ArrayList<Units.UnitConv>
 {
-
 	/**
 	 * The singleton instance of Units.
 	 */
 	private static Units g_oInstance = new Units();
+
+	
+	/**
+	 *
+	 */
 	protected ArrayList<SourceUnit> m_oSourceUnits = new ArrayList();
 
 
 	/**
-	 * Default Constructor connects units file contained in the
-	 * config file to query the units contained there. It then iterates through
-	 * the units stored in the file, adding both forward and reverse
-	 * conversions to ({@code m_oUnits}) the list of units contained in the
-	 * {@code Units} class.
+	 * Default Constructor reads the units file contained in the
+	 * config file by iterating through the units stored in the file, adding 
+	 * both forward and reverse conversions to ({@code m_oUnits}), the list of 
+	 * units contained in the {@code Units} class. It also reads the source units
+	 * file to fill {@link #m_oSourceUnits} with the definitions of what units
+	 * each source uses.
 	 */
 	private Units()
 	{
-		
 		Config oConfig = Config.getInstance();
 		String sFilename = oConfig.getString(getClass().getName(), "Units", "file", "");
 		try (CsvReader oIn = new CsvReader(new FileInputStream(sFilename)))
@@ -64,6 +68,7 @@ public class Units extends ArrayList<Units.UnitConv>
 		}
 		catch (Exception oException)
 		{
+			oException.printStackTrace();
 		}
 		
 		sFilename = Config.getInstance().getString(getClass().getName(), "SourceUnits", "file", "");
@@ -92,6 +97,7 @@ public class Units extends ArrayList<Units.UnitConv>
 
 	/**
 	 * Attempts to convert the given value from one unit to another.
+	 * 
 	 * @param sFromUnit The unit to convert from
 	 * @param sToUnit The unit to convert to
 	 * @param dVal the value to convert
@@ -162,6 +168,7 @@ public class Units extends ArrayList<Units.UnitConv>
 		return null;
 	}
 
+	
 	/**
 	 * Wraps forward conversions which are conversions of the form:
 	 * <blockquote>
@@ -177,27 +184,30 @@ public class Units extends ArrayList<Units.UnitConv>
 	 */
 	public class UnitConv implements Comparable<UnitConv>
 	{
-
 		/**
 		 * Multiply factor.
 		 */
 		protected double m_dMultiply = 1.0;
 
+		
 		/**
 		 * Division factor.
 		 */
 		protected double m_dDivide = 1.0;
 
+		
 		/**
 		 * Addition factor.
 		 */
 		protected double m_dAdd = 0.0;
 
+		
 		/**
 		 * Unit label corresponding to the units to be converted from.
 		 */
 		protected String m_sFromUnit;
 
+		
 		/**
 		 * Unit label corresponding to the units to be converted to.
 		 */
@@ -266,6 +276,7 @@ public class Units extends ArrayList<Units.UnitConv>
 		}
 	}
 
+	
 	/**
 	 * Wraps reverse conversions. Extends {@code UnitConvF} implementing the
      * {
@@ -281,7 +292,6 @@ public class Units extends ArrayList<Units.UnitConv>
 	 */
 	private class UnitConvR extends UnitConv
 	{
-
 		/**
 		 * <b> Default Constructor </b>
 		 * <p>

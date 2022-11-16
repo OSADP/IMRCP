@@ -7,17 +7,16 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * {@code ObsType} is a static class that manages the IMRCP system's list of
- * valid observation types, their labels, descriptions and units. The labels are
- * 6 character or less strings that are used to describe the medium and type of
- * observation. The string is converted into an integer that is used as the obs
- * type id using base 36
+ * This class contains the defined observation types available in system as well
+ * as the enumerated values for those observation types.
+ * @author Federal Highway Administration
  */
 public class ObsType
 {
-
 	/**
-	 * List of database sources.
+	 * Array that defines all of the observation types. Each observation type
+	 * is defined by a String[] in the format [up to 6 character alphanumeric String
+	 * that is the IMRCP observation type id, english units, metric units, observation type description, in use flag 'y' or 'n']
 	 */
 	private static final String OBS_TYPES[][] = new String[][]
 	{
@@ -31,13 +30,13 @@ public class ObsType
 		{"VIS", "mi", "km", "surface visibility", "y"},
 		{"CONPVT", "V", "V", "pavement conductivity", "y"},
 		{"STPVT", "", "", "pavement state", "y"},
-		{"DIRWND", "º", "º", "wind direction from which blowing height above ground", "y"},
-		{"GSTWND", "mph", "m/s", "wind speed gust height above ground", "y"},
-		{"SPDWND", "mph", "m/s", "wind speed height above ground", "y"},
-		{"COVCLD", "%", "%", "total cloud cover entire atmosphere single layer", "y"},
+		{"DIRWND", "º", "º", "wind direction", "y"},
+		{"GSTWND", "mph", "m/s", "wind speed gust", "y"},
+		{"SPDWND", "mph", "m/s", "wind speed", "y"},
+		{"COVCLD", "%", "%", "total cloud cover", "y"},
 		{"RTEPC", "in/hr", "mm/hr", "precipitation rate surface", "y"},
 		{"TYPPC", "", "", "precipitation type", "y"},
-		{"STG", "", "", "flood stage", "y"},
+		{"STG", "", "", "stage", "y"},
 		{"EVT", "", "", "event", "y"},
 		{"VOLLNK", "veh/min", "veh/min", "link volume", "y"},
 		{"GENLNK", "veh", "veh", "vehicles generated on each generation link", "n"},
@@ -64,226 +63,389 @@ public class ObsType
 		{"TDNLNK", "", "", "traffic density", "y"},
 		{"TIMERT", "min", "min", "route time", "y"},
 		{"RDR0", "dBZ", "dBZ", "merged base reflectivity", "y"},
-		{"NOTIFY", "", "", "Notification", "y"}
+		{"NOTIFY", "", "", "Notification", "y"},
+		{"TRSCAT", "", "", "Tropical Storm Category", "y"},
+		{"TRSTRK", "", "", "Tropical Storm Track", "y"},
+		{"TRSCNE", "", "", "Tropical Storm Cone", "y"},
+		{"KRTPVT", "F", "C", "kriged pavement temperature", "y"},
+		{"KTSSRF", "F", "C", "kriged subsurface temperature", "y"},
+		{"SSCST", "ft", "m", "extra tropical storm surge combined surge and tide", "y"},
+		{"0", "", "", "all"},
+		{"RTSLDM", "", "kg/km", "Solid material rate", "y"},
+		{"RTLIQM", "", "L/km", "Liquid material rate", "y"},
+		{"RTPREM", "", "L/Mg", "Prewet material rate", "y"},
+		{"TPSLDM", "", "", "Solid material type", "y"},
+		{"TPLIQM", "", "", "Liquid material type", "y"},
+		{"TPPREM", "", "", "Prewet material type", "y"},
+		{"MPLOW", "", "", "MAC main plow", "y"},
+		{"WPLOW", "", "", "MAC wing plow", "y"},
+		{"TPLOW", "", "", "MAC tow plow", "y"},
+		{"SPDVEH", "mph", "kph", "vehicle speed", "y"}
 	};
 
+	
 	/**
-	 * Air Temperature
+	 * air temperature
 	 */
 	public static final int TAIR = Integer.valueOf(OBS_TYPES[1][0], 36);
 
+	
 	/**
-	 * Dew Point Temperature
+	 * dew point temperature
 	 */
 	public static final int TDEW = Integer.valueOf(OBS_TYPES[2][0], 36);
 
+	
 	/**
-	 * Pavement Temperature
+	 * pavement temperature
 	 */
 	public static final int TPVT = Integer.valueOf(OBS_TYPES[3][0], 36);
 
+	
 	/**
-	 * Barometric Pressure
+	 * barometric pressure
 	 */
 	public static final int PRBAR = Integer.valueOf(OBS_TYPES[4][0], 36);
 
+	
 	/**
-	 * Surface Pressure
+	 * surface pressure
 	 */
 	public static final int PRSUR = Integer.valueOf(OBS_TYPES[5][0], 36);
 
+	
 	/**
-	 * Relative Humidity
+	 * relative humidity
 	 */
 	public static final int RH = Integer.valueOf(OBS_TYPES[6][0], 36);
 
+	
 	/**
-	 * Visibility
+	 * surface visibility
 	 */
 	public static final int VIS = Integer.valueOf(OBS_TYPES[7][0], 36);
 
+	
 	/**
-	 * Pavement Conductivity
+	 * pavement conductivity
 	 */
 	public static final int CONPVT = Integer.valueOf(OBS_TYPES[8][0], 36);
 
+	
 	/**
-	 * Pavement State
+	 * pavement state
 	 */
 	public static final int STPVT = Integer.valueOf(OBS_TYPES[9][0], 36);
 
+	
 	/**
-	 * Wind Direction
+	 * wind direction
 	 */
 	public static final int DIRWND = Integer.valueOf(OBS_TYPES[10][0], 36);
 
+	
 	/**
-	 * Wind Gust Speed
+	 * wind speed gust
 	 */
 	public static final int GSTWND = Integer.valueOf(OBS_TYPES[11][0], 36);
 
+	
 	/**
-	 * Wind Speed
+	 * wind speed
 	 */
 	public static final int SPDWND = Integer.valueOf(OBS_TYPES[12][0], 36);
 
+	
 	/**
-	 * Cloud Cover
+	 * total cloud cover
 	 */
 	public static final int COVCLD = Integer.valueOf(OBS_TYPES[13][0], 36);
 
+	
 	/**
-	 * Precipitation Rate
+	 * precipitation rate surface
 	 */
 	public static final int RTEPC = Integer.valueOf(OBS_TYPES[14][0], 36);
 
+	
 	/**
-	 * Precipitation Type
+	 * precipitation type
 	 */
 	public static final int TYPPC = Integer.valueOf(OBS_TYPES[15][0], 36);
 
+	
 	/**
-	 * Flood Stage
+	 * stage
 	 */
 	public static final int STG = Integer.valueOf(OBS_TYPES[16][0], 36);
 
+	
 	/**
-	 * Event
+	 * event
 	 */
 	public static final int EVT = Integer.valueOf(OBS_TYPES[17][0], 36);
 
+	
 	/**
-	 * Link Volume
+	 * link volume
 	 */
 	public static final int VOLLNK = Integer.valueOf(OBS_TYPES[18][0], 36);
 
+	
 	/**
-	 * Vehicles Generated on Link
+	 * vehicles generate on each generation link
 	 */
 	public static final int GENLNK = Integer.valueOf(OBS_TYPES[19][0], 36);
 
+	
 	/**
-	 * Number of Vehicles on Link
+	 * number of vehicles on each link
 	 */
 	public static final int VEHLNK = Integer.valueOf(OBS_TYPES[20][0], 36);
 
+	
 	/**
-	 * Number of Queued Vehicles on Link
+	 * number of queued vehicles on each link
 	 */
 	public static final int QUELNK = Integer.valueOf(OBS_TYPES[21][0], 36);
 
+	
 	/**
-	 * Average Speed of Vehicles on Link
+	 * average speed of vehicles on each link
 	 */
 	public static final int SPDLNK = Integer.valueOf(OBS_TYPES[22][0], 36);
 
+	
 	/**
-	 * Average Density of Vehicles on Link
+	 * average density of vehicles on each link
 	 */
 	public static final int DNTLNK = Integer.valueOf(OBS_TYPES[23][0], 36);
 
+	
 	/**
-	 * Average Speed of Moving Vehicles on Link
+	 * average speed of moving vehicles on each link
 	 */
 	public static final int SPFLNK = Integer.valueOf(OBS_TYPES[24][0], 36);
 
+	
 	/**
-	 * Average Density of Vehicles on Link
+	 * average density of moving vehicles on each link
 	 */
 	public static final int DNFLNK = Integer.valueOf(OBS_TYPES[25][0], 36);
 
+	
 	/**
-	 * Number of Left-Turning Vehicles on Link
+	 * number of left-turning vehicles on each link
 	 */
 	public static final int CTLEFT = Integer.valueOf(OBS_TYPES[26][0], 36);
 
+	
 	/**
-	 * Average Green Time
+	 * average green time for each approach
 	 */
 	public static final int DURGRN = Integer.valueOf(OBS_TYPES[27][0], 36);
 
+	
 	/**
-	 * Number of Vehicles that Pass Through the Link
+	 * number of vehicles that pass through the link
 	 */
 	public static final int CTTHRU = Integer.valueOf(OBS_TYPES[28][0], 36);
 
+	
 	/**
-	 * Cumulative Number of Vehicles that Pass the Mid Point of the Link
+	 * cumulative number of vehicles that pass the mid point of links
 	 */
 	public static final int CTMID = Integer.valueOf(OBS_TYPES[29][0], 36);
 
+	
 	/**
-	 * Subsurface Temperature
+	 * subsurface temperature
 	 */
 	public static final int TSSRF = Integer.valueOf(OBS_TYPES[30][0], 36);
 
+	
 	/**
-	 * Liquid Inundation Depth
+	 * liquid inundation depth
 	 */
 	public static final int DPHLIQ = Integer.valueOf(OBS_TYPES[31][0], 36);
 
+	
 	/**
-	 * Snow/Ice Inundation Depth
+	 * snow inundation depth
 	 */
 	public static final int DPHSN = Integer.valueOf(OBS_TYPES[32][0], 36);
 
+	
 	/**
-	 * Flow Category
+	 * predicted flow category
 	 */
 	public static final int FLWCAT = Integer.valueOf(OBS_TYPES[33][0], 36);
 
+	
 	/**
-	 * Speed Category
+	 * predicted speed category
 	 */
 	public static final int SPDCAT = Integer.valueOf(OBS_TYPES[34][0], 36);
 
+	
 	/**
-	 * Occupancy Category
+	 * predicted occupancy category
 	 */
 	public static final int OCCCAT = Integer.valueOf(OBS_TYPES[35][0], 36);
 
+	
 	/**
-	 * Queue Percentage on Link
+	 * queue percentage on link
 	 */
 	public static final int QPRLNK = Integer.valueOf(OBS_TYPES[36][0], 36);
 
+	
 	/**
-	 * Depth of Water on Link
+	 * link depth
 	 */
 	public static final int DPHLNK = Integer.valueOf(OBS_TYPES[37][0], 36);
 
+	
 	/**
-	 * Precipitation Category
+	 * precipitation category
 	 */
 	public static final int PCCAT = Integer.valueOf(OBS_TYPES[38][0], 36);
 
+	
 	/**
-	 * Traffic
+	 * traffic
 	 */
 	public static final int TRFLNK = Integer.valueOf(OBS_TYPES[39][0], 36);
 
+	
 	/**
-	 * Traffic Density
+	 * traffic density
 	 */
 	public static final int TDNLNK = Integer.valueOf(OBS_TYPES[40][0], 36);
 
+	
 	/**
-	 * Travel Time of Route
+	 * route time
 	 */
 	public static final int TIMERT = Integer.valueOf(OBS_TYPES[41][0], 36);
 
+	
 	/**
-	 * Merged Base Reflectivity (Radar)
+	 * merged base reflectivity
 	 */
 	public static final int RDR0 = Integer.valueOf(OBS_TYPES[42][0], 36);
 
+	
 	/**
-	 * Notification
+	 * notification
 	 */
 	public static final int NOTIFY = Integer.valueOf(OBS_TYPES[43][0], 36);
-
+	
+	
 	/**
-	 * Contains all the Obs Type Ids
+	 * tropical storm category
+	 */
+	public static final int TRSCAT = Integer.valueOf(OBS_TYPES[44][0], 36);
+	
+	
+	/**
+	 * tropical storm track
+	 */
+	public static final int TRSTRK = Integer.valueOf(OBS_TYPES[45][0], 36);
+	
+	
+	/**
+	 * tropical storm cone
+	 */
+	public static final int TRSCNE = Integer.valueOf(OBS_TYPES[46][0], 36);
+	
+	
+	/**
+	 * kriged pavement temperature
+	 */
+	public static final int KRTPVT = Integer.valueOf(OBS_TYPES[47][0], 36);
+	
+	
+	/**
+	 * kriged subsurface temperature
+	 */
+	public static final int KTSSRF = Integer.valueOf(OBS_TYPES[48][0], 36);
+	
+	
+	/**
+	 * extra tropical storm surge combined surge and tide
+	 */
+	public static final int SSCST = Integer.valueOf(OBS_TYPES[49][0], 36);
+	
+	
+	/**
+	 * all
+	 */
+	public static final int ALL = Integer.valueOf(OBS_TYPES[50][0], 36);
+	
+	
+	/**
+	 * solid material rate
+	 */
+	public static final int RTSLDM = Integer.valueOf(OBS_TYPES[51][0], 36);
+	
+	
+	/**
+	 * liquid material rate
+	 */
+	public static final int RTLIQM = Integer.valueOf(OBS_TYPES[52][0], 36);
+	
+	
+	/**
+	 * prewet material rate
+	 */
+	public static final int RTPREM = Integer.valueOf(OBS_TYPES[53][0], 36);
+	
+	
+	/**
+	 * solid material type
+	 */
+	public static final int TPSLDM = Integer.valueOf(OBS_TYPES[54][0], 36);
+	
+	
+	/**
+	 * liquid material type
+	 */
+	public static final int TPLIQM = Integer.valueOf(OBS_TYPES[55][0], 36);
+	
+	
+	/**
+	 * prewet material type
+	 */
+	public static final int TPPREM = Integer.valueOf(OBS_TYPES[56][0], 36);
+	
+	
+	/**
+	 * MAC main plow
+	 */
+	public static final int MPLOW = Integer.valueOf(OBS_TYPES[57][0], 36);
+	
+	
+	/**
+	 * MAC wing plow
+	 */
+	public static final int WPLOW = Integer.valueOf(OBS_TYPES[58][0], 36);
+	
+	
+	/**
+	 * MAC tow plow
+	 */
+	public static final int TPLOW = Integer.valueOf(OBS_TYPES[59][0], 36);
+	
+	/**
+	 * Vehicle Speed
+	 */
+	public static final int SPDVEH = Integer.valueOf(OBS_TYPES[60][0], 36);
+	
+	
+	/**
+	 * Contains all of the defined observation type ids, with the first index
+	 * reserved for unknown observation types
 	 */
 	private static final int[] TYPE_MAP
 	   =
@@ -294,93 +456,130 @@ public class ObsType
 		   EVT, VOLLNK, GENLNK, VEHLNK, QUELNK, SPDLNK, DNTLNK, SPFLNK,
 		   DNFLNK, CTLEFT, DURGRN, CTTHRU, CTMID, TSSRF, DPHLIQ, DPHSN,
 		   FLWCAT, SPDCAT, OCCCAT, QPRLNK, DPHLNK, PCCAT, TRFLNK, TDNLNK,
-		   TIMERT, RDR0, NOTIFY
+		   TIMERT, RDR0, NOTIFY, TRSCAT, TRSTRK, TRSCNE, KRTPVT, KTSSRF, SSCST, ALL,
+		   RTSLDM, RTLIQM, RTPREM, TPSLDM, TPLIQM, TPPREM, MPLOW, WPLOW, TPLOW, SPDVEH
 	   };
 
+	
 	/**
-	 * Contains all the Obs Type Ids
+	 *  Contains all of the defined observation type ids, without the reserved
+	 * spot for unknown observation types
 	 */
 	public static final int[] ALL_OBSTYPES = Arrays.copyOfRange(TYPE_MAP, 1, TYPE_MAP.length);
 
-	private static final TreeMap<String, TreeMap<Integer, String>> LOOKUP
-	   = new TreeMap();
 	
+	/**
+	 * Stores the enumerated values for each observation type
+	 */
+	private static final TreeMap<String, TreeMap<Integer, String>> LOOKUP = new TreeMap();
+	
+	
+	/**
+	 * Stores all of the RangeRules available in the system
+	 */
 	private static final RangeRules[] RANGERULES;
 
+	
 	/**
-	 * Threshold for light rain
+	 * Light rain threshold in kg/(m^2*s)
 	 */
-
 	public static final double m_dLIGHTRAIN;
 
+	
 	/**
-	 * Threshold for medium rain
+	 * Medium rain threshold in kg/(m^2*s)
 	 */
 	public static final double m_dMEDIUMRAIN;
 
+	
 	/**
-	 * Threshold for light snow
+	 * light snow threshold in kg/(m^2*s)
 	 */
 	public static final double m_dLIGHTSNOW;
 
+	
 	/**
-	 * Threshold for medium snow
+	 * medium snow threshold in kg/(m^2*s)
 	 */
 	public static final double m_dMEDIUMSNOW;
 	
-		/**
-	 * Threshold for temperature to infer precip type as rain
+	
+	/**
+	 * temperature for rain threshold in K
 	 */
 	public static final double m_dRAINTEMP;
 
+	
 	/**
-	 * Threshold for temperature to infer precip type as snow
+	 * temperature for snow threshold in K
 	 */
 	public static final double m_dSNOWTEMP;
 
+	
 	/**
-	 * Threshold for light rain
+	 * light rain threshold in mm/hr
 	 */
 	public static final double m_dLIGHTRAINMMPERHR;
 
+	
 	/**
-	 * Threshold for medium rain
+	 * medium rain threshold in mm/hr
 	 */
 	public static final double m_dMEDIUMRAINMMPERHR;
 
+	
 	/**
-	 * Threshold for light snow
+	 * light snow threshold in mm/hr
 	 */
 	public static final double m_dLIGHTSNOWMMPERHR;
 
+	
 	/**
-	 * Threshold for medium snow
+	 * medium snow threshold in mm/hr
 	 */
 	public static final double m_dMEDIUMSNOWMMPERHR;
+	
+	
 	/**
-	 * Creates the Lookup Maps that contain mappings from integer ids to Strings
-	 * for the different Obs Types
+	 * Initializes configured values, rangerules, and enumerated values
 	 */
 	static
 	{
 		Config oConfig = Config.getInstance();
 		
-		m_dLIGHTRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lrain", "0.0007055556"));
-		m_dMEDIUMRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "mrain", "0.0021166667"));
-		m_dLIGHTSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lsnow", "0.0000705556"));
-		m_dMEDIUMSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "msnow", "0.0007055556"));
-		m_dRAINTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "raintemp", "275.15")); // in K
-		m_dSNOWTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "snowtemp", "271.15")); // in K
-		m_dLIGHTRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightrainmm", "2.6")); // mm/hr
-		m_dMEDIUMRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medrainmm", "7.6")); // mm/hr
-		m_dLIGHTSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightsnowmm", "0.26")); // mm/hr
-		m_dMEDIUMSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medsnowmm", "0.76")); // mm/hr
+		if (oConfig != null)
+		{
+			m_dLIGHTRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lrain", "0.0007055556"));
+			m_dMEDIUMRAIN = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "mrain", "0.0021166667"));
+			m_dLIGHTSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lsnow", "0.0000705556"));
+			m_dMEDIUMSNOW = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "msnow", "0.0007055556"));
+			m_dRAINTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "raintemp", "275.15")); // in K
+			m_dSNOWTEMP = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "snowtemp", "271.15")); // in K
+			m_dLIGHTRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightrainmm", "2.6")); // mm/hr
+			m_dMEDIUMRAINMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medrainmm", "7.6")); // mm/hr
+			m_dLIGHTSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "lightsnowmm", "0.26")); // mm/hr
+			m_dMEDIUMSNOWMMPERHR = Double.parseDouble(oConfig.getString(ObsType.class.getName(), "ObsType", "medsnowmm", "0.76")); // mm/hr
 		
-		String[] sRangeRuleObs = oConfig.getStringArray(ObsType.class.getName(), "ObsType", "rules", "");
-		RANGERULES = new RangeRules[sRangeRuleObs.length];
-		for (int i = 0; i < sRangeRuleObs.length; i++)
-			RANGERULES[i] = new RangeRules(sRangeRuleObs[i]);
+			String[] sRangeRuleObs = oConfig.getStringArray(ObsType.class.getName(), "ObsType", "rules", "");
+			RANGERULES = new RangeRules[sRangeRuleObs.length];
+			for (int i = 0; i < sRangeRuleObs.length; i++)
+				RANGERULES[i] = new RangeRules(sRangeRuleObs[i]);
+		}
+		else
+		{
 		
+			RANGERULES = new RangeRules[0];
+			m_dLIGHTRAIN = 0.0007055556;
+			m_dMEDIUMRAIN = 0.0021166667;
+			m_dLIGHTSNOW = 0.0000705556;
+			m_dMEDIUMSNOW = 0.0007055556;
+			m_dRAINTEMP = 275.15; // in K
+			m_dSNOWTEMP = 271.15; // in K
+			m_dLIGHTRAINMMPERHR = 2.6; // mm/hr
+			m_dMEDIUMRAINMMPERHR = 7.6; // mm/hr
+			m_dLIGHTSNOWMMPERHR = 0.26; // mm/hr
+			m_dMEDIUMSNOWMMPERHR = 0.76; // mm/hr
+		}
 		TreeMap<Integer, String> oTemp = new TreeMap(); // NTCIP 1204 surface condition
 		oTemp.put(1, "other");
 		oTemp.put(2, "error");
@@ -400,6 +599,7 @@ public class ObsType
 		oTemp.put(21, "slush");
 		oTemp.put(22, "melting-snow");
 		oTemp.put(23, "icing-rain");
+		oTemp.put(30, "flooded"); // imrcp road condition
 		LOOKUP.put("STPVT", oTemp);
 
 		oTemp = new TreeMap();
@@ -416,6 +616,11 @@ public class ObsType
 		oTemp.put(10, "light-ice");
 		oTemp.put(11, "moderate-ice");
 		oTemp.put(12, "heavy-ice");
+		oTemp.put(101, "other");
+		oTemp.put(102, "unknown");
+		oTemp.put(104, "light-unidentified");
+		oTemp.put(105, "moderate-unidentified");
+		oTemp.put(106, "heavy-unidentified");
 		LOOKUP.put("PCCAT", oTemp);
 
 		oTemp = new TreeMap(); // RAP categorical precipitation types
@@ -424,6 +629,8 @@ public class ObsType
 		oTemp.put(2, "snow");
 		oTemp.put(3, "ice-pellets");
 		oTemp.put(4, "freezing-rain");
+		oTemp.put(5, "other");
+		oTemp.put(6, "unknown");
 		LOOKUP.put("TYPPC", oTemp);
 
 		oTemp = new TreeMap();
@@ -449,6 +656,7 @@ public class ObsType
 		LOOKUP.put("OCCCAT", oTemp);
 		
 		oTemp = new TreeMap();
+		oTemp.put(0, "not-defined");
 		oTemp.put(1, "no-action");
 		oTemp.put(2, "action");
 		oTemp.put(3, "flood");
@@ -469,7 +677,7 @@ public class ObsType
 		oTemp.put(201, "dew-on-roadway");
 		oTemp.put(202, "frost-on-roadway");
 		oTemp.put(203, "blowing-snow");
-		oTemp.put(204, "icy-bridge");
+		oTemp.put(204, "icy-roadway");
 		oTemp.put(301, "incident");
 		oTemp.put(302, "workzone");
 		oTemp.put(303, "slow-traffic");
@@ -602,7 +810,7 @@ public class ObsType
 		oTemp.put(201, "dew-on-roadway");
 		oTemp.put(202, "frost-on-roadway");
 		oTemp.put(203, "blowing-snow");
-		oTemp.put(204, "icy-bridge");
+		oTemp.put(204, "icy-roadway");
 		oTemp.put(301, "incident");
 		oTemp.put(302, "workzone");
 		oTemp.put(303, "slow-traffic");
@@ -739,23 +947,48 @@ public class ObsType
 		oTemp.put(1124, "Test");
 
 		LOOKUP.put("EVT", oTemp);
+		
+		oTemp = new TreeMap(); // NHC storm classifications
+//		oTemp.put(Integer.valueOf("DB", 36), "Tropical Depression");
+		oTemp.put(Integer.valueOf("HU", 36), "Hurricane");
+		oTemp.put(Integer.valueOf("MH", 36), "Major Hurricane");
+//		oTemp.put(Integer.valueOf("PT", 36), "Tropical Depression");
+//		oTemp.put(Integer.valueOf("PTC", 36), "Post-tropical Cyclone Remnants Of");
+//		oTemp.put(Integer.valueOf("SD", 36), "Tropical Storm");
+//		oTemp.put(Integer.valueOf("SS", 36), "Tropical Storm");
+		oTemp.put(Integer.valueOf("STD", 36), "Subtropical Depression");
+		oTemp.put(Integer.valueOf("STS", 36), "Subtropical Storm");
+		oTemp.put(Integer.valueOf("TD", 36), "Tropical Depression");
+		oTemp.put(Integer.valueOf("TS", 36), "Tropical Storm");
+		
+		LOOKUP.put("TRSCAT", oTemp);
+		LOOKUP.put("TRSTRK", oTemp);
+		LOOKUP.put("TRSCNE", oTemp);
+		
+		oTemp = new TreeMap(); // plow flag
+		oTemp.put(0, "Plow up");
+		oTemp.put(1, "Plow down");
+		
+		LOOKUP.put("MPLOW", oTemp);
+		LOOKUP.put("WPLOW", oTemp);
+		LOOKUP.put("TPLOW", oTemp);
 	}
 
-
+	
 	/**
-	 * Private Default Constructor
+	 * Default constructor. Does nothing.
 	 */
 	private ObsType()
 	{
 	}
 
-
+	
 	/**
-	 * Returns the index of given Obs Type Id in the TYPE_MAP array
-	 *
-	 * @param nObsTypeId the Obs Type Id you need the index of
-	 * @return index of the given Obs Type Id in the TYPE_MAP array. Returns 0
-	 * if the Id could not be found
+	 * Gets the index of the given IMRCP observation type id in {@link #TYPE_MAP}
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @return index of the IMRCP observation in {@link #TYPE_MAP} if it is found,
+	 * otherwise 0.
 	 */
 	private static int getIndex(int nObsTypeId)
 	{
@@ -768,46 +1001,41 @@ public class ObsType
 		return 0;
 	}
 
-
+	
 	/**
-	 * Prints the data items contained in {@code iObsSet} in the form:
-	 * <p>
-	 * <blockquote>
-	 * {object type}, {Sensor ID}, {Timestamp}, {Latitude}, {Longitude},
-	 * {Elevation}, {Value}, {Run}, {Flags}, {Confidence Level}
-	 * </blockquote>
-	 * </p>
-	 *
-	 * @param nObsTypeId
-	 * @param
-	 * @return
+	 * Gets the name of the given IMRCP observation type id.
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @return Name associated with the IMRCP observation type id
 	 */
 	public static String getName(int nObsTypeId)
 	{
 		return OBS_TYPES[getIndex(nObsTypeId)][0];
 	}
 
-
+	
 	/**
-	 * Returns the English units for the given Obs Type Id
-	 *
-	 * @param nObsTypeId the Obs Type Id you need the units of
-	 * @return English units for the given Obs Type Id
+	 * Gets the English units of the given IMRCP observation type id.
+	 * 
+	 * @param nObsTypeId IMRCP observation type
+	 * @return English units associated with the IMRCP observation type id
 	 */
 	public static String getUnits(int nObsTypeId)
 	{
 		return getUnits(nObsTypeId, false);
 	}
 
-
+	
 	/**
-	 * Returns the units for the given Obs Type Id. Whether English or Metric
-	 * units are return is based off of the given boolean
-	 *
-	 * @param nObsTypeId the Obs Type Id you need the units of
-	 * @param bMetric true if Metric units are needed, false for English units
-	 * @return English or Metric units for the given Obs Type Id. Metric units
-	 * if bMetric is true, otherwise English units
+	 * Get the English or metric units of the given IMRCP observation type id
+	 * based on the metric flag.
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @param bMetric Flag indicating the metric or English units should be returned.
+	 * true = metric, false = English
+	 * @return If bMetric is true, the metric units associated with the IMRCP 
+	 * observation type id, otherwise the English units associated with the
+	 * IMRCP observation type id.
 	 */
 	public static String getUnits(int nObsTypeId, boolean bMetric)
 	{
@@ -817,35 +1045,41 @@ public class ObsType
 			return OBS_TYPES[getIndex(nObsTypeId)][1];
 	}
 
-
+	
 	/**
-	 * Returns the description of the given Obs Type Id
-	 *
-	 * @param nObsTypeId the Obs Type Id you need the description of
-	 * @return description of the given Obs Type Id
+	 * Get the description of the given IMRCP observation type id.
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @return the description associated with the IMRCP observation type id
 	 */
 	public static String getDescription(int nObsTypeId)
 	{
 		return OBS_TYPES[getIndex(nObsTypeId)][3];
 	}
 
-
+	
 	/**
-	 *
-	 * @param nObstypeId
-	 * @return
+	 * Tells if the given IMRCP observation type id has enumerated values to lookup.
+	 * 
+	 * @param nObstypeId IMRCP observation type id
+	 * @return true if the IMRCP observation type id has an entry in {@link #LOOKUP},
+	 * otherwise false.
 	 */
 	public static boolean hasLookup(int nObstypeId)
 	{
 		return LOOKUP.containsKey(getName(nObstypeId));
 	}
 
-
+	
 	/**
-	 *
-	 * @param nObsTypeId
-	 * @param nValue
-	 * @return
+	 * Gets the String lookup value of the given value of the given IMRCP 
+	 * observation type id
+	 * 
+	 * @param nObsTypeId IMRCP observation type
+	 * @param nValue enumerated value to look up
+	 * @return String associated with the value of the IMRCP observation type
+	 * id. If the observation type does not have a look up for enumerated values,
+	 * an empty string is returned
 	 */
 	public static String lookup(int nObsTypeId, int nValue)
 	{
@@ -856,12 +1090,16 @@ public class ObsType
 		return "";
 	}
 
-
+	
 	/**
-	 *
-	 * @param nObsTypeId
-	 * @param sValue
-	 * @return
+	 * Gets the enumerated value of the given look up String of the given IMRCP
+	 * observation type id
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @param sValue look up String to get the enumerated value of
+	 * @return the enumerated value associated with the look up String for the 
+	 * IMRCP observation type id. If an enumerated value is not associated with
+	 * the String, {@code Integer.MIN_VALUE} is returned
 	 */
 	public static int lookup(int nObsTypeId, String sValue)
 	{
@@ -880,12 +1118,27 @@ public class ObsType
 	}
 	
 	
+	/**
+	 * Tells if the given IMRCP observation type id is currently in use by the
+	 * system.
+	 * 
+	 * @param nObsTypeId IMRCP observation type id
+	 * @return true if the IMRCP observation type id is in use by the system,
+	 * otherwise false.
+	 */
 	public static boolean isInUse(int nObsTypeId)
 	{
 		return OBS_TYPES[getIndex(nObsTypeId)][4].compareTo("y") == 0;
 	}
 	
 	
+	/**
+	 * Gets the RangeRules associated with the given IMRCP observation type id
+	 * 
+	 * @param nObsType IMRCP observation type id
+	 * @return The RangeRules associated with the IMRCP observation type id if
+	 * it exists, otherwise null.
+	 */
 	public static RangeRules getRangeRules(int nObsType)
 	{
 		for (int i = 0; i < RANGERULES.length; i++)
@@ -895,5 +1148,33 @@ public class ObsType
 		}
 		
 		return null;
+	}
+	
+	
+	/**
+	 * Fills the given StringBuilder with a JSON representation of the enumerated
+	 * values lookup map.
+	 * 
+	 * @param sBuf buffer to add the JSON representation of the look up map to
+	 */
+	public static void getJsonLookupValues(StringBuilder sBuf)
+	{
+		Iterator<Map.Entry<String, TreeMap<Integer, String>>> oIt = LOOKUP.entrySet().iterator();
+		sBuf.append("{");
+		while (oIt.hasNext())
+		{
+			Map.Entry<String, TreeMap<Integer, String>> oLookupMap = oIt.next();
+			sBuf.append("\"").append(oLookupMap.getKey()).append("\":[");
+			Iterator<Map.Entry<Integer, String>> oValues = oLookupMap.getValue().entrySet().iterator();
+			while (oValues.hasNext())
+			{
+				Map.Entry<Integer, String> oLookupValue = oValues.next();
+				sBuf.append("[\"").append(oLookupValue.getKey()).append("\",\"").append(oLookupValue.getValue()).append("\"],");
+			}
+			sBuf.setLength(sBuf.length() - 1);
+			sBuf.append("],");
+		}
+		sBuf.setLength(sBuf.length() - 1);
+		sBuf.append("}");
 	}
 }

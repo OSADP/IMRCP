@@ -13,64 +13,68 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * This class handles the scheduling and execution of tasks for the system. It
- * contains the primary thread pool used by the system.
+ * Singleton class that contains a thread pool and manages scheduling tasks for
+ * the system.
+ * @author Federal Highway Administration
  */
 public class Scheduling implements Executor
 {
-
 	/**
-	 * Singleton instance of Scheduling
+	 * Singleton instance
 	 */
 	private static Scheduling g_oScheduling = new Scheduling();
 
+	
 	/**
-	 * Timer used to schedule tasks for future execution
+	 * Timer object used to schedule the execution of tasks
 	 */
 	private Timer m_oTimer = new Timer();
 
+	
 	/**
 	 * System thread pool
 	 */
-	private ExecutorService m_iExecutor = Executors.newFixedThreadPool(53);
+	private ExecutorService m_iExecutor = Executors.newFixedThreadPool(131);
 
+	
 	/**
-	 * List of tasks that are scheduled
+	 * Stores the Sched objects that represent the tasks scheduled for execution
 	 */
 	private final ArrayList<Sched> m_oTasks = new ArrayList();
 
+	
 	/**
-	 * Counter variable used for schedule Ids
+	 * Counter used to assign schedule ids
 	 */
 	private static AtomicInteger m_nIdCount = new AtomicInteger();
 
-
+	
 	/**
-	 * Default constructor
+	 * Default constructor. Does nothing.
 	 */
 	private Scheduling()
 	{
 	}
 
-
+	
 	/**
-	 * Returns the reference to the singleton instance of Scheduling
-	 *
-	 * @return reference to the singleton instance
+	 * Gets the singleton instance
+	 * 
+	 * @return The singleton instance
 	 */
 	public static Scheduling getInstance()
 	{
 		return g_oScheduling;
 	}
 
-
+	
 	/**
-	 * Determines the next period to execute based off of the offset from
-	 * midnight and the period of execution
-	 *
-	 * @param nOffset schedule offset from midnight.
-	 * @param nPeriod period of execution.
-	 * @return Calendar object of the next period .
+	 * Gets a Calendar with its time set to the next period of execution based off
+	 * of the given offset and period.
+	 * 
+	 * @param nOffset Schedule offset from midnight in seconds
+	 * @param nPeriod Period of execution in seconds
+	 * @return Calendar with the time set as the next period of execution
 	 */
 	public static Calendar getNextPeriod(int nOffset, int nPeriod)
 	{
@@ -95,6 +99,14 @@ public class Scheduling implements Executor
 	}
 	
 	
+	/**
+	 * Gets a Calendar with its time set to the last period of execution based off
+	 * of the given offset and period.
+	 * 
+	 * @param nOffset Schedule offset from midnight in seconds
+	 * @param nPeriod Period of execution in seconds
+	 * @return Calendar with the time set as the last period of execution
+	 */
 	public static Calendar getLastPeriod(int nOffset, int nPeriod)
 	{
 		Calendar iCalendar = new GregorianCalendar(Directory.m_oUTC);
@@ -116,15 +128,17 @@ public class Scheduling implements Executor
 		return iCalendar;
 	}
 
-
+	
 	/**
-	 * Creates a new Sched that is scheduled to run at a fixed rate, starting 
-	 * at the next period of execution based off of the midnight offset and
+	 * Creates a Sched object wrapping the given Runnable, adds it to the task
+	 * list, {@link #m_oTasks} and uses the Timer, {@link #m_oTimer} to schedule
+	 * the task to be executed at a fixed rate based off of the given offset and
 	 * period.
-	 * @param iRunnable the Runnable to execute
-	 * @param nOffset schedule offset from midnight in seconds
-	 * @param nPeriod period of execution in seconds
-	 * @return the Id of the Sched created
+	 * 
+	 * @param iRunnable Runnable to schedule for execution
+	 * @param nOffset Schedule offset from midnight in seconds
+	 * @param nPeriod Period of execution in seconds
+	 * @return The schedule id assigned to the task
 	 */
 	public synchronized int createSched(Runnable iRunnable, int nOffset, int nPeriod)
 	{
@@ -140,13 +154,15 @@ public class Scheduling implements Executor
 
 	
 	/**
-	 * Creats a new Sched that is scheduled to run at a fixed rate, starting 
-	 * at the time represented by the Date object passed in and then at regular
-	 * intervals separated by the given period.
-	 * @param iRunnable the Runnable to execute
-	 * @param oTime Date object representing the first time to execute the Runnable
-	 * @param nPeriod period of execution in milliseconds
-	 * @return 
+	 * Creates a Sched object wrapping the given Runnable, adds it to the task
+	 * list, {@link #m_oTasks} and uses the Timer, {@link #m_oTimer} to schedule
+	 * the task to be executed at a fixed rate, with the first time it is executed
+	 * is the time in the given Date.
+	 * 
+	 * @param iRunnable Runnable to schedule for execution
+	 * @param oTime Time to first execute the task
+	 * @param nPeriod Period of execution in seconds
+	 * @return The schedule id assigned to the task
 	 */
 	public synchronized int createSched(Runnable iRunnable, Date oTime, int nPeriod)
 	{
@@ -158,22 +174,39 @@ public class Scheduling implements Executor
 		return oTask.m_nId;
 	}
 
-
+	
 	/**
-	 * Executes the given runnable once after waiting the given amount of milliseconds
-	 * @param iRunnable Runnable to execute
-	 * @param nDelay number of milliseconds to delay before executing the Runnable
+	 * Schedules the given Runnable to execute once after the given delay in 
+	 * milliseconds
+	 * 
+	 * @param iRunnable Runnable to schedule for execution
+	 * @param nDelay time to wait in milliseconds before executing the Runnable
 	 */
 	public void scheduleOnce(Runnable iRunnable, int nDelay)
 	{
 		Sched oTask = new Sched(iRunnable, -1);  // id doesn't matter since it is a one time task
 		m_oTimer.schedule(oTask, nDelay);
 	}
-
+	
 	
 	/**
-	 * Wrapper for the ExecutorService execute function
-	 * @param iRunnable Runnable to execute
+	 * Schedules the given Runnable to execute once at the given time.
+	 * 
+	 * @param iRunnable Runnable to schedule for execution
+	 * @param oWhen Time to execute the Runnable
+	 */
+	public void scheduleOnce(Runnable iRunnable, Date oWhen)
+	{
+		Sched oTask = new Sched(iRunnable, -1);
+		m_oTimer.schedule(oTask, oWhen);
+	}
+
+	
+	
+	/**
+	 * Wrapper for {@link #m_iExecutor#execute(java.lang.Runnable)}
+	 * 
+	 * @param iRunnable The Runnable to execute
 	 */
 	@Override
 	public void execute(Runnable iRunnable)
@@ -181,22 +214,23 @@ public class Scheduling implements Executor
 		m_iExecutor.execute(iRunnable);
 	}
 
-
+	
 	/**
-	 * Wrapper for the ExecutorSerive shutdown function.
+	 * Wrapper for {@link java.util.concurrent.ExecutorService#shutdownNow()}
 	 */
 	public void stop()
 	{
 		m_iExecutor.shutdownNow();
 	}
 
-
+	
 	/**
-	 * Attempts to cancel the scheduled task for the given Runnable with the
-	 * given id.
-	 * @param iRunnable Runnable with a scheduled task to cancel
-	 * @param nSchedId the Sched's id for the Runnable
-	 * @return true if the task was canceled, otherwise false
+	 * Attempts to cancel the schedule for the given Runnable and schedule id.
+	 * 
+	 * @param iRunnable Runnable to cancel its fixed interval of execution
+	 * @param nSchedId schedule id associated with the Runnable
+	 * @return true if the task was successfully canceled and removed from the
+	 * task list, otherwise false.
 	 */
 	public synchronized boolean cancelSched(Runnable iRunnable, int nSchedId)
 	{
@@ -204,60 +238,45 @@ public class Scheduling implements Executor
 		int nIndex = Collections.binarySearch(m_oTasks, oSearch);
 		if (nIndex >= 0 && m_oTasks.get(nIndex).m_iRunnable == iRunnable)
 		{
-			m_oTasks.get(nIndex).cancel();
-			m_oTasks.remove(nIndex);
+			m_oTasks.remove(nIndex).cancel();
 			return true;
 		}
 
 		return false;
 	}
 
-
+	
 	/**
-	 * Returns the number of tasks that are scheduled to run by Scheduling
-	 * @return number of tasks that are scheduled to run by Scheduling
-	 */
-	public int getNumberOfTasks()
-	{
-		return m_oTasks.size();
-	}
-
-	/**
-	 * Allows scheduled thread-pool execution of processes.
-	 * <p>
-	 * Extends {@code TimerTask} to allow scheduling for one-time or repeated
-	 * execution by a Timer.
-	 * </p>
+	 * Object used to keep track of scheduled tasks of execution.
 	 */
 	private class Sched extends TimerTask implements Comparable<Sched>
 	{
-
 		/**
-		 * Object of scheduled execution.
+		 * The runnable that is executed when this Sched calls {@link #run()}
 		 */
 		private Runnable m_iRunnable;
 
+		
+		/**
+		 * Schedule id
+		 */
 		private int m_nId;
 
-
+		
 		/**
-		 * <b> Default Constructor </b>
-		 * <p>
-		 * Creates new instances of {@code Sched}
-		 * </p>
+		 * Default constructor. Does nothing.
 		 */
 		private Sched()
 		{
 		}
 
-
+		
 		/**
-		 * <b> Constructor </b>
-		 * <p>
-		 * Initializes the runnable object to the provided value.
-		 * </p>
-		 *
-		 * @param iRunnable object to be scheduled to run.
+		 * Constructs a Sched with the given parameters.
+		 * 
+		 * @param iRunnable The runnable that is executed when this Sched calls
+		 * {@link #run()}
+		 * @param nId Schedule id
 		 */
 		private Sched(Runnable iRunnable, int nId)
 		{
@@ -267,8 +286,8 @@ public class Scheduling implements Executor
 
 
 		/**
-		 * Queues the runnable object to be executed by a thread from the thread
-		 * pool.
+		 * Wrapper for {@link #m_iExecutor#execute(java.lang.Runnable)} passing
+		 * {@link #m_iRunnable} as the parameter
 		 */
 		@Override
 		public void run()
@@ -277,6 +296,9 @@ public class Scheduling implements Executor
 		}
 
 
+		/**
+		 * Compares Scheds by id
+		 */
 		@Override
 		public int compareTo(Sched oSched)
 		{

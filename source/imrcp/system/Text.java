@@ -3,16 +3,14 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-/**
- * @file Text.java
- */
 package imrcp.system;
 
 /**
  * Provides methods to parse strings to extract numerical values. Also contains
  * methods to format and compare character sequences.
  */
-public class Text {
+public class Text 
+{
     /**
      * Lower-case character set used to encode a byte array as a hex string.
      */
@@ -21,59 +19,83 @@ public class Text {
                     '0', '1', '2', '3', '4', '5', '6', '7',
                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
             };
-    /**
+    
+	
+	/**
      * Digit offset.
      */
     private static final int DIGIT_OFFSET = 48;
-    /**
+    
+	
+	/**
      * Minimum exponent limit.
      */
     private static final int MIN_EXPONENT = -323;
-    /**
+    
+	
+	/**
      * Maximum exponent limit.
      */
     private static final int MAX_EXPONENT = 308;
 
+	
     /**
      * State Constant marking intial character.
      */
     private static final int INIT_CHAR = 0;
-    /**
+    
+	
+	/**
      * State Constant marking decimal.
      */
     private static final int DECIMAL = 1;
-    /**
+    
+	
+	/**
      * State Constant marking fraction.
      */
     private static final int FRACTION = 2;
-    /**
+    
+	
+	/**
      * State Constant marking exponents.
      */
     private static final int EXPONENT = 3;
-    /**
+    
+	
+	/**
      * State Constant marking end of string.
      */
     private static final int PARSE_END = 4;
 
-    /**
+    
+	/**
      * Positive infinity - unicode constant used to convert strings to doubles
      */
     private static final String POS_INF = "\u221E";
-    /**
+    
+	
+	/**
      * Negative infinity - unicode constant used to convert strings to doubles
      */
     private static final String NEG_INF = "-\u221E";
-    /**
+   
+	
+	/**
      * Positive infinity - string name constant used to convert strings to
      * doubles
      */
     private static final String POS_INFINITY = "Infinity";
-    /**
+    
+	
+	/**
      * Negative infinity - string name constant used to convert strings to
      * doubles
      */
     private static final String NEG_INFINITY = "-Infinity";
-    /**
+   
+	
+	/**
      * Not a number - string name constant used to convert strings to
      * doubles
      */
@@ -86,7 +108,8 @@ public class Text {
      * Creates new instances of {@code Text}
      * </p>
      */
-    private Text() {
+    private Text() 
+	{
     }
 
 
@@ -95,7 +118,8 @@ public class Text {
      *
      * @param sBuffer the string to remove whitespace from.
      */
-    public static void removeWhitespace(StringBuilder sBuffer) {
+    public static void removeWhitespace(StringBuilder sBuffer) 
+	{
         // only remove whitespace if there is something to scan
         if (sBuffer.length() > 0) {
             // reverse iterate to the first non-whitespace character
@@ -125,7 +149,8 @@ public class Text {
      * @param iCharSeq a set of characters to be converted into a long value
      * @return the decimal long value represented by the character sequence.
      */
-    public static long parseLong(CharSequence iCharSeq) {
+    public static long parseLong(CharSequence iCharSeq) 
+	{
         return parseLong(iCharSeq, 0, iCharSeq.length());
     }
 
@@ -144,7 +169,8 @@ public class Text {
      *                               characters that can be converted to a decimal long
      */
     public static long parseLong(CharSequence iCharSeq, int nPos, int nEndPos)
-            throws NumberFormatException {
+            throws NumberFormatException 
+	{
         // test for the sign character
         boolean bNegative = (iCharSeq.charAt(nPos) == '-');
         if (bNegative)
@@ -178,7 +204,8 @@ public class Text {
      * @param iCharSeq a set of characters to be converted into an integer value
      * @return the decimal integer value represented by the character sequence.
      */
-    public static int parseInt(CharSequence iCharSeq) {
+    public static int parseInt(CharSequence iCharSeq) 
+	{
         return parseInt(iCharSeq, 0, iCharSeq.length());
     }
 
@@ -197,7 +224,8 @@ public class Text {
      *                               characters that can be converted to a decimal integer
      */
     public static int parseInt(CharSequence iCharSeq, int nPos, int nEndPos)
-            throws NumberFormatException {
+            throws NumberFormatException 
+	{
         int nSign = 1;
         int nValue = 0;
 
@@ -241,7 +269,8 @@ public class Text {
      * @param iCharSeq a set of characters to be converted into a double value
      * @return the converted double value.
      */
-    public static double parseDouble(CharSequence iCharSeq) {
+    public static double parseDouble(CharSequence iCharSeq) 
+	{
         // first test for expected string names
         if (compare(iCharSeq, POS_INF) == 0 ||
                 compare(iCharSeq, POS_INFINITY) == 0)
@@ -375,7 +404,8 @@ public class Text {
      * @return a negative integer, zero, or a positive integer as the first
      * argument is less than, equal to, or greater than the second
      */
-    public static int compare(CharSequence iSeqL, CharSequence iSeqR) {
+    public static int compare(CharSequence iSeqL, CharSequence iSeqR) 
+	{
         int nCompare = 0;
         int nIndex = -1;
         int nLimit = Math.min(iSeqL.length(), iSeqR.length());
@@ -399,7 +429,8 @@ public class Text {
      * @return a negative integer, zero, or a positive integer as the first
      * argument is less than, equal to, or greater than the second
      */
-    public static int compareIgnoreCase(CharSequence iSeqL, CharSequence iSeqR) {
+    public static int compareIgnoreCase(CharSequence iSeqL, CharSequence iSeqR) 
+	{
         int nCompare = 0;
         int nIndex = -1;
         int nLimit = Math.min(iSeqL.length(), iSeqR.length());
@@ -427,7 +458,8 @@ public class Text {
      * @return <tt>true</tt> if the initial source characters match the
      * characters in the prefix. <tt>false</tt> otherwise.
      */
-    public static boolean startsWith(CharSequence iSource, CharSequence iPrefix) {
+    public static boolean startsWith(CharSequence iSource, CharSequence iPrefix) 
+	{
         int nIndex = iPrefix.length();
 
         // the source cannot start with a pattern with more characters
@@ -452,7 +484,8 @@ public class Text {
      * @return <tt>true</tt> if the charcters at the end of the source
      * match the characters in the suffix. <tt>false</tt> otherwise.
      */
-    public static boolean endsWith(CharSequence iSource, CharSequence iSuffix) {
+    public static boolean endsWith(CharSequence iSource, CharSequence iSuffix) 
+	{
         int nIndex = iSuffix.length();
         int nSrcIndex = iSource.length();
 
@@ -475,29 +508,82 @@ public class Text {
      * @param yByte Byte array containing data to be converted.
      * @return Hexadecimal string that represents the supplied byte data.
      */
-    public static String toHexString(byte[] yBytes) {
+    public static String toHexString(byte[] yBytes) 
+	{
         return toHexString(yBytes, 0, yBytes.length);
     }
+	
+	
+	/**
+     * Converts a byte array into a hexadecimal string
+     *
+     * @param yBytes Byte array containing data to be converted.
+     * @param sBuf String buffer that holds the converted characters.
+     */
+    public static void toHexString(byte[] yBytes, StringBuilder sBuf)
+	{
+		toHexString(yBytes, 0, yBytes.length, sBuf);
+    }
+	
+	
+	/**
+     * Converts a byte array into a hexadecimal string
+     *
+     * @param yBytes   Byte array containing data to be converted.
+     * @param nOffset The position within the array to begin converting.
+     * @param nLength The number of bytes to be converted.
+     * @return Hexadecimal string that represents the supplied byte data.
+     */
+    public static String toHexString(byte[] yBytes, int nOffset, int nLength)
+	{
+		StringBuilder sBuf = new StringBuilder();
+		toHexString(yBytes, nOffset, nLength, sBuf);
+		return sBuf.toString();
+	}
 
 
     /**
      * Converts a byte array into a hexadecimal string
      *
-     * @param yByte   Byte array containing data to be converted.
+     * @param yBytes   Byte array containing data to be converted.
      * @param nOffset The position within the array to begin converting.
      * @param nLength The number of bytes to be converted.
-     * @return Hexadecimal string that represents the supplied byte data.
+     * @param sBuf String buffer that holds the converted characters.
      */
-    public static String toHexString(byte[] yBytes, int nOffset, int nLength) {
-        StringBuilder sBuffer = new StringBuilder();
-        for (; nOffset < nLength; nOffset++) {
-            sBuffer.append(HEX_CHARS[((yBytes[nOffset] & 0xf0) >> 4)]);
-            sBuffer.append(HEX_CHARS[(yBytes[nOffset] & 0x0f)]);
-        }
-        return sBuffer.toString();
+    public static void toHexString(byte[] yBytes, int nOffset, 
+			int nLength, StringBuilder sBuf)
+	{
+		for (; nOffset < nLength; nOffset++)
+		{
+			sBuf.append(HEX_CHARS[((yBytes[nOffset] & 0xf0) >> 4)]);
+			sBuf.append(HEX_CHARS[(yBytes[nOffset] & 0x0f)]);
+		}
     }
 
+    /** Converts a hexadecimal sequence into a byte array
+     *
+     * @param sBuf String buffer holding hexadecimal characters.
+	 * @return A byte array containing the interpreted bytes.
+	*/
+    public static byte[] fromHexString(StringBuilder sBuf)
+	{
+		if (sBuf == null || sBuf.length() == 0)
+			return null;
 
+		if (sBuf.length() % 2 != 0)
+			sBuf.append("0");
+
+		byte[] yBytes = new byte[sBuf.length() / 2];
+		for (int nIndex = 0; nIndex < yBytes.length; nIndex++)
+		{
+			int nPos = nIndex * 2;
+			yBytes[nIndex] = (byte)((Character.digit(sBuf.charAt(nPos), 16) << 4) + 
+				Character.digit(sBuf.charAt(nPos + 1), 16));
+		}
+		return yBytes;
+    }
+	
+	
     /**
      * Replaces all occurences of the search string within the supplied
      * buffer with the replacement string.
@@ -507,7 +593,8 @@ public class Text {
      * @param sReplace Replacement string to substitute for the search string.
      */
     public static void replaceAll(StringBuilder sBuffer,
-                                  String sSearch, String sReplace) {
+                                  String sSearch, String sReplace) 
+	{
         int nIndex = 0;
         while ((nIndex = sBuffer.indexOf(sSearch, nIndex)) >= 0) {
             sBuffer.replace(nIndex, nIndex + sSearch.length(), sReplace);
@@ -547,10 +634,22 @@ public class Text {
    * @param nLength The maximum length of the truncated string.
      * @return The truncated string
      */
-    public static String truncate(String sValue, int nLength) {
+    public static String truncate(String sValue, int nLength) 
+	{
         if(sValue == null || sValue.length() <= nLength)
           return sValue;
         else
           return sValue.substring(0, nLength);
     }
+	
+	/**
+	 * Determines if the CharSequence is empty.
+	 * 
+	 * @param iSeq CharSequence to test
+	 * @return true if the CharSequence is null or its length is 0
+	 */
+	public static boolean isEmpty(CharSequence iSeq)
+	{
+		return iSeq == null || iSeq.length() == 0;
+	}
 }

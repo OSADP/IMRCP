@@ -4,23 +4,56 @@ import java.io.FilterInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 
-
+/**
+ * Provides similar functionality as {@link java.io.BufferedInputStream} without
+ * some of the error checking which increases performance.
+ * @author Federal Highway Administration
+ */
 public class BufferedInStream extends FilterInputStream
 {
-	protected static final int BUFFER_SIZE = 8192;
+	/**
+	 * Default 16k buffer size
+	 */
+	protected static final int BUFFER_SIZE = 16384;
 
+	
+	/**
+	 * Value the position can get to before more bytes need to be read into
+	 * the buffer
+	 */
 	private int m_nLimit;
+
+	
+	/**
+	 * Current position in buffer
+	 */
 	private int m_nPos;
+
+	
+	/**
+	 * Buffer
+	 */
 	private byte[] m_yBuf;
 
-
+	
+	/**
+	 * Constructs a BufferedInStream wrapping the given InputStream, using a
+	 * buffer of the given size
+	 * @param oInputStream InputStream to wrap
+	 * @param nSize Buffer size
+	 */
 	public BufferedInStream(InputStream oInputStream, int nSize)
 	{
 		super(oInputStream);
 		m_yBuf = new byte[nSize];
 	}
 
-
+	
+	/**
+	 * Constructs a BufferedInStream wrapping the given InputStream, using the
+	 * default buffer size
+	 * @param oInputStream
+	 */
 	public BufferedInStream(InputStream oInputStream)
 	{
 		this(oInputStream, BUFFER_SIZE);

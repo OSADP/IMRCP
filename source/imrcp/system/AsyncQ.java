@@ -9,7 +9,7 @@ import java.util.concurrent.Executor;
  *
  * @param <T> template type. Must be specified when creating a new instance of
  * {@code AsyncQ}.
- * @author bryan.krueger
+ * @author Federal Highway Administration
  * @version 1.0
  */
 public class AsyncQ<T> implements Runnable, IRunTarget<T>

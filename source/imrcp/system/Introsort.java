@@ -1,6 +1,3 @@
-/**
- * @file Introsort.java
- */
 package imrcp.system;
 
 import java.util.Collections;
@@ -36,7 +33,19 @@ public class Introsort
 	{
 	}
 
-
+	/**
+	 * Wraps {@link #usort(java.util.List, java.util.Comparator)} creating a
+	 * Comparator using a lambda expression to pass into the function.
+	 * 
+	 * @param <T> template type
+	 * @param iList list to sort
+	 */
+	public static <T extends Comparable<? super T>> void usort(List<T> iList)
+	{
+		usort(iList, (T o1, T o2) -> o1.compareTo(o2));
+	}
+	
+	
 	/**
 	 * Wraps {@link Introsort#usort(List, Comparator, int, int)} passing the
 	 * appropriate begin-end values.

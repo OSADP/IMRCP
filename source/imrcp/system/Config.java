@@ -14,136 +14,120 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * This class provides a way of parsing a single configuration file written in
- * JSON format, gathering the entries and their associated values, and storing
- * them for later retrieval.
+ * This class is a singleton that manages the configurable parameters for the
+ * entire system.
+ * @author Federal Highway Administration
  */
 public class Config implements Runnable
 {
-
 	/**
-	 * Path for the configuration file
+	 * Path to the IMRCP JSON configuration file
 	 */
 	private String m_sFilename;
 
+	
 	/**
-	 * Singleton instance of Config
+	 * Singleton reference
 	 */
 	private static Config g_oConfig;
 
+	
 	/**
-	 * Stores the contents of the configuration file
+	 * JsonArray object that stores the configuration file in memory
 	 */
 	private JsonArray m_oConfigArray;
 
+	
 	/**
-	 * Timestamp of the previous value of lastModified() of the configuration
-	 * file
+	 * Stores the last time the configuration file was modified in milliseconds
+	 * since Epoch
 	 */
 	private long m_lLastModified;
 
+	
 	/**
-	 * The Scheduling Id
+	 * Scheduling id
 	 */
 	private int m_nSchedId;
 
+	
 	/**
-	 * Logger
+	 * Log4j Logger object
 	 */
 	private Logger m_oLogger = LogManager.getLogger(Config.class);
 
-
+	
 	/**
-	 * Default constructor
+	 * Constructs a Config with the given IMRCP JSON configuration file path
+	 * @param sFilename
 	 */
-	private Config()
-	{
-	}
-
-
-	/**
-	 * Sets the static global instance and reads in the configuration file.
-	 */
-	Config(String sFilename)
+	public Config(String sFilename)
 	{
 		g_oConfig = this;
 		m_sFilename = sFilename;
 		run();
 	}
-
+	
 
 	/**
-	 * Thie method returns the reference to the singleton instance of Config
-	 *
-	 * @return reference to Config instance
+	 * Returns the singleton instance
+	 * @return The singleton instance, {@link #g_oConfig}
 	 */
 	public static Config getInstance()
 	{
 		return g_oConfig;
 	}
 
-
+	
 	/**
-	 * This method returns the JsonArray that contains the configuration file
-	 * keys and values.
-	 *
-	 * @return reference to the JsonArray that contains the configuration file
-	 * keys and values
+	 * Get the JsonArray that contains the configuration for the system.
+	 * @return The JsonARray containing the cofiguration for the system, {@link #m_oConfigArray}
 	 */
 	private synchronized JsonArray getConfigArray()
 	{
 		return m_oConfigArray;
 	}
 
-
+	
 	/**
-	 * If the schedule id is set, this method cancels the scheduled task for
-	 * this block
-	 */
-	public void endSchedule()
-	{
-		if (m_nSchedId > 0)
-			Scheduling.getInstance().cancelSched(this, m_nSchedId);
-	}
-
-
-	/**
-	 * Creates a scheduled task for this block to execute every 5 minutes
+	 * Sets a schedule to execute on a fixed interval.
 	 */
 	public void setSchedule()
 	{
 		m_nSchedId = Scheduling.getInstance().createSched(this, 0, 300);
 	}
 
-
+	
 	/**
-	 * Retrieves the integer of the given key for the given class or name. The
-	 * method first searches for the class and then the name. If both the class
-	 * and name are present in the configuration file, the int retrieved by name
-	 * will override the int retrieved by class. If the neither the class or
-	 * name are found, the default int will be returned.
-	 *
-	 * @param sClass the class name for the object being configured
-	 * @param sName the instance name for the object being configured
-	 * @param sKey the desired key
-	 * @param nDefault default configuration value
-	 * @return the int of the given key for the given class or name. Values
-	 * retrieved by name override values retrieved by class. If the class, name,
-	 * or key are not found, the default int is returned
+	 * Gets the integer configuration value with the given key for the given
+	 * class and instance name. First the return value is set based on the class
+	 * name and key. Then if a configuration entry exists based on the instance 
+	 * name and key, the return value is set to that value. If the key cannot be 
+	 * found for class or instance name, the default is returned.
+	 * 
+	 * @param sClass Fully Qualified Class Name of the Java class the configuration
+	 * is being looked up for
+	 * @param sName Instance name the configuration is being looked up for
+	 * @param sKey Name of the configuration value being looked up
+	 * @param nDefault Value to return if the key cannot be found
+	 * @return The configuration value that matches the given key for the given
+	 * class name and instance name. Configuration by instance name overrides
+	 * configuration by class name. If the key cannot be found for class or instance
+	 * name, the default value is returned.
 	 */
 	public int getInt(String sClass, String sName, String sKey, int nDefault)
 	{
 		JsonArray oConfigArray = getConfigArray();
 		int nReturn = nDefault;
 
-		//find configuration value by class
+		// find configuration value by class
 		for (int i = 0; i < oConfigArray.size(); i++)
 			if (oConfigArray.getJsonObject(i).containsKey(sClass))  //find the class
 				if (oConfigArray.getJsonObject(i).getJsonObject(sClass).containsKey(sKey) //find the key
 				   && oConfigArray.getJsonObject(i).getJsonObject(sClass).get(sKey).getValueType().compareTo(JsonValue.ValueType.NUMBER) == 0) //ensure the value is a number
 					nReturn = oConfigArray.getJsonObject(i).getJsonObject(sClass).getInt(sKey); //set the value
 
-		//find configuration by name, this will override configuration by class
+		// find configuration by name, this will override configuration by class
 		for (int i = 0; i < oConfigArray.size(); i++)
 			if (oConfigArray.getJsonObject(i).containsKey(sName))  //find the name
 				if (oConfigArray.getJsonObject(i).getJsonObject(sName).containsKey(sKey) //find the key
@@ -153,21 +137,23 @@ public class Config implements Runnable
 		return nReturn;
 	}
 
-
+	
 	/**
-	 * Retrieves the String of the given key for the given class or name. The
-	 * method first searches for the class and then the name. If both the class
-	 * and name are present in the configuration file, the String retrieved by
-	 * name will override the String retrieved by class. If the neither the
-	 * class or name are found, the default String will be returned.
-	 *
-	 * @param sClass the class name for the object being configured
-	 * @param sName the instance name for the object being configured
-	 * @param sKey the desired key
-	 * @param sDefault default configuration value
-	 * @return the String of the given key for the given class or name. Values
-	 * retrieved by name override values retrieved by class. If the class, name,
-	 * or key are not found, the default String is returned
+	 * Gets the String configuration value with the given key for the given
+	 * class and instance name. First the return value is set based on the class
+	 * name and key. Then if a configuration entry exists based on the instance 
+	 * name and key, the return value is set to that value. If the key cannot be 
+	 * found for class or instance name, the default is returned.
+	 * 
+	 * @param sClass Fully Qualified Class Name of the Java class the configuration
+	 * is being looked up for
+	 * @param sName Instance name the configuration is being looked up for
+	 * @param sKey Name of the configuration value being looked up
+	 * @param sDefault Value to return if the key cannot be found
+	 * @return The configuration value that matches the given key for the given
+	 * class name and instance name. Configuration by instance name overrides
+	 * configuration by class name. If the key cannot be found for class or instance
+	 * name, the default value is returned.
 	 */
 	public String getString(String sClass, String sName, String sKey, String sDefault)
 	{
@@ -191,25 +177,24 @@ public class Config implements Runnable
 		return sReturn;
 	}
 
-
+	
 	/**
-	 * Retrieves the String array of the given key for the given class or name.
-	 * The method first searches for the class and then the name. If both the
-	 * class and name are present in the configuration file, the String
-	 * retrieved by name will override the String array retrieved by class. If
-	 * the neither the class or name are found, the default String will be
-	 * returned as a String array with size 1. If the default String is null, an
-	 * array with size 0 is returned
-	 *
-	 * @param sClass the class name for the object being configured
-	 * @param sName the instance name for the object being configured
-	 * @param sKey the desired key
-	 * @param sDefault default configuration value
-	 * @return the String array of the given key for the given class or name.
-	 * Values retrieved by name override values retrieved by class. If the
-	 * class, name, or key are not found, the default String is returned as a
-	 * String array with size 1. If the default String is null, an array with
-	 * size 0 is returned
+	 * Gets the String array configuration value with the given key for the given
+	 * class and instance name. First the return value is set based on the class
+	 * name and key. Then if a configuration entry exists based on the instance 
+	 * name and key, the return value is set to that value. If the key cannot be 
+	 * found for class or instance name, the default is returned.
+	 * 
+	 * @param sClass Fully Qualified Class Name of the Java class the configuration
+	 * is being looked up for
+	 * @param sName Instance name the configuration is being looked up for
+	 * @param sKey Name of the configuration value being looked up
+	 * @param sDefault Value to return if the key cannot be found
+	 * @return The configuration value that matches the given key for the given
+	 * class name and instance name. Configuration by instance name overrides
+	 * configuration by class name. If the key cannot be found for class or instance
+	 * name, the default value is returned. If the default value is not null it
+	 * is returned as a String[] with length 1 storing the default value.
 	 */
 	public String[] getStringArray(String sClass, String sName, String sKey, String sDefault)
 	{
@@ -262,10 +247,9 @@ public class Config implements Runnable
 
 
 	/**
-	 * This method checks to see if the configuration file has been modified. If
-	 * the file has been modified, the method read the configuration file and
-	 * stores the configuration keys and values in a JsonArray for future
-	 * retrieval.
+	 * If the IMRCP JSON configuration file has been modified, reads the file
+	 * and updates the reference of {@link #m_oConfigArray} to a new JsonArray
+	 * that contains the contents of the file.
 	 */
 	@Override
 	public final void run()
@@ -299,16 +283,17 @@ public class Config implements Runnable
 		}
 	}
 
-
+	
 	/**
-	 * Creates and returns a HashMap that contains all of the configuration
-	 * items for the given class and name as well as the general ImrcpBlock
-	 * configurations
-	 *
-	 * @param sClass desired class name
-	 * @param sName desired instance name
-	 * @return HashMap that contains all the configuration items for the general
-	 * ImrcpBlock and the given class and name
+	 * Adds all of the configuration items as String[]s for the given class and 
+	 * instance name to a HashMap and returns that HashMap
+	 * 
+	 * @param sClass Fully Qualified Class Name of the Java class the configuration
+	 * is being looked up for
+	 * @param sName Instance name the configuration is being looked up for
+	 * @return A HashMap with all of the configuration items for the given class
+	 * and instance name with the keys being the name of the configuration item
+	 * and the values being String[] representations of the configuration values
 	 */
 	public HashMap<String, String[]> getProps(String sClass, String sName)
 	{
@@ -319,7 +304,7 @@ public class Config implements Runnable
 
 		for (int i = 0; i < oConfigArray.size(); i++)
 		{
-			if (oConfigArray.getJsonObject(i).containsKey("imrcp.ImrcpBlock")) //find the class
+			if (oConfigArray.getJsonObject(i).containsKey("imrcp.ImrcpBlock")) // get the default values for ImrcpBlocks
 			{
 				oTemp = oConfigArray.getJsonObject(i).getJsonObject("imrcp.ImrcpBlock");
 				for (String sKey : oTemp.keySet())

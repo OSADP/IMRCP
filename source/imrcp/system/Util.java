@@ -1,108 +1,50 @@
 package imrcp.system;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.util.zip.Deflater;
+import java.util.zip.GZIPOutputStream;
 
 /**
- * This class contains static utility functions for the system.
- * @author aaron.cherney
+ * Contains utility methods for half-precision floating point numbers, getting 
+ * byte array from primitive numbers, and reading the last line of a file.
+ * @author Federal Highway Administration
  */
 public class Util
 {
-	private static final char[] HEX_CHARS =
-	{
-		'0', '1', '2', '3', '4', '5', '6', '7',
-		'8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-	};
 	/**
-	 * Tells whether the given object id is a segment or not
-	 * @param nObjId Object id
-	 * @return true if the object id represents a segment, otherwise false
+	 * Lookup array for half-precision floating point values
 	 */
-	public static boolean isSegment(int nObjId)
-	{
-		return (nObjId & 0xF0000000) == 0x40000000;
-	}
+	private static final float[] SHORT_FLOAT = new float[65536];
 
-
-	/**
-	 * Tells whether the given object id is a route or not
-	 * @param nObjId Object id
-	 * @return true if the object id represents a route, otherwise false
-	 */
-	public static boolean isRoute(int nObjId)
-	{
-		return (nObjId & 0xF0000000) == 0x50000000;
-	}
-
-
-	/**
-	 * Tells whether the given object id is a link or not
-	 * @param nObjId Object id
-	 * @return true if the object id represents a link, otherwise false
-	 */
-	public static boolean isLink(int nObjId)
-	{
-		return (nObjId & 0xF0000000) == 0x30000000;
-	}
-
-
-	/**
-	 * Tells whether the given object id is a sensor or not
-	 * @param nObjId Object id
-	 * @return true if the object id represents a sensor, otherwise false
-	 */
-	public static boolean isSensor(int nObjId)
-	{
-		return (nObjId & 0xF0000000) == 0x10000000;
-	}
-
-
-	/**
-	 * Function used to help parse through a String that represents a line from
-	 * a csv file without using split and creating more objects. This function
-	 * does not handle the start and end of the csv line, it only moves the 
-	 * endpoints correctly if nEndpoints[1] is the index of a comma and
-	 * there is another comma after it.
-	 * @param sCsv String containing a line from a csv file
-	 * @param nEndpoints int array of size 2 to store the endpoints for a 
-	 * String.substring() call.
-	 */
-	public static final void moveEndpoints(String sCsv, int[] nEndpoints)
-	{
-		nEndpoints[0] = nEndpoints[1] + 1;
-		nEndpoints[1] = sCsv.indexOf(",", nEndpoints[0]);
-		if (nEndpoints[1] < 0) // check for end of the line
-			nEndpoints[1] = sCsv.length();
-	}
 	
-	public static double round(double dVal, double dMultiplier)
+	static
 	{
-		return Math.round(dVal * dMultiplier) / dMultiplier;
+		for (int nIndex = 0; nIndex < 65536; nIndex++) // fill lookup table
+			SHORT_FLOAT[nIndex] = fromHpfp(nIndex); // half-precision floating point
 	}
+
 	
-	public static String toHexString(byte[] yBytes, int nOffset, int nLength) 
-	{
-        StringBuilder sBuffer = new StringBuilder();
-        for (; nOffset < nLength; nOffset++) 
-		{
-            sBuffer.append(HEX_CHARS[((yBytes[nOffset] & 0xf0) >> 4)]);
-            sBuffer.append(HEX_CHARS[(yBytes[nOffset] & 0x0f)]);
-        }
-        return sBuffer.toString();
-    }
-	
+	/**
+	 * Gets the last line of the text file with the given path.
+	 * 
+	 * @param sFilename path to the file to open
+	 * @return the last line of the file
+	 * @throws Exception
+	 */
 	public static String getLastLineOfFile(String sFilename) throws Exception
 	{
 		File oFile = new File(sFilename);
 		if (!oFile.exists())
 			return null;
-		try (RandomAccessFile oIn = new RandomAccessFile(sFilename, "r"))
+		try (RandomAccessFile oIn = new RandomAccessFile(sFilename, "r")) // open for read
 		{
-			long lLength = oIn.length() - 1;
+			long lLength = oIn.length() - 1; // start at the end of the file
 			StringBuilder sBuffer = new StringBuilder();
 
-			for (long lPointer = lLength; lPointer != -1; lPointer--)
+			for (long lPointer = lLength; lPointer != -1; lPointer--) // iterate backwards
 			{
 				oIn.seek(lPointer);
 				int nByte = oIn.readByte();
@@ -124,33 +66,144 @@ public class Util
 			return sBuffer.reverse().toString();
 		}
 	}
+	
+	
+	/**
+	 * Fills the given byte array with the bytes of the given long.
+	 * 
+	 * @param lLong The long to convert to bytes
+	 * @param yBytes byte array to be filled with the bytes of the long.
+	 * @return the reference of the byte array passed into the function. It is 
+	 * filled with the bytes that make up the long.
+	 */
+	public static byte[] longToBytes(long lLong, byte[] yBytes)
+	{
+		yBytes[0] = (byte)(lLong >> 56);
+		yBytes[1] = (byte)(lLong >> 48);
+		yBytes[2] = (byte)(lLong >> 40);
+		yBytes[3] = (byte)(lLong >> 32);
+		yBytes[4] = (byte)(lLong >> 24);
+		yBytes[5] = (byte)(lLong >> 16);
+		yBytes[6] = (byte)(lLong >> 8);
+		yBytes[7] = (byte)lLong;
+		
+		return yBytes;
+	}
+	
+	
+	/**
+	 * Converts the bytes in the array into a long.
+	 * 
+	 * @param yBytes the bytes defining a long
+	 * @return a long defined by the bytes in the array
+	 */
+	public static long bytesToLong(byte[] yBytes)
+	{
+		return (((long)yBytes[0] << 56) +
+                ((long)(yBytes[1] & 255) << 48) +
+                ((long)(yBytes[2] & 255) << 40) +
+                ((long)(yBytes[3] & 255) << 32) +
+                ((long)(yBytes[4] & 255) << 24) +
+                ((yBytes[5] & 255) << 16) +
+                ((yBytes[6] & 255) <<  8) +
+                ((yBytes[7] & 255) <<  0));
+	}
 
 	
 	/**
-	* Lexicographically compare two character sequences. Using the character
-	* sequence interface enables the mixing of comparisons between
-	* <tt>String</tt>, <tt>StringBuffer</tt>, and <tt>StringBuilder</tt>
-	* objects. The character values at each index of the sequences is compared
-	* up to the minimum number of available characters. The sequence lengths
-	* determine the comparison when the contents otherwise appear to be equal.
-	*
-	* @param iSeqL the first character sequence to be compared
-	* @param iSeqR the second character sequence to be compared
-	* @return a negative integer, zero, or a positive integer as the first
-	* argument is less than, equal to, or greater than the second
-	*/
-	public static int compare(CharSequence iSeqL, CharSequence iSeqR)
+	 * Convenience function used to wrap the given OutputStream with a GZIPOutputStream
+	 * using level 9 (best compression, most processing) compression
+	 * @param oOs OutputStream to wrap
+	 * @return GZIPOutputStream that is wrapping the OutputStream
+	 * @throws IOException
+	 */
+	public static GZIPOutputStream getGZIPOutputStream(OutputStream oOs)
+		throws IOException
 	{
-		int nCompare = 0;
-		int nIndex = -1;
-		int nLimit = Math.min(iSeqL.length(), iSeqR.length());
+		return new GZIPOutputStream(oOs) {{def.setLevel(Deflater.BEST_COMPRESSION);}};
+	}
+	
+	
+	/**
+	 * Looks up the half-precision floating point number associated with the given
+	 * short.
+	 * 
+	 * @param hbits  half-precision floating point short value
+	 * @return half-precision floatign point number associated with the given
+	 * short
+	 */
+	public static float toFloat(int hbits)
+	{
+		return SHORT_FLOAT[hbits];
+	}
 
-		while (nCompare == 0 && ++nIndex < nLimit)
-			nCompare = iSeqL.charAt(nIndex) - iSeqR.charAt(nIndex);
 
-		if (nCompare == 0)
-			return iSeqL.length() - iSeqR.length();
+	/**
+	 * Calculates the half-precision floating point number for the given integer
+	 * which is treated as a short as the higher 16 bits are ignored.
+	 * @param hbits short to convert to half-precision floating point
+	 * @return
+	 */
+	public static float fromHpfp(int hbits)
+	{
+			int mant = hbits & 0x03ff;            // 10 bits mantissa
+			int exp =  hbits & 0x7c00;            // 5 bits exponent
+			if( exp == 0x7c00 )                   // NaN/Inf
+					exp = 0x3fc00;                    // -> NaN/Inf
+			else if( exp != 0 )                   // normalized value
+			{
+					exp += 0x1c000;                   // exp - 15 + 127
+					if( mant == 0 && exp > 0x1c400 )  // smooth transition
+							return Float.intBitsToFloat( ( hbits & 0x8000 ) << 16
+																							| exp << 13 | 0x3ff );
+			}
+			else if( mant != 0 )                  // && exp==0 -> subnormal
+			{
+					exp = 0x1c400;                    // make it normal
+					do {
+							mant <<= 1;                   // mantissa * 2
+							exp -= 0x400;                 // decrease exp by 1
+					} while( ( mant & 0x400 ) == 0 ); // while not normal
+					mant &= 0x3ff;                    // discard subnormal bit
+			}                                     // else +/-0 -> +/-0
+			return Float.intBitsToFloat(          // combine all parts
+					( hbits & 0x8000 ) << 16          // sign  << ( 31 - 15 )
+					| ( exp | mant ) << 13 );         // value << ( 23 - 10 )
+	}
 
-		return nCompare;
-	} 
+
+	/**
+	 * Converts the given float to a short value that acts as a look up index for
+	 * {@link #SHORT_FLOAT}
+	 * 
+	 * @param fval the float to convert
+	 * @return The short value associated with the given float as a half-precision floating point number.
+	 * All higher 16 bits as 0 for all results
+	 */
+	public static int toHpfp(float fval)
+	{
+			int fbits = Float.floatToIntBits( fval );
+			int sign = fbits >>> 16 & 0x8000;          // sign only
+			int val = ( fbits & 0x7fffffff ) + 0x1000; // rounded value
+
+			if( val >= 0x47800000 )               // might be or become NaN/Inf
+			{                                     // avoid Inf due to rounding
+					if( ( fbits & 0x7fffffff ) >= 0x47800000 )
+					{                                 // is or must become NaN/Inf
+							if( val < 0x7f800000 )        // was value but too large
+									return sign | 0x7c00;     // make it +/-Inf
+							return sign | 0x7c00 |        // remains +/-Inf or NaN
+									( fbits & 0x007fffff ) >>> 13; // keep NaN (and Inf) bits
+					}
+					return sign | 0x7bff;             // unrounded not quite Inf
+			}
+			if( val >= 0x38800000 )               // remains normalized value
+					return sign | val - 0x38000000 >>> 13; // exp - 127 + 15
+			if( val < 0x33000000 )                // too small for subnormal
+					return sign;                      // becomes +/-0
+			val = ( fbits & 0x7fffffff ) >>> 23;  // tmp exp for subnormal calc
+			return sign | ( ( fbits & 0x7fffff | 0x800000 ) // add subnormal bit
+					 + ( 0x800000 >>> val - 102 )     // round depending on cut off
+				>>> 126 - val );   // div by 2^(1-(exp-127+15)) and >> 13 | exp=0
+	}
 }
