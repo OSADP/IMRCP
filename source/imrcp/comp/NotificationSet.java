@@ -3,75 +3,85 @@ package imrcp.comp;
 import java.util.ArrayList;
 
 /**
- * A class used to store integer arrays that represent the bounding box for
- * areas that have the same Notification
+ * Represents a set of locations for a Notification that have the same start time,
+ * end time and value (event type). The int[] in the list are bounding boxes in 
+ * the format [min lat, max lat, min lon, max lon]
+ * @author Federal Highway Administration
  */
 public class NotificationSet extends ArrayList<int[]> implements Comparable<NotificationSet>
 {
-
 	/**
-	 * Min lat of the Notification
+	 * Minimum latitude of all the locations
 	 */
 	int m_nLat1 = Integer.MAX_VALUE;
 
+	
 	/**
-	 * Min lon of the Notification
+	 * Minimum longitude of all the locations
 	 */
 	int m_nLon1 = Integer.MAX_VALUE;
 
+	
 	/**
-	 * Max lat of the Notification
+	 * Maximum latitude of all the locations
 	 */
 	int m_nLat2 = Integer.MIN_VALUE;
 
+	
 	/**
-	 * Max lon of the Notification
+	 * Maximum longitude of all the locations
 	 */
 	int m_nLon2 = Integer.MIN_VALUE;
 
+	
 	/**
-	 * Timestamp of when the Notification starts being valid
+	 * Start time of the notification in milliseconds since Epoch
 	 */
 	long m_lStartTime;
 
+	
 	/**
-	 * Timestamp of when the Notification stops being valid
+	 * End time of the notification in milliseconds since Epoch
 	 */
 	long m_lEndTime;
 
+	
 	/**
-	 * Timestamp of when the Notification was received
+	 * Received time of the notification in milliseconds since Epoch
 	 */
 	long m_lTimeRecv = Long.MAX_VALUE;
 
+	
 	/**
-	 * Value of the Notification describing the type of Notification
+	 * Event type
+	 * 
+	 * @see imrcp.system.ObsType#LOOKUP for complete list of types
 	 */
 	double m_dValue;
 
+	
 	/**
-	 * A list of details, each entry corresponds to one of the bounding box
-	 * int[].
+	 * Stores the detail string
 	 */
 	ArrayList<String> m_sDetails = new ArrayList();
 
-
+	
 	/**
-	 * Default Constructor
+	 * Default constructor. Wrapper for {@link java.util.ArrayList#ArrayList()}
 	 */
 	NotificationSet()
 	{
 		super();
 	}
 
-
+	
 	/**
-	 * Creates a new NotificationSet with the given parameters
-	 *
-	 * @param lStart start time
-	 * @param lEnd end time
-	 * @param dVal Notification value
-	 * @param lRecv received time
+	 * Calls {@link java.util.ArrayList#ArrayList()} then sets the member variables
+	 * to the given values.
+	 * @param lStart start time in milliseconds since Epoch
+	 * @param lEnd end time in milliseconds since Epoch
+	 * @param dVal event type
+	 * @param lRecv received time in milliseconds since Epoch
 	 */
 	NotificationSet(long lStart, long lEnd, double dVal, long lRecv)
 	{
@@ -85,11 +95,10 @@ public class NotificationSet extends ArrayList<int[]> implements Comparable<Noti
 
 
 	/**
-	 * Adds the element to the list and updates the min and max latitudes and
-	 * longitudes
-	 *
-	 * @param nAdd
-	 * @return
+	 * If {@link java.util.ArrayList#add(java.lang.Object)} returns true,
+	 * updates the min and max lon/lat values for the NotificationSet
+	 * @param nAdd location represented by [min lat, max lat, min lon, max lon]
+	 * @return value returned by {@link java.util.ArrayList#add(java.lang.Object)}
 	 */
 	@Override
 	public boolean add(int[] nAdd)
@@ -116,10 +125,13 @@ public class NotificationSet extends ArrayList<int[]> implements Comparable<Noti
 
 
 	/**
-	 * Compares NotificationSets first by value, then start time, then end time
-	 *
-	 * @param o the NotificationSet to compare
-	 * @return
+	 * Compares NotificationSets by value, then start time, then end time.
+	 * 
+	 * @param o the NotificationSet to be compared
+	 * @return a negative integer, zero, or a positive integer as this object 
+	 * is less than, equal to, or greater than the specified object.
+	 * 
+	 * @see java.lang.Comparable#compareTo(java.lang.Object) 
 	 */
 	@Override
 	public int compareTo(NotificationSet o)

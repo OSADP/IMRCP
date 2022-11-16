@@ -1,136 +1,80 @@
 package imrcp.comp;
 
-import imrcp.BaseBlock;
-import imrcp.FileCache;
-import imrcp.FilenameFormatter;
-import imrcp.geosrv.Segment;
-import imrcp.geosrv.SegmentShps;
-import imrcp.store.AlertObs;
+import imrcp.system.BaseBlock;
+import imrcp.store.FileCache;
+import imrcp.system.FilenameFormatter;
+import imrcp.geosrv.Network;
+import imrcp.geosrv.osm.OsmWay;
+import imrcp.geosrv.WayNetworks;
+import imrcp.store.ImrcpResultSet;
+import imrcp.store.Obs;
 import imrcp.system.Directory;
+import imrcp.system.FileUtil;
+import imrcp.system.Id;
 import imrcp.system.ObsType;
-import imrcp.system.Util;
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.sql.ResultSet;
+import java.nio.channels.Channels;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 
 /**
- * Thie BaseBlock generates Notifications based off of the alerts created by
- the Alerts blocks
+ * Notifications modules subscribe to Alerts modules to create Notification 
+ * observations for configured alert types. The goal is of Notifications are to 
+ * filter sets of Alerts to smaller sets focusing on specific alert types that
+ * are useful to operators and can pop up on the map UI.
+ * @author Federal Highway Administration
  */
 public class Notifications extends BaseBlock
 {
-
 	/**
-	 * Comparator for AlertObs that compares first by value, then start time,
-	 * and then end time.
-	 */
-	private Comparator<AlertObs> m_oComp = (AlertObs o1, AlertObs o2) -> 
-	{
-		int nReturn = Double.compare(o1.m_dValue, o2.m_dValue);
-		if (nReturn == 0)
-		{
-			nReturn = Long.compare(o1.m_lObsTime1, o2.m_lObsTime1);
-			if (nReturn == 0)
-				nReturn = Long.compare(o1.m_lObsTime2, o2.m_lObsTime2);
-		}
-		return nReturn;
-	};
-
-	/**
-	 * Poitner to the SegmentShp block used for segment definitions
-	 */
-	private SegmentShps m_oShps;
-
-	/**
-	 * Array of alert types that Notifications get generated for
+	 * Configurable array to store the alert types that should generate 
+	 * notifications
+	 * 
+	 * @see imrcp.system.ObsType#LOOKUP for complete list of types
 	 */
 	private int[] m_nNotificationTypes;
 
+	
 	/**
-	 * Bounding boz of the study area
-	 */
-	private int[] m_nStudyArea;
-
-	/**
-	 * Header of the csv file
-	 */
-	private final String m_sHEADER = "ObsType,Source,ObjId,ObsTime1,ObsTime2,TimeRecv,Lat1,Lon1,Lat2,Lon2,Elev,Value,Conf,ClearedTime,Detail\n";
-
-	/**
-	 * Tolerance used to group notifications together
+	 * Tolerance in decimal degrees scaled to 7 decimal places used for 
+	 * spatially combining notifications
 	 */
 	private int m_nTol;
 	
+	
+	/**
+	 * Object used to create time dependent file names to save on disk
+	 */
 	private FilenameFormatter m_oFilenameFormat;
 	
-	private int m_nFileFrequency;
 	
-	private int m_nForecastHrs;
-
-
 	/**
-	 * Does nothing at the moment.
-	 *
-	 * @return always true
-	 * @throws Exception
+	 * How often a file should be made to store notification obs
 	 */
-	@Override
-	public boolean start() throws Exception
-	{
-		return true;
-	}
+	private int m_nFileFrequency;
 
-
-	/**
-	 * Resets all configurable variables
-	 */
+	
 	@Override
 	public void reset()
 	{
-		m_oShps = (SegmentShps)Directory.getInstance().lookup("SegmentShps");
 		m_nTol = m_oConfig.getInt("tol", 50000);
 		m_oFilenameFormat = new FilenameFormatter(m_oConfig.getString("format", ""));
 		m_nFileFrequency = m_oConfig.getInt("freq", 86400000);
-		m_nForecastHrs = m_oConfig.getInt("fcst", 6);
 		String[] sTypes = m_oConfig.getStringArray("types", "");
 		m_nNotificationTypes = new int[sTypes.length];
 		for (int i = 0; i < sTypes.length; i++)
 			m_nNotificationTypes[i] = ObsType.lookup(ObsType.EVT, sTypes[i]);
-		String[] sBox = m_oConfig.getStringArray("box", "");
-		m_nStudyArea = new int[4];
-
-		m_nStudyArea[0] = Integer.MAX_VALUE;
-		m_nStudyArea[1] = Integer.MIN_VALUE;
-		m_nStudyArea[2] = Integer.MAX_VALUE;
-		m_nStudyArea[3] = Integer.MIN_VALUE;
-		for (int i = 0; i < sBox.length;)
-		{
-			int nLon = Integer.parseInt(sBox[i++]);
-			int nLat = Integer.parseInt(sBox[i++]);
-
-			if (nLon < m_nStudyArea[2])
-				m_nStudyArea[2] = nLon;
-
-			if (nLon > m_nStudyArea[3])
-				m_nStudyArea[3] = nLon;
-
-			if (nLat < m_nStudyArea[0])
-				m_nStudyArea[0] = nLat;
-
-			if (nLat > m_nStudyArea[1])
-				m_nStudyArea[1] = nLat;
-		}
 	}
 
-
+	
 	/**
-	 * Processes Notifications received from other blocks.
-	 *
-	 * @param oNotification the received Notification
+	 * Called when a message from {@link imrcp.system.Directory} is received. 
+	 * If the message is "new data" {@link Notifications#createNotifications(imrcp.store.FileCache)}
+	 * is called with the FileCache that sent the message.
+	 * @param sMessage [BaseBlock message is from, message name]
 	 */
 	@Override
 	public void process(String[] sMessage)
@@ -142,12 +86,11 @@ public class Notifications extends BaseBlock
 		}
 	}
 
-
+	
 	/**
-	 * Creates Notifications based off of the current alerts in the Store that
-	 * notified this block
-	 *
-	 * @param oStore The Store that notified this block
+	 * Queries the given FileCache for current alerts and generates a set of
+	 * notifications from the result set.
+	 * @param oStore Filecahe to query
 	 */
 	public void createNotifications(FileCache oStore)
 	{
@@ -156,101 +99,108 @@ public class Notifications extends BaseBlock
 			long lTime = System.currentTimeMillis();
 			lTime = (lTime / 60000) * 60000;
 			ArrayList<NotificationSet> oNotificationSets = new ArrayList();
-
-
-			// get current alerts
-			ResultSet oData = oStore.getData(ObsType.EVT, lTime, lTime + 86400000, m_nStudyArea[0], m_nStudyArea[1], m_nStudyArea[2], m_nStudyArea[3], lTime);
-			NotificationSet oSearch = new NotificationSet();
-			while (oData.next())
-			{
-				oSearch.m_dValue = oData.getDouble(12);
-				if (!makeNotification(oSearch.m_dValue)) // skip alerts that do not generate notifications
-					continue;
-
-				oSearch.m_lStartTime = oData.getLong(4);
-				oSearch.m_lEndTime = oData.getLong(5);
-				int nIndex = Collections.binarySearch(oNotificationSets, oSearch); // check if there is already a NotificationSet with the same value and timestamps
-				if (nIndex < 0)
-				{
-					nIndex = ~nIndex;
-					oNotificationSets.add(nIndex, new NotificationSet(oSearch.m_lStartTime, oSearch.m_lEndTime, oSearch.m_dValue, oData.getLong(6)));
-				}
-				NotificationSet oSet = oNotificationSets.get(nIndex);
-				int[] nLocation = new int[]
-				{
-					oData.getInt(7), oData.getInt(9), oData.getInt(8), oData.getInt(10)
-				}; // lat1, lat2, lon1, lon2
-				if (nLocation[1] == Integer.MIN_VALUE) // if the alert is for a single point
-				{
-					int nObjId = oData.getInt(3);
-					Segment oSeg = null;
-					if (Util.isSegment(nObjId)) // find segments by id
-						oSeg = m_oShps.getLinkById(oData.getInt(3));
-					else if (Util.isLink(nObjId)) // find links by snapping point to segments
-						oSeg = m_oShps.getLink(m_nTol, nLocation[2], nLocation[0]);
-					if (oSeg == null) // alert does not belong to a segment
-					{
-						nLocation[1] = nLocation[0];
-						nLocation[3] = nLocation[2];
-						oSet.m_sDetails.add("");
-					}
-					else // alert does belong to a segment so put the name of it in the details
-					{
-						nLocation[0] = oSeg.m_nYmin;
-						nLocation[1] = oSeg.m_nYmax;
-						nLocation[2] = oSeg.m_nXmin;
-						nLocation[3] = oSeg.m_nXmax;
-						oSet.m_sDetails.add(oSeg.m_sName);
-					}
-				}
-				else
-					oSet.m_sDetails.add("");
-				oSet.add(nLocation);
-			}
-
-			ArrayList<NotificationSet> oFinalNotifications = new ArrayList();
-			for (NotificationSet oSet : oNotificationSets) // group the locations together
-				groupLocations(oSet, oFinalNotifications);
-
-			mergeFinal(oFinalNotifications); // merge the final notifications
-			ArrayList<AlertObs> oNotifications = new ArrayList();
-			for (NotificationSet oFinal : oFinalNotifications)
-			{
-				String sDetail = "";
-				ArrayList<String> sDetails = oFinal.m_sDetails;
-				int nSize = sDetails.size();
-				switch (nSize) // set the detail for the Notification
-				{
-					case 1:
-						if (sDetails.get(0).length() > 0)
-							sDetail = sDetails.get(0);
-						else
-							sDetail = "1 Location";
-						break;
-					case 2:
-						if (sDetails.get(0).length() > 0 && sDetails.get(1).length() > 0)
-							sDetail = sDetails.get(0) + ";" + sDetails.get(1);
-						else
-							sDetail = "2 Locations";
-						break;
-					default:
-						sDetail = nSize + " Locations";
-						break;
-				}
-				oNotifications.add(new AlertObs(ObsType.NOTIFY, Integer.valueOf("imrcp", 36), Integer.MIN_VALUE, oFinal.m_lStartTime, oFinal.m_lEndTime, lTime, oFinal.m_nLat1, oFinal.m_nLon1, oFinal.m_nLat2, oFinal.m_nLon2, Short.MIN_VALUE, oFinal.m_dValue, Short.MIN_VALUE, sDetail));
-			}
-
-			// write the notifications to the file
+			WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+			// generate rolling file name
 			long lStartTime = (lTime / m_nFileFrequency) * m_nFileFrequency;
 			long lEndTime = lStartTime + m_nFileFrequency * 2;
 			String sFilename = m_oFilenameFormat.format(lStartTime, lStartTime, lEndTime);
-			new File(sFilename.substring(0, sFilename.lastIndexOf("/"))).mkdirs();
-			try (BufferedWriter oOut = new BufferedWriter(new FileWriter(sFilename, true)))
+			Path oPath = Paths.get(sFilename);
+			Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
+			// get current alerts
+			for (Network oNetwork : oWays.getNetworks())
 			{
-				if (new File(sFilename).length() == 0)
-					oOut.write(m_sHEADER);
-				for (AlertObs oNotification : oNotifications)
-					oNotification.writeCsv(oOut);
+				int[] nBb = oNetwork.getBoundingBox();
+				ImrcpResultSet oData = (ImrcpResultSet)oStore.getData(ObsType.EVT, lTime, lTime + 86400000, nBb[1], nBb[3], nBb[0], nBb[2], lTime); // get alerts that are valid from now to 24 hours from now
+				NotificationSet oSearch = new NotificationSet();
+				for (int nObsIndex = 0; nObsIndex < oData.size(); nObsIndex++)
+				{
+					Obs oObs = (Obs)oData.get(nObsIndex);
+					oSearch.m_dValue = oObs.m_dValue;
+					if (!makeNotification(oSearch.m_dValue)) // skip alerts that do not generate notifications
+						continue;
+
+					oSearch.m_lStartTime = oObs.m_lObsTime1;
+					oSearch.m_lEndTime = oObs.m_lObsTime2;
+					int nIndex = Collections.binarySearch(oNotificationSets, oSearch); // check if there is already a NotificationSet with the same value and timestamps
+					if (nIndex < 0)
+					{
+						nIndex = ~nIndex;
+						oNotificationSets.add(nIndex, new NotificationSet(oSearch.m_lStartTime, oSearch.m_lEndTime, oSearch.m_dValue, oObs.m_lTimeRecv));
+					}
+					NotificationSet oSet = oNotificationSets.get(nIndex);
+					int[] nLocation = new int[]
+					{
+						oObs.m_nLat1, oObs.m_nLat2, oObs.m_nLon1, oObs.m_nLon2
+					}; // lat1, lat2, lon1, lon2
+					if (nLocation[1] == Integer.MIN_VALUE) // if the alert is for a single point
+					{
+
+						OsmWay oWay = null;
+						if (Id.isSegment(oObs.m_oObjId)) // find segments by id
+							oWay = oWays.getWayById(oObs.m_oObjId);
+						if (oWay == null) // alert does not belong to a segment
+						{
+							nLocation[1] = nLocation[0];
+							nLocation[3] = nLocation[2];
+							oSet.m_sDetails.add("");
+						}
+						else // alert does belong to a segment so put the name of it in the details
+						{
+							nLocation[0] = oWay.m_nMinLat;
+							nLocation[1] = oWay.m_nMaxLat;
+							nLocation[2] = oWay.m_nMinLon;
+							nLocation[3] = oWay.m_nMaxLon;
+							oSet.m_sDetails.add(oWay.m_sName);
+						}
+					}
+					else
+						oSet.m_sDetails.add("");
+					oSet.add(nLocation);
+				}
+			
+
+				ArrayList<NotificationSet> oFinalNotifications = new ArrayList();
+				for (NotificationSet oSet : oNotificationSets) // group the locations together
+					groupLocations(oSet, oFinalNotifications);
+
+				mergeFinal(oFinalNotifications); // merge the final notifications
+				ArrayList<Obs> oNotifications = new ArrayList();
+				for (NotificationSet oFinal : oFinalNotifications)
+				{
+					String sDetail = "";
+					ArrayList<String> sDetails = oFinal.m_sDetails;
+					int nSize = sDetails.size();
+					switch (nSize) // set the detail for the Notification
+					{
+						case 1:
+							if (sDetails.get(0).length() > 0)
+								sDetail = sDetails.get(0);
+							else
+								sDetail = "1 Location";
+							break;
+						case 2:
+							if (sDetails.get(0).length() > 0 && sDetails.get(1).length() > 0)
+								sDetail = sDetails.get(0) + ";" + sDetails.get(1);
+							else
+								sDetail = "2 Locations";
+							break;
+						default:
+							sDetail = nSize + " Locations";
+							break;
+					}
+					oNotifications.add(new Obs(ObsType.NOTIFY, Integer.valueOf("imrcp", 36), Id.NULLID, oFinal.m_lStartTime, oFinal.m_lEndTime, lTime, oFinal.m_nLat1, oFinal.m_nLon1, oFinal.m_nLat2, oFinal.m_nLon2, Short.MIN_VALUE, oFinal.m_dValue, Short.MIN_VALUE, sDetail));
+				}
+
+				// append the notifications to the rolling file
+				
+				boolean bWriteHeader = !Files.exists(oPath);
+				try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.APPENDTO, FileUtil.FILEPERS), "UTF-8")))
+				{
+					if (bWriteHeader)
+						oOut.write(Obs.CSVHEADER);
+					for (Obs oNotification : oNotifications)
+						oNotification.writeCsv(oOut);
+				}
 			}
 			notify("file download", sFilename);
 		}
@@ -260,21 +210,19 @@ public class Notifications extends BaseBlock
 		}
 	}
 
-
+	
 	/**
-	 * Groups the given NotificationSet with the NotificationSets already
-	 * created. NotificationSets are grouped only if the value, starttime, and
-	 * endtime are the same and the bounding boxes are within the tolerance
-	 * value of each other.
-	 *
-	 * @param oSet the NotificationSet to be grouped
-	 * @param oFinalNotifications ArrayList of the NotificationSets already
-	 * created
+	 * Iterates through the list of given NotificationSets and determines if
+	 * the given NotificationSet can be grouped together with any in the list
+	 * by type, start time, end time, and location
+	 * @param oSet NotificationSet candidate to merge
+	 * @param oFinalNotifications list of NotificationSets oSet can be merged with
 	 */
 	private void groupLocations(NotificationSet oSet, ArrayList<NotificationSet> oFinalNotifications)
 	{
 		int nIndex = oSet.size();
 
+		// iterate backward for easy removal
 		while (nIndex-- > 0)
 		{
 			int[] nLocation = oSet.get(nIndex);
@@ -288,12 +236,12 @@ public class Notifications extends BaseBlock
 						oFinalNotification.add(nLocation);
 						oFinalNotification.m_sDetails.add(oSet.m_sDetails.get(nIndex));
 						bMerged = true;
-						break;
+						break; // merge with the first available NotificationSet
 					}
 				}
 			}
 
-			if (!bMerged)
+			if (!bMerged) // if the current location of the NotificationSet does not get merged create a new NotificationSet and add it to the list to get searched through in subsequent loops and calls of this function
 			{
 				NotificationSet oNewSet = new NotificationSet(oSet.m_lStartTime, oSet.m_lEndTime, oSet.m_dValue, oSet.m_lTimeRecv);
 				oNewSet.add(nLocation);
@@ -306,13 +254,11 @@ public class Notifications extends BaseBlock
 		}
 	}
 
-
+	
 	/**
-	 * Merges the Notifications in the given ArrayList. Needed one more function
-	 * to do this because the groupLocations method could not handle all
-	 * situations
-	 *
-	 * @param oFinalNotifications ArrayList of the final NotificationSets
+	 * Checks to see if any of the NotificationSets in the given list can be 
+	 * merged with one another
+	 * @param oFinalNotifications List of NotificationSets to try and merge
 	 */
 	private void mergeFinal(ArrayList<NotificationSet> oFinalNotifications)
 	{
@@ -348,13 +294,12 @@ public class Notifications extends BaseBlock
 		}
 	}
 
-
+	
 	/**
-	 * Tells whether or not a Notification should be created based off of the
-	 * alert type.
-	 *
-	 * @param dValue alert type
-	 * @return true if a Notification should be created, otherwise false
+	 * Checks if the given alert type is configured to generate notifications
+	 * @param dValue {@link imrcp.system.ObsType#EVT} value that corresponds to
+	 * alert types
+	 * @return true if the given value is in {@link Notifications#m_nNotificationTypes}
 	 */
 	private boolean makeNotification(double dValue)
 	{

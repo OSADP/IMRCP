@@ -3,42 +3,39 @@ package imrcp.comp;
 import imrcp.system.ObsType;
 
 /**
- * Object to hold configured Alert Conditions for an Alert Rule. A Condition
- * consists of the Observation type, the comparison operator, the value to be
- * compared to, and the units of the value.
+ * Stores information about conditions that generate alerts for different
+ * observation types.
+ * @author Federal Highway Administration
  */
 public class AlertCondition
 {
-
 	/**
-	 * Integer obs type id
+	 * IMRCP Observation type
 	 */
 	public int m_nObsType;
 
+	
 	/**
-	 * Minimum value of the condition
+	 * Minimum value to match this condition (inclusive)
 	 */
 	public double m_dMin;
 
+	
 	/**
-	 * Maximum value of the condition
+	 * Maximum value to match this condition (exclusive)
 	 */
 	public double m_dMax;
 
+	
 	/**
-	 * Units of the values
+	 * Units used for {@link m_dMin} and {@link m_dMax}
 	 */
 	public String m_sUnits;
 
-
+	
 	/**
-	 * Creates the Alert Condition from a String array that is read from the
-	 * configuration file where the array has the following structure: {ObsType
-	 * String, min value, max value, units of the values}. If there is no min or
-	 * max value that part of the array is an empty string.
-	 *
-	 * @param sCondition String array that contains the configured data for the
-	 * condition
+	 * Constructs an {@link AlertCondition} from a String[]
+	 * @param strings
 	 */
 	public AlertCondition(String[] sCondition)
 	{
@@ -58,12 +55,14 @@ public class AlertCondition
 		m_sUnits = sCondition[3];
 	}
 
-
+	
 	/**
-	 * Evaluates the comparison for the Condition
-	 *
-	 * @param dObsValue the observed value
-	 * @return true if the Condition is met, otherwise false.
+	 * Checks if the value matches the condition. If {@link m_dMin} and {@link m_dMax}
+	 * are the same it checks if the given value is equal to {@link m_dMin} otherwise
+	 * it checks if the given value is in between {@link m_dMin} and {@link m_dMax}.
+	 * {@code m_dMin <= dObsValue < m_dMax}
+	 * @param dObsValue value to check
+	 * @return true if the value matches the condition.
 	 */
 	public boolean evaluate(double dObsValue)
 	{
