@@ -1,12 +1,50 @@
 package imrcp.geosrv;
 
+import imrcp.geosrv.osm.OsmNode;
+import imrcp.geosrv.osm.OsmWay;
+import imrcp.store.Obs;
+import imrcp.system.Arrays;
+import java.awt.geom.Area;
+import java.awt.geom.Path2D;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Iterator;
+
 /**
- * Common SHP file reading utility functions.
+ * This class contains computational geometry and related methods.
+ * @author Federal Highway Administration
  */
-public class GeoUtil
+public abstract class GeoUtil
 {
+	/**
+	 * Approximate radius of the earth in km
+	 */
 	public static final double EARTH_RADIUS_KM = 6371;
+
+	
+	/**
+	 * Pi divided by 180
+	 */
 	public static final double PIOVER180 = Math.PI / 180;
+
+	
+	/**
+	 * Fills the given array with the point the two line segments intersect. If
+	 * the two line segments do not intersect, the array is filled with 
+	 * {@code Double.NaN} 
+	 * 
+	 * @param dPx x coordinate of the initial point of the first segment
+	 * @param dPy y coordinate of the initial point of the first segment
+	 * @param dEnd1x x coordinate of the terminal point of the first segment
+	 * @param dEnd1y y coordinate of the terminal point of the first segment
+	 * @param dQx x coordinate of the initial point of the second segment
+	 * @param dQy y coordinate of the initial point of the second segment
+	 * @param dEnd2x x coordinate of the terminal point of the second segment
+	 * @param dEnd2y y coordinate of the terminal point of the second segment
+	 * @param dInter array to get filled with the coordinates of the intersection
+	 * point
+	 */
 	public static void getIntersection(double dPx, double dPy, double dEnd1x, double dEnd1y, double dQx, double dQy, double dEnd2x, double dEnd2y, double[] dInter)
 	{
 		dInter[0] = Double.NaN;
@@ -18,175 +56,41 @@ public class GeoUtil
 		double dSx = dEnd2x - dQx;
 		double dSy = dEnd2y - dQy;
 		double dRCrossS = cross(dRx, dRy, dSx, dSy);
-		if (dRCrossS == 0)
+		if (dRCrossS == 0) // the lines are collinear, parallel, or overlap so there is no single point of intersection
 			return;
 		double dT = cross(dDeltaQPx, dDeltaQPy, dSx, dSy) / dRCrossS;
-		if (dT < 0 || dT > 1)
+		if (dT < 0 || dT > 1) // lines do not intersect
 			return;
 		double dU = cross(dDeltaQPx, dDeltaQPy, dRx, dRy) / dRCrossS;
-		if (dU < 0 || dU > 1)
+		if (dU < 0 || dU > 1) // lines do not intersect
 			return;
 		dInter[0] = dPx + dT * dRx;
 		dInter[1] = dPy + dT * dRy;
 	}
 
-
+	
+	/**
+	 * Gets the magnitude of the vector that is the cross product between two vectors
+	 * with their z component set to zero.
+	 * 
+	 * @param dVx x component of vector 1
+	 * @param dVy y component of vector 1
+	 * @param dWx x component of vector 2
+	 * @param dWy y component of vector 2
+	 * @return the magnitude of the vector that is the cross product between two 
+	 * vectors with their z component set to zero.
+	 */
 	public static double cross(double dVx, double dVy, double dWx, double dWy)
 	{
 		return dVx * dWy - dVy * dWx;
 	}
 
+	
 	/**
-	 * Creates a new instance of GeoUtil
-	 */
-	private GeoUtil()
-	{
-	}
-
-
-	/**
-	 * Reverses the two bytes in a short integer. The first byte of the short
-	 * becomes the second byte and the second byte of the short becomes the
-	 * first.
-	 * <br><br>
-	 * Example: swap(1) returns 256
-	 * <ul style='list-style-type:none'>
-	 * <li><nobr>1 => 00000000 00000001</nobr></li>
-	 * <li><nobr>256 => 00000001 00000000</nobr></li>
-	 * </ul>
-	 * <br> and swap(257) returns 257
-	 * <ul style='list-style-type:none'>
-	 * <li><nobr>257 => 00000001 00000001</nobr></li>
-	 * <li><nobr>257 => 00000001 00000001</nobr></li>
-	 * </ul>
-	 *
-	 * @param rValue short integer value to have its bytes swapped
-	 * @return short integer with bytes swapped
-	 */
-	public static short swap(short rValue)
-	{
-		int nByte1 = rValue & 0xff;
-		int nByte2 = (rValue >> 8) & 0xff;
-
-		return (short)(nByte1 << 8 | nByte2);
-	}
-
-
-	/**
-	 * Reverses the four bytes in an integer. The first byte becomes the fourth
-	 * byte, the second byte becomes the third byte, the third byte becomes the
-	 * second byte and the fourth byte becomes the first byte.
-	 * <br><br>
-	 * Example: swap(134217728) returns 16909320
-	 * <ul style='list-style-type:none'>
-	 * <li><nobr>134217728 => 00001000 00000100 00000010 00000001</nobr></li>
-	 * <li><nobr>16777216 => 00000001 00000010 00000100 00001000</nobr></li>
-	 * </ul>
-	 *
-	 * @param nValue integer value to have its bytes swapped
-	 * @return integer with bytes swapped
-	 */
-	public static int swap(int nValue)
-	{
-		return ((nValue << 24)
-		   + (nValue << 8 & 0x00FF0000)
-		   + (nValue >>> 8 & 0x0000FF00)
-		   + (nValue >>> 24));
-	}
-
-
-	/**
-	 * Reverses the eight bytes in a long integer. The first byte becomes the
-	 * eighth byte, the second byte becomes the seventh byte, etc...
-	 * <br><br>
-	 * Example: swap(72057594037927936) returns 1
-	 * <ul style='list-style-type:none'>
-	 * <li><nobr>134217728 => 00000001 00000000 00000000 00000000 00000000
-	 * 00000000 00000000 00000000</nobr></li>
-	 * <li><nobr>16777216 => 00000000 00000000 00000000 00000000 00000000
-	 * 00000000 00000000 00000001</nobr></li>
-	 * </ul>
-	 *
-	 * @param lValue long integer value to have its bytes swapped
-	 * @return long integer with bytes swapped
-	 */
-	public static long swap(long lValue)
-	{
-		long lByte1 = lValue & 0xff;
-		long lByte2 = (lValue >> 8) & 0xff;
-		long lByte3 = (lValue >> 16) & 0xff;
-		long lByte4 = (lValue >> 24) & 0xff;
-		long lByte5 = (lValue >> 32) & 0xff;
-		long lByte6 = (lValue >> 40) & 0xff;
-		long lByte7 = (lValue >> 48) & 0xff;
-		long lByte8 = (lValue >> 56) & 0xff;
-
-		return (lByte1 << 56 | lByte2 << 48 | lByte3 << 40 | lByte4 << 32
-		   | lByte5 << 24 | lByte6 << 16 | lByte7 << 8 | lByte8);
-	}
-
-
-	/**
-	 * Reverses the four bytes in a floating point number. The first byte
-	 * becomes the fourth byte, the second byte becomes the third byte, the
-	 * third byte becomes the second byte and the fourth byte becomes the first
-	 * byte.
-	 *
-	 * @param fValue floating point value to have its bytes swapped
-	 * @return long integer with bytes swapped
-	 */
-	public static float swap(float fValue)
-	{
-		return Float.intBitsToFloat(swap(Float.floatToIntBits(fValue)));
-	}
-
-
-	/**
-	 * Reverses the eight bytes in a double precision number. The first byte
-	 * becomes the eighth byte, the second byte becomes the seventh byte, etc...
-	 *
-	 * @param dValue double precision value to have its bytes swapped
-	 * @return long integer with bytes swapped
-	 */
-	public static double swap(double dValue)
-	{
-		return Double.longBitsToDouble(swap(Double.doubleToLongBits(dValue)));
-	}
-
-
-	/**
-	 *
-	 * @param lValue
-	 * @return
-	 */
-	public static double swapD(long lValue)
-	{
-		return Double.longBitsToDouble(swap(lValue));
-	}
-
-
-	/**
-	 * Returns the unsigned integer value of a byte.
-	 *
-	 * @param yValue the byte
-	 * @return the unsigned integer value of the byte
-	 */
-	public static int unsignByte(byte yValue)
-	{
-		int nValue = yValue;
-		if (nValue < 0)
-			nValue += 256;
-
-		return nValue;
-	}
-
-
-	/**
-	 * Determines the next smallest integer value.
-	 *
-	 * @param nValue integer value to floor
-	 * @param nPrecision
-	 * @return next smallest integer to the parameter integer
+	 * Floors the given integer to the given precision.
+	 * @param nValue the value to floor
+	 * @param nPrecision the precision to used to floor
+	 * @return the floored value of the integer based on the precision
 	 */
 	public static int floor(int nValue, int nPrecision)
 	{
@@ -201,19 +105,20 @@ public class GeoUtil
 		return nFlooredValue;
 	}
 
-
+	
 	/**
-	 * Determines if the specified point is within the specified boundary. A
-	 * specified tolerance adjusts the compared region as needed.
-	 *
-	 * @param nX x coordinate of point
-	 * @param nY y coordinate of point
-	 * @param nT y value of the top of the region
-	 * @param nR x value of the right side of the region
-	 * @param nB y value of the bottom of the region
-	 * @param nL x value of the left side of the region
-	 * @param nTol the allowed margin for a point to be considered inside
-	 * @return true if the point is inside or on the rectangular region
+	 * Determines if the given point is inside the given bounding box with the
+	 * given tolerance.
+	 * 
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @param nT top bound of the bounding box
+	 * @param nR right bound of the bounding box
+	 * @param nB bottom bound of the bounding box
+	 * @param nL left bound of the bounding box
+	 * @param nTol tolerance to expand the bounding box by
+	 * @return true if the point is inside (or on the edge) of the bounding box
+	 * expanded by the tolerance, otherwise false.
 	 */
 	public static boolean isInside(int nX, int nY,
 	   int nT, int nR, int nB, int nL, int nTol)
@@ -236,20 +141,53 @@ public class GeoUtil
 		return (nX >= nL - nTol && nX <= nR + nTol
 		   && nY >= nB - nTol && nY <= nT + nTol);
 	}
-
+	
 
 	/**
-	 * Determines if the specified point is within the specified boundary. A
-	 * specified tolerance adjusts the compared region as needed
-	 *
-	 * @param dX x coordinate of point
-	 * @param dY y coordinate of point
-	 * @param dT y value of the top of the region
-	 * @param dR x value of the right side of the region
-	 * @param dB y value of the bottom of the region
-	 * @param dL x value of the left side of the region
-	 * @param dTol the allowed margin for a point to be considered inside
-	 * @return true if the point is inside or on the rectangular region
+	 * Calculates the right hand rule value of the point in regards to the given
+	 * directed line segment.
+	 * 
+	 * @param dX x coordinate of the point
+	 * @param dY y coordinate of the point 
+	 * @param dX1 x coordinate of the initial point of the line segment
+	 * @param dY1 y coordinate of the initial point of the line segment
+	 * @param dX2 x coordinate of the terminal point of the line segment
+	 * @param dY2 y coordinate of the terminal point of the line segment.
+	 * @return -1, 0, or 1. -1 means the point is on the right side of the line
+	 * segment, 0 means the point is on the line defined by the line segment, and
+	 * 1 means the point is on the left side of the line segment
+	 */
+	public static int rightHand(double dX, double dY, double dX1, double dY1, double dX2, double dY2)
+	{
+		double dXp = dX1 - dX;
+		double dXd = dX2 - dX1;
+
+		double dYp = dY1 - dY;
+		double dYd = dY2 - dY1;
+
+		double dVal = (dXd * dYp) - (dYd * dXp);
+		if (dVal > 0)
+			return 1;
+		else if (dVal < 0)
+			return -1;
+		
+		return 0;
+	}
+
+	
+	/**
+	 * Determines if the given point is inside the given bounding box with the
+	 * given tolerance.
+	 * 
+	 * @param dX x coordinate of the point
+	 * @param dY y coordinate of the point
+	 * @param dT top bound of the bounding box
+	 * @param dR right bound of the bounding box
+	 * @param dB bottom bound of the bounding box
+	 * @param dL left bound of the bounding box
+	 * @param dTol tolerance to expand the bounding box by
+	 * @return true if the point is inside (or on the edge) of the bounding box
+	 * expanded by the tolerance, otherwise false.
 	 */
 	public static boolean isInside(double dX, double dY, double dT, double dR,
 	   double dB, double dL, double dTol)
@@ -258,23 +196,27 @@ public class GeoUtil
 		   && dY >= dB - dTol && dY <= dT + dTol);
 	}
 
-
+	
 	/**
-	 * Determines the squared perpendicular distance between a point and a line.
-	 * All values are scaled to six decimal places. The distance is returned or
-	 * a negative integer when the point does not intersect the line.
-	 *
-	 * @param nX	longitude
-	 * @param nY	latitude
-	 * @param nX1	longitude for the first end point of the line
-	 * @param nY1	latitude for the first end point of the line
-	 * @param nX2	longitude for the second end point of the line
-	 * @param nY2	latitude for the second end point of the line
-	 * @param oSnap
-	 * @return scaled degree distance between the point and line
+	 * Gets the squared perpendicular distance from the given point to the given 
+	 * directed line segment. Wrapper for the method that accepts doubles:
+	 * {@link #getPerpDist(double, double, double, double, double, double, imrcp.geosrv.WaySnapInfo)}.
+	 * Useful intermediate parameters get stored in the given WaySnapInfo
+	 * 
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @param nX1 x coordinate of the initial point of the line segment
+	 * @param nY1 y coordinate of the initial point of the line segment
+	 * @param nX2 x coordinate of the terminal point of the line segment
+	 * @param nY2 y coordinate of the terminal point of the line segment.
+	 * @param oSnap object that stores some useful intermediate parameters of the
+	 * perpendicular distance algorithm
+	 * @return The perpendicular distance from the point to the line segment. If
+	 * the point cannot be snapped to the line segment {@code Integer.MIN_VALUE}
+	 * is returned
 	 */
 	public static int getPerpDist(int nX, int nY,
-	   int nX1, int nY1, int nX2, int nY2, SegSnapInfo oSnap)
+	   int nX1, int nY1, int nX2, int nY2, WaySnapInfo oSnap)
 	{
 		double dDist = getPerpDist((double)nX, (double)nY,
 		   (double)nX1, (double)nY1, (double)nX2, (double)nY2, oSnap);
@@ -285,24 +227,55 @@ public class GeoUtil
 		oSnap.m_nSqDist = (int)dDist;
 		return (int)dDist;
 	}
-
-
+	
+	
 	/**
-	 * Determines the squared perpendicular distance between a point and a line.
-	 * All values are scaled to six decimal places. The distance is returned or
-	 * NaN when the point does not intersect the line.
-	 *
-	 * @param dX	longitude
-	 * @param dY	latitude
-	 * @param dX1	longitude for the first end point of the line
-	 * @param dY1	latitude for the first end point of the line
-	 * @param dX2	longitude for the second end point of the line
-	 * @param dY2	latitude for the second end point of the line
-	 * @param oSnap
-	 * @return scaled degree distance between the point and line
+	 * Gets the squared perpendicular distance from the given point to the given 
+	 * directed line segment. Wrapper for the method that accepts doubles:
+	 * {@link #getPerpDist(double, double, double, double, double, double)}
+	 * 
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @param nX1 x coordinate of the initial point of the line segment
+	 * @param nY1 y coordinate of the initial point of the line segment
+	 * @param nX2 x coordinate of the terminal point of the line segment
+	 * @param nY2 y coordinate of the terminal point of the line segment.
+	 * @return The perpendicular distance from the point to the line segment. If
+	 * the point cannot be projected on to the line segment {@code Integer.MIN_VALUE}
+	 * is returned
+	 */
+	public static int getPerpDist(int nX, int nY,
+	   int nX1, int nY1, int nX2, int nY2)
+	{
+		double dDist = getPerpDist((double)nX, (double)nY,
+		   (double)nX1, (double)nY1, (double)nX2, (double)nY2);
+
+		if (Double.isNaN(dDist) || dDist > Integer.MAX_VALUE)
+			return Integer.MIN_VALUE;
+
+		return (int)dDist;
+	}
+
+	
+	/**
+	 * Gets the squared perpendicular distance from the given point to the given 
+	 * directed line segment by attempting to project the point onto the line segment.
+	 * Useful intermediate parameters get stored in the given WaySnapInfo. 
+	 * 
+	 * @param dX x coordinate of the point
+	 * @param dY y coordinate of the point
+	 * @param dX1 x coordinate of the initial point of the line segment
+	 * @param dY1 y coordinate of the initial point of the line segment
+	 * @param dX2 x coordinate of the terminal point of the line segment
+	 * @param dY2 y coordinate of the terminal point of the line segment.
+	 * @param oSnap object that stores some useful intermediate parameters of the
+	 * perpendicular distance algorithm
+	 * @return The perpendicular distance from the point to the line segment. If
+	 * the point cannot be projected on to the line segment {@code Double.NaN}
+	 * is returned
 	 */
 	public static double getPerpDist(double dX, double dY,
-	   double dX1, double dY1, double dX2, double dY2, SegSnapInfo oSnap)
+	   double dX1, double dY1, double dX2, double dY2, WaySnapInfo oSnap)
 	{
 		double dXd = dX2 - dX1;
 		double dYd = dY2 - dY1;
@@ -333,27 +306,120 @@ public class GeoUtil
 		dYd = dY - dYp; // between the point and the intersection
 		return dXd * dXd + dYd * dYd;
 	}
-
-
+	
+	
 	/**
-	 * Converts a lat/lon double into integer degrees scaled to seven decimals
-	 * places
+	 * Gets the squared perpendicular distance from the given point to the given 
+	 * directed line segment by attempting to project the point onto the line segment.
+	 * 
+	 * @param dX x coordinate of the point
+	 * @param dY y coordinate of the point
+	 * @param dX1 x coordinate of the initial point of the line segment
+	 * @param dY1 y coordinate of the initial point of the line segment
+	 * @param dX2 x coordinate of the terminal point of the line segment
+	 * @param dY2 y coordinate of the terminal point of the line segment.
 	 *
-	 * @param dValue lat/lon double
-	 * @return integer degrees scaled to seven decimals places
+	 * @return The perpendicular distance from the point to the line segment. If
+	 * the point cannot be projected on to the line segment {@code Double.NaN}
+	 * is returned
+	 */
+	public static double getPerpDist(double dX, double dY, double dX1, double dY1, double dX2, double dY2)
+	{
+		double dXd = dX2 - dX1;
+		double dYd = dY2 - dY1;
+		double dXp = dX - dX1;
+		double dYp = dY - dY1;
+
+		if (dXd == 0 && dYd == 0) // line segment is a point
+			return dXp * dXp + dYp * dYp; // squared dist between the points
+
+		double dU = dXp * dXd + dYp * dYd;
+		double dV = dXd * dXd + dYd * dYd;
+
+		if (dU < 0 || dU > dV) // nearest point is not on the line
+		{
+			return Double.NaN;
+		}
+
+		// find the perpendicular intersection of the point on the line
+		dXp = dX1 + (dU * dXd / dV);
+		dYp = dY1 + (dU * dYd / dV);
+
+		dXd = dX - dXp; // calculate the squared distance
+		dYd = dY - dYp; // between the point and the intersection
+		return dXd * dXd + dYd * dYd;
+	}
+	
+	
+	/**
+	 * Gets the squared perpendicular distance from the given point to the given 
+	 * directed line segment by attempting to project the point onto the line segment.
+	 * The projected point gets stored in dSnap.
+	 * 
+	 * @param dX x coordinate of the point
+	 * @param dY y coordinate of the point
+	 * @param dX1 x coordinate of the initial point of the line segment
+	 * @param dY1 y coordinate of the initial point of the line segment
+	 * @param dX2 x coordinate of the terminal point of the line segment
+	 * @param dY2 y coordinate of the terminal point of the line segment.
+	 * @param dSnap array that gets filled with the projected point on the line
+	 * segment in the format [projected x coordinate, projected y coordinate]. 
+	 * If the point cannot be projected both coordinates are set to  {@code Double.NaN}
+	 * @return The perpendicular distance from the point to the line segment. If
+	 * the point cannot be projected on to the line segment {@code Double.NaN}
+	 * is returned
+	 */
+	public static double snap(double dX, double dY,
+	   double dX1, double dY1, double dX2, double dY2, double[] dSnap)
+	{
+		double dXd = dX2 - dX1;
+		double dYd = dY2 - dY1;
+		double dXp = dX - dX1;
+		double dYp = dY - dY1;
+		dSnap[0] = dSnap[1] = Double.NaN;
+		if (dXd == 0 && dYd == 0) // line segment is a point
+			return dXp * dXp + dYp * dYp; // squared dist between the points
+
+		double dU = dXp * dXd + dYp * dYd;
+		double dV = dXd * dXd + dYd * dYd;
+
+		if (dU < 0 || dU > dV) // nearest point is not on the line
+		{
+			return Double.NaN;
+		}
+
+
+		// find the perpendicular intersection of the point on the line
+		dXp = dX1 + (dU * dXd / dV);
+		dYp = dY1 + (dU * dYd / dV);
+		dSnap[0] = dXp;
+		dSnap[1] = dYp;
+
+		dXd = dX - dXp; // calculate the squared distance
+		dYd = dY - dYp; // between the point and the intersection
+		return dXd * dXd + dYd * dYd;
+	}
+
+	
+	/**
+	 * Converts the given decimal degree coordinate to an integer scaled to 7
+	 * decimal places. This is used to store geo-coordinates as integers.
+	 * 
+	 * @param dValue Decimal degree coordinate to convert
+	 * @return the decimal degree coordinate as an integer scaled to 7 decimal places
 	 */
 	public static int toIntDeg(double dValue)
 	{
 		return ((int)Math.round((dValue + 0.00000005) * 10000000.0));
 	}
 
-
+	
 	/**
-	 * Converts a lat/lon integer degrees scaled to seven decimal places into a
-	 * double that is in decimal degrees.
-	 *
-	 * @param nValue lat/lon integer degrees scaled to seven decimal places
-	 * @return decimal degrees as a double
+	 * Converts the given integer decimal degree scaled to 7 decimal places to a
+	 * double representation in decimal degrees.
+	 * 
+	 * @param nValue integer decimal degree scaled to 7 decimal places
+	 * @return Decimal degrees value of the scaled integer value
 	 */
 	public static double fromIntDeg(int nValue)
 	{
@@ -361,31 +427,25 @@ public class GeoUtil
 	}
 	
 	
+	/**
+	 * Converts the given integer decimal degree scaled to the given power of 10
+	 * to a double representation in decimal degrees
+	 * 
+	 * @param nValue integer decimal degree scaled to the power of 10
+	 * @param nScale the power of 10
+	 * @return Decimal degrees value of the scaled integer value
+	 */
 	public static double fromIntDeg(int nValue, int nScale)
 	{
 		return (((double)nValue) / (1.0 * nScale));
 	}
-
-
-	public static boolean polyLineIsInsidePolygon(int[] nPolyline, int[] nPolyPoints)
-	{
-		for (int i = 0; i < nPolyline.length;)
-		{
-			int nX = nPolyline[i++];
-			int nY = nPolyline[i++];
-			if (!isInsidePolygon(nPolyPoints, nX, nY))
-				return false;
-		}
-		
-		return true;
-	}
+	
 	
 	/**
-	 * Determines if a given x,y coordinate is inside the polygon defined by the
-	 * array.
-	 *
-	 * @param nPolyPoints array of coordinates that define a polygon. Order is
-	 * [y1, x1, y1, x2, ..., y1, x1]
+	 * Determines if the given point is inside the given closed polygon defined 
+	 * by the array. This is an implementation of the Ray Casting Algorithm.
+	 * 
+	 * @param nPolyPoints closed polygon in format [y0, x0, y1, x1, ... yn, xn, y0, x0]
 	 * @param nX x coordinate of the point
 	 * @param nY y coordinate of the point
 	 * @return true if the point is inside the polygon, otherwise false
@@ -411,39 +471,263 @@ public class GeoUtil
 	}
 	
 	
+	/**
+	 * Determines if the given point is inside the given multipolygon defined
+	 * by the ArrayList of polygon rings.
+	 * 
+	 * @param nRings list containing any outer and inner rings defining a 
+	 * multipolygon object. Rings are defined by a growable array which has a flexible
+	 * format but should be something like [insertion point, hole flag, min x, min y, max x, max y, x0, y0, x1, y1, ... xn, yn, x0, y0].
+	 * In that case nHole would be 1 and nBoundsStart would be 2 and nRingStart would be 6.
+	 * @param nRingStart the index in the ring arrays that the coordinates start at
+	 * @param nHole the index in the ring arrays that the hole flag is located
+	 * @param nBoundsStart the index in the ring arrays that the bounding box starts at
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @return true if the point is inside the multipolygon, otherwise false.
+	 */
+	public static boolean isInsideMultiPolygon(ArrayList<int[]> nRings, int nRingStart, int nHole, int nBoundsStart, double nX, double nY)
+	{
+		if (nRings.size() == 1)
+			return isInsidePolygon(nRings.get(0), nX, nY, nRingStart, nBoundsStart);
+		
+		boolean bInsideExterior = false;
+		for (int[] nRing : nRings)
+		{
+			boolean bHole = nRing[nHole] == 1;
+			if (bInsideExterior && !bHole) // if the point is inside an exterior ring and the current ring is not a hole then there cannot be another hole inside the exterior ring the point is inside so early out
+				return true;
+			boolean bInside = isInsidePolygon(nRing, nX, nY, nRingStart, nBoundsStart);
+			if (!bHole && bInside)
+				bInsideExterior = true;
+			
+			if (bHole && bInside) // if the point is inside of a hole then it is not "inside" the polygon
+				return false;
+		}
+		return bInsideExterior;
+	}
+	
+	
+	/**
+	 * Determines if the given polyline is inside or intersects the given multipolygon.
+	 * 
+	 * @param nRings list containing any outer and inner rings defining a 
+	 * multipolygon object. Rings are defined by a growable array which has a flexible
+	 * format but should be something like [insertion point, hole flag, min x, min y, max x, max y, x0, y0, x1, y1, ... xn, yn, x0, y0].
+	 * In that case nHole would be 1 and nBoundsStart would be 2 and nRingStart would be 6.
+	 * @param nRingStart the index in the ring arrays that the coordinates start at
+	 * @param nHole the index in the ring arrays that the hole flag is located
+	 * @param nBoundsStart the index in the ring arrays that the bounding box starts at
+	 * @param nPolyBounds bounding box of the entire multipolygon [min x, min y, max x, max y]
+	 * @param nPolyLine growable array defining the polyline to test which has a flexible
+	 * format but should be something line [insertion point, min x, min y, max x, max y, x0, y0, x1, y1, ... xn, yn].
+	 * In that case nLineStart would be 5 and nLineBoundsStart would be 1
+	 * @param nLineStart the index in the polyline array that the coordinates start at
+	 * @param nLineBoundsStart the index in the polyline array that the bounding box starts at
+	 * @return true if the polyline is inside or intersect the multipolygon
+	 */
+	public static boolean isInsideMultiPolygon(ArrayList<int[]> nRings, int nRingStart, int nHole, int nBoundsStart,  int[] nPolyBounds, int[] nPolyLine, int nLineStart, int nLineBoundsStart)
+	{
+		if (!boundingBoxesIntersect(nPolyBounds[0], nPolyBounds[1], nPolyBounds[2], nPolyBounds[3], nPolyLine[nLineBoundsStart], nPolyLine[nLineBoundsStart + 1], nPolyLine[nLineBoundsStart + 2], nPolyLine[nLineBoundsStart + 3]))
+			return false;
+		Iterator<int[]> oLineIt = Arrays.iterator(nPolyLine, new int[2], nLineStart, 2);
+		while (oLineIt.hasNext()) // first iterate through all the points to see if any are inside
+		{
+			int[] nPt = oLineIt.next();
+			if (isInside(nPt[0], nPt[1], nPolyBounds[3], nPolyBounds[2], nPolyBounds[1], nPolyBounds[0], 0)) // quick bounding box test
+			{
+				if (isInsideMultiPolygon(nRings, nRingStart, nHole, nBoundsStart, nPt[0], nPt[1])) // early out if a point is inside, meaning the polyline is at least partially inside
+					return true;
+			}
+		}
+		
+		double[] dIntersection = new double[2];
+		
+		for (int[] nRing : nRings) // if no point was inside, check if any line segment intersects an edge of the polygons
+		{
+			if (nRing[nHole] == 1 ||  // can skip holes, only test exterior rings
+				!boundingBoxesIntersect(nPolyLine[nLineBoundsStart], nPolyLine[nLineBoundsStart + 1], nPolyLine[nLineBoundsStart + 2], nPolyLine[nLineBoundsStart + 3],
+									    nRing[nBoundsStart], nRing[nBoundsStart + 1], nRing[nBoundsStart + 2], nRing[nBoundsStart + 3])) // and polygons that aren't close to the line
+				continue;
+			
+			oLineIt = Arrays.iterator(nPolyLine, new int[4], nLineStart, 2); 
+			int nLine = 0;
+			while (oLineIt.hasNext())
+			{
+				int[] nSeg = oLineIt.next();
+				int nX1 = nSeg[0];
+				int nY1 = nSeg[1];
+				int nX2 = nSeg[2];
+				int nY2 = nSeg[3];
+				
+				if (nX2 < nX1) // swap the left and right bounds as needed
+				{
+					nX2 ^= nX1;
+					nX1 ^= nX2;
+					nX2 ^= nX1;
+				}
+				
+				if (nY2 < nY1) // swap the top and bottom bounds as needed
+				{
+					nY2 ^= nY1;
+					nY1 ^= nY2;
+					nY2 ^= nY1;
+				}
+				
+				if (boundingBoxesIntersect(nX1, nY1, nX2, nY2, nRing[nBoundsStart], nRing[nBoundsStart + 1], nRing[nBoundsStart + 2], nRing[nBoundsStart + 3])) // if the line segment is close to the polygon, check if it intersects any edge
+				{
+					Iterator<int[]> oPolyIt = Arrays.iterator(nRing, new int[4], nRingStart, 2);
+					while (oPolyIt.hasNext())
+					{
+						int[] nEdge = oPolyIt.next();
+						getIntersection(nSeg[0], nSeg[1], nSeg[2], nSeg[3], nEdge[0], nEdge[1], nEdge[2], nEdge[3], dIntersection);
+						if (Double.isFinite(dIntersection[0]))
+							return true;
+					}
+				}
+				nLine++;
+			}
+		}
+		
+		return false;
+	}
+	
+	
+	/**
+	 * Determines if the given roadway segment is inside or intersects the given 
+	 * multipolygon.
+	 * 
+	 * @param nRings list containing any outer and inner rings defining a 
+	 * multipolygon object. Rings are defined by a growable array which has a flexible
+	 * format but should be something like [insertion point, hole flag, min x, min y, max x, max y, x0, y0, x1, y1, ... xn, yn, x0, y0].
+	 * In that case nHole would be 1 and nBoundsStart would be 2 and nRingStart would be 6.
+	 * @param nRingStart the index in the ring arrays that the coordinates start at
+	 * @param nHole the index in the ring arrays that the hole flag is located
+	 * @param nBoundsStart the index in the ring arrays that the bounding box starts at
+	 * @param nPolyBounds bounding box of the entire multipolygon [min x, min y, max x, max y]
+	 * @param oWay the roadway segment to test
+	 * @return true if the roadway segment is inside or intersect the multipolygon
+	 */
+	public static boolean isInsideMultiPolygon(ArrayList<int[]> nRings, int nRingStart, int nHole, int nBoundsStart,  int[] nPolyBounds, OsmWay oWay)
+	{
+		int[] nLine = Arrays.newIntArray(oWay.m_oNodes.size() * 2 + 5);
+		nLine = Arrays.add(nLine, new int[]{oWay.m_nMinLon, oWay.m_nMinLat, oWay.m_nMaxLon, oWay.m_nMaxLat});
+		for (OsmNode oNode : oWay.m_oNodes)
+		{
+			nLine = Arrays.add(nLine, oNode.m_nLon, oNode.m_nLat);
+		}
+		
+		return isInsideMultiPolygon(nRings, nRingStart, nHole, nBoundsStart, nPolyBounds, nLine, 5, 1);
+	}
+	
+	
+	/**
+	 * Wrapper for {@link #isInsidePolygon(int[], double, double, int, int)} for
+	 * a polygon array that does not have the bounding box include so 0 is passed
+	 * for nBoundsStart.
+	 * 
+	 * @param nPoly growable array defining the  closed polygon which has a flexible
+	 * format but should be something like [insertion point, x0, y0, x1, y1, ... xn, yn, x0, y0]
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @param nStart index in the polygon array that the coordinates start at
+	 * @return true if the point is inside the polygon, otherwise false
+	 */
+	public static boolean isInsidePolygon(int[] nPoly, double nX, double nY, int nStart)
+	{
+		return isInsidePolygon(nPoly, nX, nY, nStart, 0);
+	}
+	
+	
+	/**
+	 * Determines if the given point is inside the given closed polygon defined 
+	 * by the array. This is an implementation of the Ray Casting Algorithm.
+	 * 
+	 * @param nPoly growable array defining the  closed polygon which has a flexible
+	 * format but should be something like [insertion point, x0, y0, x1, y1, ... xn, yn, x0, y0]
+	 * @param nX x coordinate of the point
+	 * @param nY y coordinate of the point
+	 * @param nStart index in the polygon array that the coordinates start at
+	 * @param nBoundsStart if the growable array contains the bounding box this 
+	 * is the index in the array that the bounding box starts at, otherwise should
+	 * be 0
+	 * @return true if the point is inside the polygon, otherwise false
+	 */
+	public static boolean isInsidePolygon(int[] nPoly, double nX, double nY, int nStart, int nBoundsStart)
+	{
+		if (nBoundsStart > 0) // if the bounding box is included in the polygon array
+		{
+			if (!isInside(nX, nY, nPoly[nBoundsStart + 3], nPoly[nBoundsStart + 2], nPoly[nBoundsStart + 1], nPoly[nBoundsStart], 0)) // early out bounding box test
+				return false;
+		}
+		
+		int nCount = 0;
+		int[] nSeg = new int[4];
+		Iterator<int[]> oIt = Arrays.iterator(nPoly, nSeg, nStart, 2);
+		while (oIt.hasNext())
+		{
+			oIt.next();
+			int nX1 = nSeg[0];
+			int nY1 = nSeg[1];
+			int nX2 = nSeg[2];
+			int nY2 = nSeg[3];
+			if ((nY1 < nY && nY2 >= nY || nY2 < nY && nY1 >= nY)
+			   && (nX1 <= nX || nX2 <= nX)
+			   && (nX1 + (nY - nY1) / (nY2 - nY1) * (nX2 - nX1) < nX))
+				++nCount;
+		}
+		return (nCount & 1) != 0;
+	}
+	
+	
+	/**
+	 * Determines if the two bounding boxes intersect.
+	 * 
+	 * @param dXmin1 min x of the first bounding box
+	 * @param dYmin1 min y of the first bounding box
+	 * @param dXmax1 max x of the first bounding box
+	 * @param dYmax1 max y of the first bounding box
+	 * @param dXmin2 min x of the second bounding box
+	 * @param dYmin2 min y of the second bounding box
+	 * @param dXmax2 max x of the second bounding box
+	 * @param dYmax2 max y of the second bounding box
+	 * @return true if the two bounding boxes intersect, otherwise false
+	 */
 	public static boolean boundingBoxesIntersect(double dXmin1, double dYmin1, double dXmax1, double dYmax1, double dXmin2, double dYmin2, double dXmax2, double dYmax2)
 	{
 		return dYmax1 >= dYmin2 && dYmin1 <= dYmax2 && dXmax1 >= dXmin2 && dXmin1 <= dXmax2;
 	}
 	
+	
+	/**
+	 * Determines if the two bounding boxes intersect.
+	 * 
+	 * @param nXmin1 min x of the first bounding box
+	 * @param nYmin1 min y of the first bounding box
+	 * @param nXmax1 max x of the first bounding box
+	 * @param nYmax1 max y of the first bounding box
+	 * @param nXmin2 min x of the second bounding box
+	 * @param nYmin2 min y of the second bounding box
+	 * @param nXmax2 max x of the second bounding box
+	 * @param nYmax2 max y of the second bounding box
+	 * @return true if the two bounding boxes intersect, otherwise false
+	 */
 	public static boolean boundingBoxesIntersect(int nXmin1, int nYmin1, int nXmax1, int nYmax1, int nXmin2, int nYmin2, int nXmax2, int nYmax2)
 	{
 		return nYmax1 >= nYmin2 && nYmin1 <= nYmax2 && nXmax1 >= nXmin2 && nXmin1 <= nXmax2;
 	}
+		
 	
-	public static int[] ensureCapacity(int[] nArray, int nMinCapacity)
-    {
-        nMinCapacity += nArray[0];
-        if (nArray.length < nMinCapacity)
-        {
-            int[] dNew = new int[(nMinCapacity * 2)];
-            System.arraycopy(nArray, 0, dNew, 0, nArray.length);
-            return dNew;
-        }
-        return nArray; // no changes were needed
-    }
-
-
-    public static double[] ensureCapacity(double[] dArray, int nMinCapacity)
-    {
-		if ((int)dArray[0] + nMinCapacity < dArray.length)
-	        return dArray; // no changes were needed
-
-		double[] dNew = new double[dArray.length * 2 + nMinCapacity];
-		System.arraycopy(dArray, 0, dNew, 0, (int)dArray[0]);
-		return dNew;
-    }
-	
+	/**
+	 * Compares the two doubles with the given tolerance.
+	 * 
+	 * @param d1 first double
+	 * @param d2 second double
+	 * @param dTol tolerance
+	 * @return 0 if the doubles are within the tolerance of get other, -1 if the 
+	 * second double is more than the tolerance greater than the first double, 1
+	 * if the first double is more than the tolerance greater than the second double.
+	 */
 	public static int compareTol(double d1, double d2, double dTol)
 	{
 		if (d2 > d1)
@@ -458,27 +742,13 @@ public class GeoUtil
 	}
 	
 	
-	public static int compareTol(int n1, int n2, int nTol)
-	{
-		if (n2 > n1)
-		{
-			if (n2 - n1 > nTol)
-				return -1;
-		}
-		else if (n1 - n2 > nTol)		
-			return 1;
-		
-		return 0;
-	}
-	
-	public static long getSqDist(int nX1, int nY1, int nX2, int nY2)
-	{
-		long nDeltaX = nX2 - nX1;
-		long nDeltaY = nY2 - nY1;
-		return nDeltaX * nDeltaX + nDeltaY * nDeltaY;
-	}
-	
-	
+	/**
+	 * Adjusts the latitude to decimal degrees if it is outside of the range of
+	 * {@literal -90 <= dLat <= 90}
+	 * 
+	 * @param dLat latitude to adust if needed
+	 * @return latitude in decimal degrees
+	 */
 	public static double adjustLat(double dLat)
 	{
 		if (dLat > 90.0)
@@ -490,6 +760,13 @@ public class GeoUtil
 	}
 	
 	
+	/**
+	 * Adjusts the longitude to decimal degrees if it is outside of the range of
+	 * {@literal -180 < dLon <= 180}
+	 * 
+	 * @param dLon longitude to adust if needed
+	 * @return longitude in decimal degrees
+	 */
 	public static double adjustLon(double dLon)
 	{
 		if (dLon > 180)
@@ -500,13 +777,16 @@ public class GeoUtil
 		return dLon;
 	}
 	
+	
 	/**
-	 * Adapted from the Haversine formula
-	 * @param dLat1
-	 * @param dLon1
-	 * @param dLat2
-	 * @param dLon2
-	 * @return 
+	 * Gets the distance between the 2 geo-coordinates in km using the Haversine
+	 * formula.
+	 * 
+	 * @param dLat1 latitude in decimal degrees of the first point
+	 * @param dLon1 longitude in decimal degrees of the first point
+	 * @param dLat2 latitude in decimal degrees of the second point
+	 * @param dLon2 longitude in decimal degrees of the second point
+	 * @return distance in km between the 2 geo-coordinates.
 	 */
 	public static double distanceFromLatLon(double dLat1, double dLon1, double dLat2, double dLon2)
 	{
@@ -514,5 +794,205 @@ public class GeoUtil
 		double dLon = (dLon2 - dLon1) * PIOVER180;
 		double dA = Math.sin(dLat / 2) * Math.sin(dLat /2) + Math.cos(dLat1 * PIOVER180) * Math.cos(dLat2 * PIOVER180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
 		return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(dA));
+	}
+	
+	
+	/**
+	 * Determines the measure of the angle defined by the 3 points in radians. 
+	 * The second point is the vertex of the angle.
+	 * 
+	 * @param dX1 x coordinate of point 1
+	 * @param dY1 y coordinate of point 1
+	 * @param dX2 x coordinate of the point 2(vertex)
+	 * @param dY2 y coordinate of the point 2(vertex)
+	 * @param dX3 x coordinate of point 3
+	 * @param dY3 y coordinate of point 3
+	 * @return Measure of the angle defined by the 3 points in radians
+	 */
+	public static double angle(double dX1, double dY1, double dX2, double dY2, double dX3, double dY3)
+	{
+		double dUi = dX1 - dX2;
+		double dUj = dY1 - dY2;
+		double dVi = dX3 - dX2;
+		double dVj = dY3 - dY2;
+		double dDot = dUi * dVi + dUj * dVj;
+		double dLenU = Math.sqrt(dUi * dUi + dUj * dUj);
+		double dLenV = Math.sqrt(dVi * dVi + dVj * dVj);
+		if (dLenU == 0 || dLenV == 0) // prevent division by zero
+			return Double.NaN;
+		double dValue = dDot / (dLenU * dLenV);
+		dValue = round(dValue, 12); // round to help prevent value outside of the domain of arccos
+		if (dValue > 1 || dValue < -1) // prevent domain error for arcos
+			return Double.NaN;
+		
+		return Math.acos(dValue); // return value in radians
+	}
+	
+	
+	/**
+	 * Rounds the given value to the nearest given amount of decimal places.
+	 * @param dVal value to round
+	 * @param nPlaces number of decimal places to round to
+	 * @return the rounded value
+	 */
+	public static double round(double dVal, int nPlaces)
+	{
+		BigDecimal dBd = new BigDecimal(Double.toString(dVal));
+		dBd = dBd.setScale(nPlaces, RoundingMode.HALF_UP);
+		return dBd.doubleValue();
+	}
+	
+	
+	/**
+	 * Gets the squared distance between the given two points
+	 * 
+	 * @param dXi x coordinate of the first point
+	 * @param dYi y coordinate of the first point
+	 * @param dXj x coordinate of the second point
+	 * @param dYj y coordinate of the second point
+	 * @return The squared distance between the points.
+	 */
+	public static double sqDist(double dXi, double dYi, double dXj, double dYj)
+	{
+		double dXd = dXj - dXi;
+		double dYd = dYj - dYi;
+		return dXd * dXd + dYd * dYd;
+	}
+	
+	
+	/**
+	 * Gets the distance between the given two points 
+	 * 
+	 * @param dXi x coordinate of the first point
+	 * @param dYi y coordinate of the first point
+	 * @param dXj x coordinate of the second point
+	 * @param dYj y coordinate of the second point
+	 * @return The distance between the points.
+	 */
+	public static double distance(double dXi, double dYi, double dXj, double dYj)
+	{
+		return Math.sqrt(sqDist(dXi, dYi, dXj, dYj));
+	}
+	
+	
+	/**
+	 * Determines the measure of the angle defined by using the first point as
+	 * the vertex of the angle, the second point as a point on the terminal side
+	 * of the angle and a point one unit to the right on the vertex as a point on
+	 * the initial side of the angle.
+	 * 
+	 * @param dX1 x coordinate of point 1 (vertex)
+	 * @param dY1 y coordinate of point 1 (vertex)
+	 * @param dX2 x coordinate of the point 2 (terminal side of angle)
+	 * @param dY2 y coordinate of the point 2 (terminal side of angle
+
+	 * @return Measure of the angle defined using the first point as the vertex 
+	 * of the angle, the second point as a point on the terminal side of the 
+	 * angle and a point one unit to the right on the vertex as a point on
+	 * the initial side of the angle.
+	 */
+	public static double angle(double dX1, double dY1, double dX2, double dY2)
+	{
+		return angle(dX1 + 1, dY1, dX1, dY1, dX2, dY2);
+	}
+	
+	
+	/**
+	 * Determines the heading of the directed line segment defined by the given
+	 * 2 points.
+	 * 
+	 * @param dX1 x coordinate of the initial point
+	 * @param dY1 y coordinate of the initial point
+	 * @param dX2 x coordinate of the terminal point
+	 * @param dY2 y coordinate of the terminal point
+	 * @return The heading of the directed line segment in radians. Range is {@literal 0 <= rad < 2pi}
+	 */
+	public static double heading(double dX1, double dY1, double dX2, double dY2)
+	{
+		double dRads = angle(dX1, dY1, dX2, dY2);
+		if (dY1 > dY2)
+			dRads = 2 * Math.PI - dRads;
+		
+		return dRads;
+	}
+	
+
+	/**
+	 * Determines the magnitude of the difference between the two headings.
+	 * @param dHdg1 first heading in radians
+	 * @param dHdg2 second heading in radians
+	 * @return the magnitude of the difference between the two headings in radians
+	 */
+	public static double hdgDiff(double dHdg1, double dHdg2)
+	{
+
+		int nQuad1 = GeoUtil.quad(dHdg1);
+		int nQuad2 = GeoUtil.quad(dHdg2);
+		if ((nQuad1 == 0 || nQuad1 == 1) && nQuad2 == 4)
+			dHdg2 -= (2 * Math.PI);
+		if (nQuad1 == 4 && (nQuad2 == 0 || nQuad2 == 1))
+			dHdg2 += (2 * Math.PI);
+		return Math.abs(dHdg2 - dHdg1);
+		
+	}
+	
+	
+	/**
+	 * Determines the quadrant the given angle, in radians, is in.
+	 * @param dAngle angle in radians, {@literal 0 <= angle}
+	 * @return the quadrant the angle is in. If the angle is on the x or y axis
+	 * other values are returned namely:
+	 * 3pi/2 = -3
+	 * pi = -2
+	 * pi/2 = -1
+	 * 0 = 0
+	 */
+	public static int quad(double dAngle)
+	{
+		double d2Pi = Math.PI * 2;
+		double d3Pi2 = Math.PI * 3 / 2;
+		double d1Pi2 = Math.PI / 2;
+		while (dAngle >= d2Pi)
+			dAngle -= d2Pi;
+		if (dAngle > d3Pi2)
+			return 4;
+		else if (dAngle == d3Pi2)
+			return -3;
+		else if (dAngle > Math.PI)
+			return 3;
+		else if (dAngle == Math.PI)
+			return -2;
+		else if (dAngle > d1Pi2)
+			return 2;
+		else if (dAngle == d1Pi2)
+			return - 1;
+		else if (dAngle > 0)
+			return 1;
+		
+		return 0;
+	}
+		
+	
+	/**
+	 * Determines if the spatial extents of the given observation are inside or 
+	 * intersect the given Area
+	 * @param oArea Area to test
+	 * @param oObs Obs to test
+	 * @return true if the Obs is inside or intersects the Area, otherwise false
+	 */
+	public static boolean obsInside(Area oArea, Obs oObs)
+	{
+		if (oObs.m_nLat2 == Integer.MIN_VALUE || oObs.m_nLat2 == Integer.MAX_VALUE) // check for point
+			return oArea.contains(oObs.m_nLon1, oObs.m_nLat1);
+		
+		Path2D.Double oPath = new Path2D.Double();
+		oPath.moveTo(oObs.m_nLon1, oObs.m_nLat1);
+		oPath.lineTo(oObs.m_nLon1, oObs.m_nLat2);
+		oPath.lineTo(oObs.m_nLon2, oObs.m_nLat2);
+		oPath.lineTo(oObs.m_nLon2, oObs.m_nLat1);
+		oPath.closePath();
+		Area oObsArea = new Area(oPath);
+		oObsArea.intersect(oArea);
+		return !oObsArea.isEmpty();
 	}
 }

@@ -3,41 +3,47 @@ package imrcp.geosrv;
 import java.util.Iterator;
 
 /**
- * Enables iterating over a set of points that define a Segment.
+ * Object used to iterate over an int array that represents a roadway segment
+ * (linestring) by line segment.
+ * @author Federal Highway Administration
  */
 public class SegIterator implements Iterator<int[]>
 {
 	/**
-	 * Position index
+	 * Stores the position in the array
 	 */
 	private int m_nPos;
 
+	
 	/**
-	 * End index
+	 * Stores the end position of iteration
 	 */
 	private int m_nEnd;
 
+	
 	/**
-	 * Array containing the coordinates of the segment
+	 * Local reference of the linestring
 	 */
 	private int[] m_nPoints;
 
+	
 	/**
-	 * Reusable 2D line
+	 * Stores the points of the current line segment
 	 */
 	private final int[] m_nLine = new int[4];
 
-
+	
 	/**
-	 * Default private constructor
+	 * Default constructor. Does nothing.
 	 */
 	private SegIterator()
 	{
 	}
 
-
+	
 	/**
-	 * Package private constructor to read private Road points
+	 * Constructs a SegIterator for the given array of points
+	 * @param nPoints array of points that represents a line string
 	 */
 	SegIterator(int[] nPoints)
 	{
@@ -46,12 +52,7 @@ public class SegIterator implements Iterator<int[]>
 	}
 
 
-	/**
-	 * Returns whether or not next() can be called to return the next line
-	 * segment in the Segment
-	 *
-	 * @return true if next() can be called
-	 */
+	
 	@Override
 	public boolean hasNext()
 	{
@@ -59,11 +60,10 @@ public class SegIterator implements Iterator<int[]>
 	}
 
 
+	
 	/**
-	 * Returns the next two points in the Segment
-	 *
-	 * @return array with length 4 representing the next line segment in the
-	 * Segment
+	 * Copies the points of the next line segment into {@link #m_nLine} and
+	 * returns it reference.
 	 */
 	@Override
 	public int[] next()
@@ -74,8 +74,9 @@ public class SegIterator implements Iterator<int[]>
 	}
 
 
+	
 	/**
-	 * not implemented
+	 * NOT IMPLEMENTED
 	 */
 	@Override
 	public void remove()
