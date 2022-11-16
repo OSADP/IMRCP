@@ -3792,11 +3792,12 @@ public final class VectorTile {
   	public static void main(String[] sArgs)
 		throws Exception
 	{
-//		byte[] yBytes = Base64.decode("GikKDHRpbGVfb3V0bGluZRIUGAIiEAkAACL+AwAA/gP9AwAA/QMogAJ4AhpUCg5NUk1TX1JURVBDXzAuMBI9GAMiOQnEG5ACwgEAJTkAAG85AAAlHQAASRsAACYdAAAlVQAACdwCAAAwWAAAJAAmOgAAJgBKGwAdAAAmDyiAIHgCGjEKDk1STVNfUlRFUENfMi41EhoYAyIWCdAVVEIAI1cAACUcAB4AAAlYAABUDyiAIHgCGigKDk1STVNfUlRFUENfNS4wEhEYAyINCcQWoAEaACUcAAAmDyiAIHgCGicKDk1STVNfUlRFUENfNy41EhAYAyIMCfgUChoACToAAAoPKIAgeAIaKQoPTVJNU19SVEVQQ18xMC4wEhEYAyINCYoWgAMaACVWAAAmDyiAIHgCGjgKD01STVNfUlRFUENfMTIuNRIgGAMiHAmmFsoDKgAlHgAAABwAACYPCTklGgAjHgAAJA8ogCB4AhopCg9NUk1TX1JURVBDXzE1LjASERgDIg0JxBakAxoAIxwAACQPKIAgeAI=");
+//		byte[] yBytes = Base64.decode("Gh0KC1RSU0NBVDM3MzYwEgkYASIFCeIziiYogCB4AhokCgtUUlNDQVQzNzM0NRIHIgUJ3juSDBIHIgUJmDeUGCiAIHgC");
 //		vector_tile.VectorTile.Tile oVt = vector_tile.VectorTile.Tile.parseFrom(yBytes);
 ////		vector_tile.VectorTile.Tile oVt = VectorTile.Tile.parseFrom(new java.io.FileInputStream("C:/Users/aaron.cherney/Documents/grbfiles/radar_010_20190111_2300_000.mvt"));
 ////		vector_tile.VectorTile.Tile oVt = VectorTile.Tile.parseFrom(new java.io.FileInputStream("C:/Users/aaron.cherney/Documents/CarmaCloud/radar7-29-48.mvt"));
-		vector_tile.VectorTile.Tile oVt = VectorTile.Tile.parseFrom(new java.io.FileInputStream("C:/Users/aaron.cherney/Documents/25056"));
+//		vector_tile.VectorTile.Tile oVt = VectorTile.Tile.parseFrom(new java.io.FileInputStream("C:/Users/aaron.cherney/Downloads/200452"));
+		vector_tile.VectorTile.Tile oVt = VectorTile.Tile.parseFrom(new java.io.FileInputStream("C:/Users/aaron.cherney/Documents/26962"));
 		System.out.println(oVt.toString());
 ////		try (FileOutputStream oOut = new FileOutputStream("C:/Users/aaron.cherney/Documents/CarmaCloud/new_1521.mvt"))
 ////		try (BufferedWriter oOut = new BufferedWriter(new FileWriter("C:/Users/aaron.cherney/Documents/CarmaCloud/radar.txt")))
