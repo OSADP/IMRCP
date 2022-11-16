@@ -15,46 +15,114 @@
  */
 package imrcp.collect;
 
-import imrcp.system.CsvReader;
+import imrcp.system.dbf.DbfResultSet;
 import imrcp.system.ObsType;
+import java.sql.SQLException;
 
 /**
- *
+ * This class stores metadata for AHPS (Advanced Hydrologic Prediction Services)
+ * flood stations
+ * 
  * @author Federal Highway Administration
  */
-public class FloodStageMetadata implements Comparable<FloodStageMetadata>
+public class FloodStageMetadata
 {
-	public String m_sId;
+	/**
+	 * Stage level for action
+	 */
 	public double m_dAction;
+
+	
+	/**
+	 * Stage level for flood
+	 */
 	public double m_dFlood;
+
+	
+	/**
+	 * Stage level for moderate flood
+	 */
 	public double m_dModerate;
+
+	
+	/**
+	 * Stage level for major flood
+	 */
 	public double m_dMajor;
 	
+	
+	/**
+	 * Default Constructor. Does nothing
+	 */
 	FloodStageMetadata()
 	{
 	
 	}
+
 	
-	FloodStageMetadata(CsvReader oIn)
+	/**
+	 * Parses a record of an AHPS .dbf file to obtain the different flood stage
+	 * values
+	 * @param oDbf DbfResultSet object that has already read the desired line of
+	 * the .dbf file
+	 * @throws SQLException 
+	 */
+	public FloodStageMetadata(DbfResultSet oDbf)
+		throws SQLException
 	{
-		m_sId = oIn.parseString(0);
-		m_dAction = oIn.isNull(1) ? Double.MAX_VALUE : oIn.parseDouble(1);
-		m_dFlood = oIn.isNull(2) ? Double.MAX_VALUE : oIn.parseDouble(2);
-		m_dModerate = oIn.isNull(3) ? Double.MAX_VALUE : oIn.parseDouble(3);
-		m_dMajor = oIn.isNull(4) ? Double.MAX_VALUE : oIn.parseDouble(4);
+		if (oDbf.getString("Action").isEmpty())
+			m_dAction = Double.MAX_VALUE;
+		else
+		{
+			m_dAction = oDbf.getDouble("Action");
+			if (Double.isNaN(m_dAction))
+				m_dAction = Double.MAX_VALUE;
+		}
+		
+		if (oDbf.getString("Flood").isEmpty())
+			m_dFlood = Double.MAX_VALUE;
+		else
+		{
+			m_dFlood = oDbf.getDouble("Flood");
+			if (Double.isNaN(m_dFlood))
+				m_dFlood = Double.MAX_VALUE;
+		}
+		
+		if (oDbf.getString("Moderate").isEmpty())
+			m_dModerate = Double.MAX_VALUE;
+		else
+		{
+			m_dModerate = oDbf.getDouble("Moderate");
+			if (Double.isNaN(m_dModerate))
+				m_dModerate = Double.MAX_VALUE;
+		}
+		
+		if (oDbf.getString("Major").isEmpty())
+			m_dMajor = Double.MAX_VALUE;
+		else
+		{
+			m_dMajor = oDbf.getDouble("Major");
+			if (Double.isNaN(m_dMajor))
+				m_dMajor = Double.MAX_VALUE;
+		}
 	}
 	
+	
+	/**
+	 * Compares a value to the different flood stages and returns the corresponding
+	 * flood stage enumeration
+	 * @param dStageLevel Stage level to compare
+	 * @return Flood stage enumeration from {@link ObsType#lookup(int, java.lang.String)}
+	 */
 	public double getStageValue(double dStageLevel)
 	{
-		if (dStageLevel >= m_dFlood)
+		if (dStageLevel >= m_dFlood || dStageLevel >= m_dModerate || dStageLevel >= m_dMajor) // it is possible some of the flood stages to not be defined in the ahps file so check flood first then the other more severe levels
 			return ObsType.lookup(ObsType.STG, "flood");
 		if (dStageLevel >= m_dAction)
 			return ObsType.lookup(ObsType.STG, "action");
+		if (m_dAction == Double.MAX_VALUE && m_dFlood == Double.MAX_VALUE && m_dModerate == Double.MAX_VALUE && m_dMajor == Double.MAX_VALUE)
+			return ObsType.lookup(ObsType.STG, "not-defined");
+		
 		return ObsType.lookup(ObsType.STG, "no-action");
-	}
-	@Override
-	public int compareTo(FloodStageMetadata o)
-	{
-		return m_sId.compareTo(o.m_sId);
 	}
 }

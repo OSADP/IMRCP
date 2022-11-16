@@ -1,6 +1,6 @@
 package imrcp.collect;
 
-import imrcp.FilenameFormatter;
+import imrcp.system.FilenameFormatter;
 import imrcp.system.Directory;
 import imrcp.system.Scheduling;
 import java.io.BufferedInputStream;
@@ -18,33 +18,135 @@ import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 /**
- * This abstract base class implements common NetCDF patterns for identifying,
- * downloading, reading, and retrieving observation values for remote data sets.
+ * Generic collector used to download gridded weather forecasts from different
+ * National Weather Service products.
+ * @author Federal Highway Administration
  */
 public class RemoteGrid extends Collector
 {	
+	/**
+	 * Stores the file currently being downloaded
+	 */
 	protected String m_sCurrentFile = null;
-	protected int m_nDirs;
-	protected int m_nDirDiff;
-	protected FilenameFormatter m_oUrlExt;
-	protected String m_sStart;
-	protected String m_sEnd;
-	protected String m_sInitSkip;
-	protected String m_sConSkip;
-	protected String m_sPattern;
-	protected boolean m_bUseNow;
-	protected int m_nRecvOffset;
-	protected int m_nDownloadPeriod;
-	protected int m_nDownloadOffset;
-	protected int m_nFileOffsetLimit;
-	protected int m_nDefaultBuffer;
-	protected int m_nTimeout;
-	
 
+	
+	/**
+	 * Number of subdirectories to check. This is used for products that keep
+	 * multiple days of forecasts available
+	 */
+	protected int m_nDirs;
+
+	
+	/**
+	 * Number of milliseconds inbetween two consecutive subdirectories
+	 */
+	protected int m_nDirDiff;
+
+	
+	/**
+	 * Object used to create time dependent paths that extend the base url
+	 */
+	protected FilenameFormatter m_oUrlExt;
+
+	
+	/**
+	 * String to search for in the file index that starts a file name
+	 */
+	protected String m_sStart;
+
+	
+	/**
+	 * String to search for in the file index that ends a file name
+	 */
+	protected String m_sEnd;
+
+	
+	/**
+	 * String to search for to skip all of the header information of the file index
+	 */
+	protected String m_sInitSkip;
+
+	
+	/**
+	 * String to search for after a file has been found in the file index to get 
+	 * in a position to be able to find the next file.
+	 */
+	protected String m_sConSkip;
+
+	
+	/**
+	 * Regex string used to validate if a file name found in the index is the
+	 * correct type to download
+	 */
+	protected String m_sPattern;
+
+	
+	/**
+	 * Set to true if the product has a single file that gets over written for
+	 * each forecast. Set to false if the product has time dependent file names
+	 */
+	protected boolean m_bUseNow;
+
+	
+	/**
+	 * Time in milliseconds that needs to be added to the timestamp parsed from
+	 * source files to get the correct received time
+	 */
+	protected int m_nRecvOffset;
+
+	
+	/**
+	 * How often it is expected to download a forecast in seconds
+	 */
+	protected int m_nDownloadPeriod;
+
+	
+	/**
+	 * The midnight offset in seconds of when a new forecast is expected to be
+	 * available
+	 */
+	protected int m_nDownloadOffset;
+
+	
+	/**
+	 * For products that have multiple files for a forecast interval, this is 
+	 * the lower limit of file indices to keep
+	 */
+	protected int m_nFileOffsetStart;
+
+	
+	/**
+	 * For products that have multiple files for a forecast interval, this is 
+	 * the upper limit of file indices to keep
+	 */
+	protected int m_nFileOffsetLimit;
+
+	
+	/**
+	 * Default size of the buffer than contains the downloaded file
+	 */
+	protected int m_nDefaultBuffer;
+
+	
+	/**
+	 * Timeout in milliseconds used for {@link java.net.URLConnection}
+	 */
+	protected int m_nTimeout;
+
+	
+	/**
+	 * Time in millisecond to wait after an error has happened to start trying 
+	 * to download files again.
+	 */
+	protected int m_nErrorRetry;
+	
+	
 	/**
 	 * Default constructor
 	 */
@@ -52,8 +154,9 @@ public class RemoteGrid extends Collector
 	{
 	}
 	
+	
 	/**
-	 * Resets all of the configurable data for RTMA
+	 *
 	 */
 	@Override
 	public void reset()
@@ -71,15 +174,17 @@ public class RemoteGrid extends Collector
 		m_nRecvOffset = m_oConfig.getInt("recvoffset", 0);
 		m_nDownloadPeriod = m_oConfig.getInt("dlperiod", 3600);
 		m_nDownloadOffset = m_oConfig.getInt("dloffset", 3300);
+		m_nFileOffsetStart = m_oConfig.getInt("offsetstart", 0);
 		m_nFileOffsetLimit = m_oConfig.getInt("offsetlimit", 0);
 		m_nDefaultBuffer = m_oConfig.getInt("defbuf", 83886080);
 		m_nTimeout = m_oConfig.getInt("conntimeout", 90000);
+		m_nErrorRetry = m_oConfig.getInt("error", 300000);
 	}
 	
 	
 	/**
-	 * Regularly called on a schedule to refresh the cached model data with the
-	 * most recently published model file.
+	 * Attempts to download any available file from the configured product that
+	 * is not saved to disk.
 	 */
 	@Override
 	public void execute()
@@ -94,7 +199,7 @@ public class RemoteGrid extends Collector
 		String sExt = m_oDestFile.getExtension();
 		Pattern oRegEx = Pattern.compile(m_sPattern);
 		long[] lTimes = new long[3];
-		for (int i = -1; i < 1; i++) // go back one day because two days of data is available from MRMS
+		for (int i = -2; i < 1; i++) // determine files that have already been downloaded, files are stored by day so go back two since some products have multiple days available
 		{
 			oTime.setTimeInMillis(lNow + (i * 86400000));
 			String sDir = getDestFilename(oTime.getTimeInMillis());
@@ -111,7 +216,7 @@ public class RemoteGrid extends Collector
 		}
 		try
 		{
-			for (int i = 0; i < m_nDirs; i++)
+			for (int i = 0; i < m_nDirs; i++) // for each subdirectory of the NWS product
 			{
 				sIndex.setLength(0);
 				long lTimestamp = lNow - i * m_nDirDiff;
@@ -127,10 +232,10 @@ public class RemoteGrid extends Collector
 						sIndex.append((char)nByte);
 				}
 
-				int nStart = sIndex.indexOf(m_sInitSkip);
-				nStart = sIndex.indexOf(m_sStart, nStart);
+				int nStart = sIndex.indexOf(m_sInitSkip); // skip to where files are listed
+				nStart = sIndex.indexOf(m_sStart, nStart); // find the first file entry
 				int nEnd = sIndex.indexOf(m_sEnd, nStart);
-				while (nStart >= 0 && nEnd >= 0)
+				while (nStart >= 0 && nEnd >= 0) // iterate through the entire file index
 				{
 					String sFile = sIndex.substring(nStart, nEnd + m_sEnd.length());
 					if (oRegEx.matcher(sFile).matches())
@@ -141,14 +246,14 @@ public class RemoteGrid extends Collector
 							oFilesToDownload.add(~nIndex, sFullPath);
 					}
 
-					if (!m_sConSkip.isEmpty())
+					if (!m_sConSkip.isEmpty()) // skip unnecessary characters
 					{
 						nStart = sIndex.indexOf(m_sConSkip, nEnd + m_sEnd.length());
 						if (nStart < 0)
 							continue;
 					}
 					
-					nStart = sIndex.indexOf(m_sStart, nEnd);
+					nStart = sIndex.indexOf(m_sStart, nEnd); // find the next file entry
 					nEnd = sIndex.indexOf(m_sEnd, nStart);
 				}
 				
@@ -159,6 +264,7 @@ public class RemoteGrid extends Collector
 				String sCurrentDestFile = null;
 				while (nDownloadIndex-- > 0)
 				{
+					// determine the destination name for source files
 					sCurrentFile = oFilesToDownload.get(nDownloadIndex);
 					int nOffset = 0;
 					if (m_bUseNow)
@@ -166,12 +272,12 @@ public class RemoteGrid extends Collector
 					else
 						nOffset = m_oSrcFile.parseRecv(sCurrentFile, lTimes);
 					
-					if (nOffset > m_nFileOffsetLimit)
+					if (nOffset > m_nFileOffsetLimit || nOffset < m_nFileOffsetStart)
 						continue;
 					sCurrentDestFile = getDestFilename(lTimes[0] + m_nRecvOffset, nOffset);
 					int nDiskIndex = oFilesOnDisk.size();
 					boolean bDownload = true;
-					while (nDiskIndex-- > 0)
+					while (nDiskIndex-- > 0) // remove files that are already on disk from list
 					{
 						if (sCurrentDestFile.contains(oFilesOnDisk.get(nDiskIndex)))
 						{
@@ -196,30 +302,42 @@ public class RemoteGrid extends Collector
 							while ((nByte = oInStream.read()) >= 0)
 								oBaos.write(nByte);
 							
-							try (BufferedOutputStream oFileOut = new BufferedOutputStream(new FileOutputStream(sCurrentDestFile)))
+							if (oBaos.size() > 0)
 							{
-								oBaos.writeTo(oFileOut);
+								try (BufferedOutputStream oFileOut = new BufferedOutputStream(new FileOutputStream(sCurrentDestFile)))
+								{
+									oBaos.writeTo(oFileOut);
+								}
+								m_sCurrentFile = null;
+								m_oLogger.info("Download finished: " + sCurrentDestFile);
+								if (!oRecvTimes.containsKey(lTimes[0]))
+									oRecvTimes.put(lTimes[0], new ArrayList());
+								oRecvTimes.get(lTimes[0]).add(sCurrentDestFile);
+								oFilesOnDisk.add(sCurrentDestFile);
 							}
-							m_sCurrentFile = null;
-							m_oLogger.info("Download finished: " + sCurrentDestFile);
-							if (!oRecvTimes.containsKey(lTimes[0]))
-								oRecvTimes.put(lTimes[0], new ArrayList());
-							oRecvTimes.get(lTimes[0]).add(sCurrentDestFile);
-							oFilesOnDisk.add(sCurrentDestFile);
+							else
+							{
+								m_sCurrentFile = null;
+								m_oLogger.info("Download failed - 0 byte file: " + sCurrentDestFile);
+							}
 						}
 						catch (Exception oException)
 						{
+							m_sCurrentFile = null;
 							if (oException instanceof SocketTimeoutException) // connection timed out
 							{
 								File oPartial = new File(sCurrentDestFile);
 								if (oPartial.exists())
 									oPartial.delete(); // delete the incomplete file
 							}
-							if (oException instanceof FileNotFoundException) // this error happens a lot so do not fill up log file with unnecessary information
+							else if (oException instanceof FileNotFoundException) // this error happens a lot so do not fill up log file with unnecessary information
 								m_oLogger.error(oException.fillInStackTrace());
 							else
+							{
 								m_oLogger.error(oException, oException);
-							m_sCurrentFile = null;
+								setError();
+								return;
+							}
 						}
 						
 					}
@@ -240,18 +358,30 @@ public class RemoteGrid extends Collector
 		}
 	}
 
-
+	
 	/**
-	 * Initializes the data for the configured amount of time.
+	 * Sets a schedule to execute once in 10 seconds so the block is initialed 
+	 * and started before trying to download files because that can take a long
+	 * time and we don't want the stores to wait on a bulk download to start, and
+	 * a schedule to execute on a fixed interval.
+	 * @return
+	 * @throws Exception
 	 */
 	@Override
 	public boolean start() throws Exception
 	{
-		execute();
+		Scheduling.getInstance().scheduleOnce(this, 10000);
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 	
+	
+	/**
+	 * If a file is currently being downloaded and written to disk, delete the 
+	 * partial file.
+	 * @return true if no exceptions are thrown
+	 * @throws Exception
+	 */
 	@Override
 	public boolean stop() throws Exception
 	{
@@ -261,5 +391,27 @@ public class RemoteGrid extends Collector
 		}
 		
 		return true;
+	}
+	
+	
+	/**
+	 * Set the {@link imrcp.system.BaseBlock#m_nStatus} to {@link imrcp.system.ImrcpBlock#ERROR}
+	 * and then create a timer to schedule the block to call {@link RemoteGrid#setIdle()}
+	 * after the configured time.
+	 */
+	@Override
+	protected void setError()
+	{
+		super.setError();
+		new Timer().schedule(new TimerTask() {@Override public void run(){setIdle();}}, m_nErrorRetry);
+	}
+	
+	
+	/**
+	 * Set the {@link imrcp.system.BaseBlock#m_nStatus} to {@link imrcp.system.ImrcpBlock#IDLE}
+	 */
+	private void setIdle()
+	{
+		checkAndSetStatus(IDLE, ERROR);
 	}
 }
