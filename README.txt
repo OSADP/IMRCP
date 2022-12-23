@@ -1,6 +1,6 @@
 Open Source Overview
 ============================
-The Integrated Modeling for Road Condition Prediction (IMRCP) System version 2.0 integrates weather and traffic data sources and predictive methods to effectively predict road and travel conditions in support of tactical and strategic decisions by travelers, transportation operators, and maintenance providers. The system collects and integrates environmental observations and transportation operations data; collects forecast environmental and operations data when available; initiates road weather and traffic forecasts based on collected data; generates travel and operational alerts from the collected real-time and forecast data; and provides the road condition data, forecasts and alerts to users and other systems.
+The Integrated Modeling for Road Condition Prediction (IMRCP) System integrates weather and traffic data sources and predictive methods to effectively predict road and travel conditions in support of tactical and strategic decisions by travelers, transportation operators, and maintenance providers. The system collects and integrates environmental observations and transportation operations data; collects forecast environmental and operations data when available; initiates road weather and traffic forecasts based on collected data; generates travel and operational alerts from the collected real-time and forecast data; and provides the road condition data, forecasts and alerts to users and other systems.
 
 License information
 -------------------
