@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 
 System Requirements
 -------------------------
-Minimum IMRCP hosting hardware requirements are one x64 server with 1 TB of memory, 64 64-bit processors, and 100 TB network attached storage. The system runs on a Debian 64-bit Linux operating system using a 1 Gb Internet connection. Software depenencies include these minimum versions: Java Runtime Environment 1.8, R version 3.6 and associated R libraries forecast, neuralnet, markovchain, and tictoc; plus RServe 1.8.
+Minimum IMRCP hosting hardware requirements are one x64 server with 1 TB of memory, 64 64-bit processors, and 100 TB network attached storage. The system runs on a Debian 64-bit Linux operating system using a 1 Gb Internet connection. Software depenencies include these minimum versions: Java Runtime Environment 1.8, XZ 1.9, liblzma 5.4, R version 3.6 and associated R libraries forecast, neuralnet, markovchain, and tictoc; plus RServe 1.8.
 
 Documentation
 -------------
