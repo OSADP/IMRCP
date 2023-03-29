@@ -1,4 +1,0 @@
-Key contributors to the development of the Integrated Modeling for Road Condition Prediction (IMRCP) System software 1.0 include:
-Aaron Cherney, Bryan Krueger, Jessica Silliman, and Kyle Garrett of Synesis Partners;
-Fang Zhou, Jiaqi Ma, and Michelle Neuner of Leidos; and
-Haleh Ale Ahmad, Hani Mahmassani, Marija Ostojic, and Zihan Hong of Northwestern University Transportation Center
