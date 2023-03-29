@@ -1,0 +1,531 @@
+{
+	"Road Network Model":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/rnm/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"RNM0", "metadata":{"imrcp-range":"Roadway", "obstype":"RMN"}, "source-layer":"RNM0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#000"}},
+			{"id":"RNM1", "metadata":{"imrcp-range":"Bridge Deck", "obstype":"RMN"}, "source-layer":"RNM1", "paint":{"line-color":"#666"}}
+		]
+	},
+	"Pavement State":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/stpvt/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"STPVT3", "metadata":{"imrcp-range":"Dry","obstype":"STPVT"}, "source-layer":"STPVT3", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#960"}},
+			{"id":"STPVT5", "metadata":{"imrcp-range":"Wet"}, "source-layer":"STPVT5", "paint":{"line-color":"#00af20"}},
+			{"id":"STPVT30", "metadata":{"imrcp-range":"Flooded"}, "source-layer":"STPVT30", "paint":{"line-color":"#39f"}},
+			{"id":"STPVT12", "metadata":{"imrcp-range":"Dew"}, "source-layer":"STPVT12", "paint":{"line-color":"#99ffa1"}},
+			{"id":"STPVT13", "metadata":{"imrcp-range":"Frost"}, "source-layer":"STPVT13", "paint":{"line-color":"#fdafff"}},
+			{"id":"STPVT20", "metadata":{"imrcp-range":"Ice/Snow"}, "source-layer":"STPVT20", "paint":{"line-color":"#00faff"}},
+			{"id":"STPVT31", "metadata":{"imrcp-range":"Plowed"}, "source-layer":"STPVT31", "paint":{"line-color":"#a5cacb"}}
+		]
+	},
+	"Pavement Temperature (F)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/tpvt/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"TPVT-Infinity", "metadata":{"imrcp-range":"Below 0","obstype":"TPVT"}, "source-layer":"TPVT-Infinity", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#c51b8a"}},
+			{"id":"TPVT0", "metadata":{"imrcp-range":"0 - 20"}, "source-layer":"TPVT0", "paint":{"line-color":"#5e4fa2"}},
+			{"id":"TPVT20", "metadata":{"imrcp-range":"20 - 30"}, "source-layer":"TPVT20", "paint":{"line-color":"#313695"}},
+			{"id":"TPVT30", "metadata":{"imrcp-range":"30 - 34"}, "source-layer":"TPVT30", "paint":{"line-color":"#3288bd"}},
+			{"id":"TPVT34", "metadata":{"imrcp-range":"34 - 45"}, "source-layer":"TPVT34", "paint":{"line-color":"#238b45"}},
+			{"id":"TPVT45", "metadata":{"imrcp-range":"45 - 56"}, "source-layer":"TPVT45", "paint":{"line-color":"#cccc00"}},
+			{"id":"TPVT56", "metadata":{"imrcp-range":"56 - 68"}, "source-layer":"TPVT56", "paint":{"line-color":"#ff751a"}},
+			{"id":"TPVT68", "metadata":{"imrcp-range":"68 - 86"}, "source-layer":"TPVT68", "paint":{"line-color":"#f46d43"}},
+			{"id":"TPVT86", "metadata":{"imrcp-range":"86 - 104"}, "source-layer":"TPVT86", "paint":{"line-color":"#d53e4f"}},
+			{"id":"TPVT104", "metadata":{"imrcp-range":"Above 104"}, "source-layer":"TPVT104", "paint":{"line-color":"#9e0142"}}
+		]
+	},
+	"Pavement Snow Depth (in)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/dphsn/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"DPHSN0", "metadata":{"imrcp-range":"0.01 - 1","obstype":"DPHSN"}, "source-layer":"DPHSN0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#80ffff"}},
+			{"id":"DPHSN1", "metadata":{"imrcp-range":"1 - 3"}, "source-layer":"DPHSN1", "paint":{"line-color":"#1a1aff"}},
+			{"id":"DPHSN3", "metadata":{"imrcp-range":"Above 3"}, "source-layer":"DPHSN3", "paint":{"line-color":"#006"}}
+		]
+	},
+	"Pavement Flood Depth (in)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/dphlnk/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"DPHLNK0", "metadata":{"imrcp-range":"0 - 12","obstype":"DPHLNK"}, "source-layer":"DPHLNK0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#1a1aff"}},
+			{"id":"DPHLNK12", "metadata":{"imrcp-range":"Above 12"}, "source-layer":"DPHLNK1", "paint":{"line-color":"#006"}}
+		]
+	},
+	"Traffic":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/trflnk/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"TRFLNK0", "metadata":{"imrcp-range":"Slow","obstype":"TRFLNK"}, "source-layer":"TRFLNK0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#8c1515"}},
+			{"id":"TRFLNK20", "metadata":{"imrcp-range":""}, "source-layer":"TRFLNK20", "paint":{"line-color":"#f00"}},
+			{"id":"TRFLNK40", "metadata":{"imrcp-range":""}, "source-layer":"TRFLNK40", "paint":{"line-color":"#ff751a"}},
+			{"id":"TRFLNK60", "metadata":{"imrcp-range":""}, "source-layer":"TRFLNK60", "paint":{"line-color":"#ffc700"}},
+			{"id":"TRFLNK80", "metadata":{"imrcp-range":"Fast"}, "source-layer":"TRFLNK80", "paint":{"line-color":"#00af20"}}
+		]
+	},
+	"Traffic Speed (mph)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/spdlnk/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"SPDLNK0", "metadata":{"imrcp-range":"0 - 15","obstype":"SPDLNK"}, "source-layer":"SPDLNK0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#8c1515"}},
+			{"id":"SPDLNK15", "metadata":{"imrcp-range":"15 - 30"}, "source-layer":"SPDLNK15", "paint":{"line-color":"#f00"}},
+			{"id":"SPDLNK30", "metadata":{"imrcp-range":"30 - 45"}, "source-layer":"SPDLNK30", "paint":{"line-color":"#ff751a"}},
+			{"id":"SPDLNK45", "metadata":{"imrcp-range":"45 - 60"}, "source-layer":"SPDLNK45", "paint":{"line-color":"#ffc700"}},
+			{"id":"SPDLNK60", "metadata":{"imrcp-range":"Above 60"}, "source-layer":"SPDLNK60", "paint":{"line-color":"#00af20"}}
+		]
+	},
+	"#Traffic Density (%)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/tdnlnk/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"TDNLNK0", "metadata":{"imrcp-range":"Below 25","obstype":"TDNLNK"}, "source-layer":"TDNLNK0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#00af20"}},
+			{"id":"TDNLNK25", "metadata":{"imrcp-range":"25 - 50"}, "source-layer":"TDNLNK25", "paint":{"line-color":"#ffc700"}},
+			{"id":"TDNLNK50", "metadata":{"imrcp-range":"50 - 75"}, "source-layer":"TDNLNK50", "paint":{"line-color":"#ff751a"}},
+			{"id":"TDNLNK75", "metadata":{"imrcp-range":"Above 75"}, "source-layer":"TDNLNK75", "paint":{"line-color":"#f00"}}
+		]
+	},
+	"#Traffic Flow (veh/min)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/vollnk/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"VOLLNK0", "metadata":{"imrcp-range":"Below 40","obstype":"VOLLNK"}, "source-layer":"VOLLNK0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#00af20"}},
+			{"id":"VOLLNK40", "metadata":{"imrcp-range":"40 - 80"}, "source-layer":"VOLLNK40", "paint":{"line-color":"#ffc700"}},
+			{"id":"VOLLNK80", "metadata":{"imrcp-range":"80 - 120"}, "source-layer":"VOLLNK80", "paint":{"line-color":"#ff751a"}},
+			{"id":"VOLLNK120", "metadata":{"imrcp-range":"Above 120"}, "source-layer":"VOLLNK120", "paint":{"line-color":"#f00"}}
+		]
+	},
+	"#Routes (min)":
+	{
+		"group":"Road",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/timert/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"line",
+		"layers":
+		[
+			{"id":"TIMERT0", "metadata":{"imrcp-range":"Less than 15","obstype":"TIMERT"}, "source-layer":"TIMERT0", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#00af20"}},
+			{"id":"TIMERT15", "metadata":{"imrcp-range":"15 - 30"}, "source-layer":"TIMERT15", "paint":{"line-color":"#ffc700"}},
+			{"id":"TIMERT30", "metadata":{"imrcp-range":"30 - 45"}, "source-layer":"TIMERT30", "paint":{"line-color":"#ff751a"}},
+			{"id":"TIMERT45", "metadata":{"imrcp-range":"45 - 60"}, "source-layer":"TIMERT45", "paint":{"line-color":"#f00"}},
+			{"id":"TIMERT60", "metadata":{"imrcp-range":"More than 60"}, "source-layer":"TIMERT60", "paint":{"line-color":"#8c1515"}}
+		]
+	},
+        "#Tropical Storm Track":
+        {
+                "group":"Road",
+                "source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/trstrk/{z}/{x}/{y}"], "maxzoom":4, "minzoom":6},
+                "type":"line",
+                "layers":
+                [
+                        {"id":"TRSTRK37345", "metadata":{"imrcp-range":"Subtropical Depression","obstype":"TRSTRK"}, "source-layer":"TRSTRK37345", "layout":{"line-cap":"round", "line-join":"round"}, "paint":{"line-color":"#009cf7"}},
+                        {"id":"TRSTRK37360", "metadata":{"imrcp-range":"Subtropical Storm"}, "source-layer":"TRSTRK37360", "paint":{"line-color":"#00ff00"}},
+                        {"id":"TRSTRK1057", "metadata":{"imrcp-range":"Tropical Depression"}, "source-layer":"TRSTRK1057", "paint":{"line-color":"#008c00"}},
+                        {"id":"TRSTRK1072", "metadata":{"imrcp-range":"Tropical Storm"}, "source-layer":"TRSTRK1072", "paint":{"line-color":"#ffff00"}},
+                        {"id":"TRSTRK642", "metadata":{"imrcp-range":"Hurricane"}, "source-layer":"TRSTRK642", "paint":{"line-color":"#d60000"}},
+                        {"id":"TRSTRK809", "metadata":{"imrcp-range":"Major Hurricane"}, "source-layer":"TRSTRK809", "paint":{"line-color":"#9c52c6"}}
+                ]
+        },
+	"Air Temp (F)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/tair/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"TAIR-Infinity", "metadata":{"imrcp-range":"Below 0","obstype":"TAIR"}, "source-layer":"TAIR-Infinity", "paint":{"fill-color":"#c51b8a", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"TAIR0", "metadata":{"imrcp-range":"0 - 20"}, "source-layer":"TAIR0", "paint":{"fill-color":"#5e4fa2"}},
+			{"id":"TAIR20", "metadata":{"imrcp-range":"20 - 30"}, "source-layer":"TAIR20", "paint":{"fill-color":"#313695"}},
+			{"id":"TAIR30", "metadata":{"imrcp-range":"30 - 34"}, "source-layer":"TAIR30", "paint":{"fill-color":"#3288bd"}},
+			{"id":"TAIR34", "metadata":{"imrcp-range":"34 - 45"}, "source-layer":"TAIR34", "paint":{"fill-color":"#238b45"}},
+			{"id":"TAIR45", "metadata":{"imrcp-range":"45 - 56"}, "source-layer":"TAIR45", "paint":{"fill-color":"#cccc00"}},
+			{"id":"TAIR56", "metadata":{"imrcp-range":"56 - 68"}, "source-layer":"TAIR56", "paint":{"fill-color":"#ff751a"}},
+			{"id":"TAIR68", "metadata":{"imrcp-range":"68 - 86"}, "source-layer":"TAIR68", "paint":{"fill-color":"#f46d43"}},
+			{"id":"TAIR86", "metadata":{"imrcp-range":"86 - 104"}, "source-layer":"TAIR86", "paint":{"fill-color":"#d53e4f"}},
+			{"id":"TAIR104", "metadata":{"imrcp-range":"Above 104"}, "source-layer":"TAIR104", "paint":{"fill-color":"#9e0142"}}
+		]
+	},
+	"Surface Visibility (mi)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/vis/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"VIS0", "metadata":{"imrcp-range":"Below 0.2","obstype":"VIS"}, "source-layer":"VIS0", "paint":{"fill-color":"#000", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"VIS2", "metadata":{"imrcp-range":"0.2 - 0.6"}, "source-layer":"VIS2", "paint":{"fill-color":"#9b9b9b"}},
+			{"id":"VIS6", "metadata":{"imrcp-range":"Above 0.6"}, "source-layer":"VIS6", "paint":{"fill-color":"#fff"}}
+		]
+	},
+	"Wind Gust Speed (mph)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/gstwnd/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"GSTWND0", "metadata":{"imrcp-range":"Below 5","obstype":"GSTWND"}, "source-layer":"GSTWND0", "paint":{"fill-color":"#edf8fb", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"GSTWND5", "metadata":{"imrcp-range":"5 - 15"}, "source-layer":"GSTWND5", "paint":{"fill-color":"#ccece6"}},
+			{"id":"GSTWND15", "metadata":{"imrcp-range":"15 - 25"}, "source-layer":"GSTWND15", "paint":{"fill-color":"#99d8c9"}},
+			{"id":"GSTWND25", "metadata":{"imrcp-range":"25 - 39"}, "source-layer":"GSTWND25", "paint":{"fill-color":"#66c2a4"}},
+			{"id":"GSTWND39", "metadata":{"imrcp-range":"39 - 57"}, "source-layer":"GSTWND39", "paint":{"fill-color":"#41ae76"}},
+			{"id":"GSTWND57", "metadata":{"imrcp-range":"57 - 74"}, "source-layer":"GSTWND57", "paint":{"fill-color":"#238b45"}},
+			{"id":"GSTWND74", "metadata":{"imrcp-range":"74 - 85"}, "source-layer":"GSTWND74", "paint":{"fill-color":"#005824"}},
+			{"id":"GSTWND85", "metadata":{"imrcp-range":"85 - 96"}, "source-layer":"GSTWND85", "paint":{"fill-color":"#91cf60"}},
+			{"id":"GSTWND96", "metadata":{"imrcp-range":"96 - 111"}, "source-layer":"GSTWND96", "paint":{"fill-color":"#d9ef8b"}},
+			{"id":"GSTWND111", "metadata":{"imrcp-range":"111 - 130"}, "source-layer":"GSTWND111", "paint":{"fill-color":"#ffffbf"}},
+			{"id":"GSTWND130", "metadata":{"imrcp-range":"130 - 144"}, "source-layer":"GSTWND130", "paint":{"fill-color":"#fee08b"}},
+			{"id":"GSTWND144", "metadata":{"imrcp-range":"144 - 157"}, "source-layer":"GSTWND144", "paint":{"fill-color":"#fc8d59"}},
+			{"id":"GSTWND157", "metadata":{"imrcp-range":"Above 157"}, "source-layer":"GSTWND157", "paint":{"fill-color":"#d73027"}}
+		]
+	},
+	"Wind Speed (mph)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/spdwnd/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"SPDWND0", "metadata":{"imrcp-range":"Below 5","obstype":"SPDWND"}, "source-layer":"SPDWND0", "paint":{"fill-color":"#edf8fb", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"SPDWND5", "metadata":{"imrcp-range":"5 - 15"}, "source-layer":"SPDWND5", "paint":{"fill-color":"#ccece6"}},
+			{"id":"SPDWND15", "metadata":{"imrcp-range":"15 - 25"}, "source-layer":"SPDWND15", "paint":{"fill-color":"#99d8c9"}},
+			{"id":"SPDWND25", "metadata":{"imrcp-range":"25 - 39"}, "source-layer":"SPDWND25", "paint":{"fill-color":"#66c2a4"}},
+			{"id":"SPDWND39", "metadata":{"imrcp-range":"39 - 57"}, "source-layer":"SPDWND39", "paint":{"fill-color":"#41ae76"}},
+			{"id":"SPDWND57", "metadata":{"imrcp-range":"57 - 74"}, "source-layer":"SPDWND57", "paint":{"fill-color":"#238b45"}},
+			{"id":"SPDWND74", "metadata":{"imrcp-range":"74 - 85"}, "source-layer":"SPDWND74", "paint":{"fill-color":"#005824"}},
+			{"id":"SPDWND85", "metadata":{"imrcp-range":"85 - 96"}, "source-layer":"SPDWND85", "paint":{"fill-color":"#91cf60"}},
+			{"id":"SPDWND96", "metadata":{"imrcp-range":"96 - 111"}, "source-layer":"SPDWND96", "paint":{"fill-color":"#d9ef8b"}},
+			{"id":"SPDWND111", "metadata":{"imrcp-range":"111 - 130"}, "source-layer":"SPDWND111", "paint":{"fill-color":"#ffffbf"}},
+			{"id":"SPDWND130", "metadata":{"imrcp-range":"130 - 144"}, "source-layer":"SPDWND130", "paint":{"fill-color":"#fee08b"}},
+			{"id":"SPDWND144", "metadata":{"imrcp-range":"144 - 157"}, "source-layer":"SPDWND144", "paint":{"fill-color":"#fc8d59"}},
+			{"id":"SPDWND157", "metadata":{"imrcp-range":"Above 157"}, "source-layer":"SPDWND157", "paint":{"fill-color":"#d73027"}}
+		]
+	},
+	"Radar (dBZ)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/rdr0/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"RDR05", "metadata":{"imrcp-range":"5 - 10","obstype":"RDR0"}, "source-layer":"RDR05", "paint":{"fill-color":"#00efe7", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"RDR010", "metadata":{"imrcp-range":"10 - 15"}, "source-layer":"RDR010", "paint":{"fill-color":"#009cf7"}},
+			{"id":"RDR015", "metadata":{"imrcp-range":"15 - 20"}, "source-layer":"RDR015", "paint":{"fill-color":"#0000f7"}},
+			{"id":"RDR020", "metadata":{"imrcp-range":"20 - 25"}, "source-layer":"RDR020", "paint":{"fill-color":"#00ff00"}},
+			{"id":"RDR025", "metadata":{"imrcp-range":"25 - 30"}, "source-layer":"RDR025", "paint":{"fill-color":"#00c600"}},
+			{"id":"RDR030", "metadata":{"imrcp-range":"30 - 35"}, "source-layer":"RDR030", "paint":{"fill-color":"#008c00"}},
+			{"id":"RDR035", "metadata":{"imrcp-range":"35 - 40"}, "source-layer":"RDR035", "paint":{"fill-color":"#ffff00"}},
+			{"id":"RDR040", "metadata":{"imrcp-range":"40 - 45"}, "source-layer":"RDR040", "paint":{"fill-color":"#e7bd00"}},
+			{"id":"RDR045", "metadata":{"imrcp-range":"45 - 50"}, "source-layer":"RDR045", "paint":{"fill-color":"#fe9300"}},
+			{"id":"RDR050", "metadata":{"imrcp-range":"50 - 55"}, "source-layer":"RDR050", "paint":{"fill-color":"#ff0000"}},
+			{"id":"RDR055", "metadata":{"imrcp-range":"55 - 60"}, "source-layer":"RDR055", "paint":{"fill-color":"#d60000"}},
+			{"id":"RDR060", "metadata":{"imrcp-range":"60 - 65"}, "source-layer":"RDR060", "paint":{"fill-color":"#bd0000"}},
+			{"id":"RDR065", "metadata":{"imrcp-range":"65 - 70"}, "source-layer":"RDR065", "paint":{"fill-color":"#fe00fe"}},
+			{"id":"RDR070", "metadata":{"imrcp-range":"70 - 75"}, "source-layer":"RDR070", "paint":{"fill-color":"#9c52c6"}},
+			{"id":"RDR075", "metadata":{"imrcp-range":"Above 75"}, "source-layer":"RDR075", "paint":{"fill-color":"#c652bf"}}
+		]
+	},
+	"Precip Rate (in/hr)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/rtepc/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"RTEPC1", "metadata":{"imrcp-range":"0.01 - 0.25","obstype":"RTEPC"}, "source-layer":"RTEPC1", "paint":{"fill-color":"#00efe7", "fill-antialias":true, "fill-opacity":1}},
+			{"id":"RTEPC25", "metadata":{"imrcp-range":"0.25 - 0.5"}, "source-layer":"RTEPC25", "paint":{"fill-color":"#009cf7"}},
+			{"id":"RTEPC50", "metadata":{"imrcp-range":"0.5 - 0.75"}, "source-layer":"RTEPC50", "paint":{"fill-color":"#0000f7"}},
+			{"id":"RTEPC75", "metadata":{"imrcp-range":"0.75 - 1"}, "source-layer":"RTEPC75", "paint":{"fill-color":"#00ff00"}},
+			{"id":"RTEPC100", "metadata":{"imrcp-range":"1 - 1.25"}, "source-layer":"RTEPC100", "paint":{"fill-color":"#00c600"}},
+			{"id":"RTEPC125", "metadata":{"imrcp-range":"1.25 - 1.5"}, "source-layer":"RTEPC125", "paint":{"fill-color":"#008c00"}},
+			{"id":"RTEPC150", "metadata":{"imrcp-range":"1.5 - 1.75"}, "source-layer":"RTEPC150", "paint":{"fill-color":"#ffff00"}},
+			{"id":"RTEPC175", "metadata":{"imrcp-range":"1.75 - 2"}, "source-layer":"RTEPC175", "paint":{"fill-color":"#e7bd00"}},
+			{"id":"RTEPC200", "metadata":{"imrcp-range":"2 - 2.5"}, "source-layer":"RTEPC200", "paint":{"fill-color":"#fe9300"}},
+			{"id":"RTEPC250", "metadata":{"imrcp-range":"Above 2.5"}, "source-layer":"RTEPC250", "paint":{"fill-color":"#ff0000"}}
+		]
+	},
+	"Precip Rate and Type":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/pccat/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"PCCAT1", "metadata":{"imrcp-range":"Rain - Light","obstype":"PCCAT"}, "source-layer":"PCCAT1", "paint":{"fill-color":"#80ff80", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"PCCAT2", "metadata":{"imrcp-range":"Rain - Moderate"}, "source-layer":"PCCAT2", "paint":{"fill-color":"#00af20"}},
+			{"id":"PCCAT3", "metadata":{"imrcp-range":"Rain - Heavy"}, "source-layer":"PCCAT3", "paint":{"fill-color":"#00561e"}},
+			{"id":"PCCAT4", "metadata":{"imrcp-range":"Frz Rain - Light"}, "source-layer":"PCCAT4", "paint":{"fill-color":"#d9b3ff"}},
+			{"id":"PCCAT5", "metadata":{"imrcp-range":"Frz Rain - Moderate"}, "source-layer":"PCCAT5", "paint":{"fill-color":"#8b4baf"}},
+			{"id":"PCCAT6", "metadata":{"imrcp-range":"Frz Rain - Heavy"}, "source-layer":"PCCAT6", "paint":{"fill-color":"#4a0070"}},
+			{"id":"PCCAT7", "metadata":{"imrcp-range":"Snow - Light"}, "source-layer":"PCCAT7", "paint":{"fill-color":"#80ffff"}},
+			{"id":"PCCAT8", "metadata":{"imrcp-range":"Snow - Moderate"}, "source-layer":"PCCAT8", "paint":{"fill-color":"#1a1aff"}},
+			{"id":"PCCAT9", "metadata":{"imrcp-range":"Snow - Heavy"}, "source-layer":"PCCAT9", "paint":{"fill-color":"#006"}},
+			{"id":"PCCAT10", "metadata":{"imrcp-range":"Ice Pellets - Light"}, "source-layer":"PCCAT10", "paint":{"fill-color":"#ffc2f1"}},
+			{"id":"PCCAT11", "metadata":{"imrcp-range":"Ice Pellets - Moderate"}, "source-layer":"PCCAT11", "paint":{"fill-color":"#ff4bf6"}},
+			{"id":"PCCAT12", "metadata":{"imrcp-range":"Ice Pellets - Heavy"}, "source-layer":"PCCAT12", "paint":{"fill-color":"#830d56"}}
+		]
+	},
+	"Surge and Tide (ft)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/sscst/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"SSCST-Infinity", "metadata":{"imrcp-range":"Below 0.3","obstype":"SSCST"}, "source-layer":"SSCST-Infinity", "paint":{"fill-color":"#006", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"SSCST3", "metadata":{"imrcp-range":"0.3 - 0.6"}, "source-layer":"SSCST914", "paint":{"fill-color":"#009"}},
+			{"id":"SSCST6", "metadata":{"imrcp-range":"0.6 - 0.9"}, "source-layer":"SSCST1829", "paint":{"fill-color":"#00c"}},
+			{"id":"SSCST9", "metadata":{"imrcp-range":"0.9 - 1.2"}, "source-layer":"SSCST2743", "paint":{"fill-color":"#00f"}},
+			{"id":"SSCST12", "metadata":{"imrcp-range":"1.2 - 1.5"}, "source-layer":"SSCST3658", "paint":{"fill-color":"#06f"}},
+			{"id":"SSCST15", "metadata":{"imrcp-range":"1.5 - 1.8"}, "source-layer":"SSCST4572", "paint":{"fill-color":"#09f"}},
+			{"id":"SSCST18", "metadata":{"imrcp-range":"1.8 - 2.1"}, "source-layer":"SSCST5486", "paint":{"fill-color":"#0cf"}},
+			{"id":"SSCST21", "metadata":{"imrcp-range":"2.1 - 2.4"}, "source-layer":"SSCST6401", "paint":{"fill-color":"#0ff"}},
+			{"id":"SSCST24", "metadata":{"imrcp-range":"2.4 - 2.7"}, "source-layer":"SSCST7315", "paint":{"fill-color":"#60f"}},
+			{"id":"SSCST27", "metadata":{"imrcp-range":"2.7 - 3.0"}, "source-layer":"SSCST8230", "paint":{"fill-color":"#90f"}},
+			{"id":"SSCST30", "metadata":{"imrcp-range":"3.0 - 3.3"}, "source-layer":"SSCST9144", "paint":{"fill-color":"#c0f"}},
+			{"id":"SSCST33", "metadata":{"imrcp-range":"3.3 - 3.6"}, "source-layer":"SSCST10058", "paint":{"fill-color":"#f0f"}},
+			{"id":"SSCST36", "metadata":{"imrcp-range":"3.6 - 3.9"}, "source-layer":"SSCST10973", "paint":{"fill-color":"#f90"}},
+			{"id":"SSCST39", "metadata":{"imrcp-range":"Above 3.9"}, "source-layer":"SSCST11887", "paint":{"fill-color":"#f00"}}
+		]
+	},
+	"#Max Inundation (ft)":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/dphliq/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"DPHLIQ0", "metadata":{"imrcp-range":"Below 0.3","obstype":"DPHLIQ"}, "source-layer":"DPHLIQ0", "paint":{"fill-color":"#006", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"DPHLIQ4", "metadata":{"imrcp-range":"0.3 - 0.6"}, "source-layer":"DPHLIQ4", "paint":{"fill-color":"#009"}},
+			{"id":"DPHLIQ7", "metadata":{"imrcp-range":"0.6 - 0.9"}, "source-layer":"DPHLIQ7", "paint":{"fill-color":"#00c"}},
+			{"id":"DPHLIQ11", "metadata":{"imrcp-range":"0.9 - 1.2"}, "source-layer":"DPHLIQ11", "paint":{"fill-color":"#00f"}},
+			{"id":"DPHLIQ14", "metadata":{"imrcp-range":"1.2 - 1.5"}, "source-layer":"DPHLIQ14", "paint":{"fill-color":"#06f"}},
+			{"id":"DPHLIQ18", "metadata":{"imrcp-range":"1.5 - 1.8"}, "source-layer":"DPHLIQ18", "paint":{"fill-color":"#09f"}},
+			{"id":"DPHLIQ22", "metadata":{"imrcp-range":"1.8 - 2.1"}, "source-layer":"DPHLIQ22", "paint":{"fill-color":"#0cf"}},
+			{"id":"DPHLIQ25", "metadata":{"imrcp-range":"2.1 - 2.4"}, "source-layer":"DPHLIQ25", "paint":{"fill-color":"#0ff"}},
+			{"id":"DPHLIQ29", "metadata":{"imrcp-range":"2.4 - 2.7"}, "source-layer":"DPHLIQ29", "paint":{"fill-color":"#60f"}},
+			{"id":"DPHLIQ32", "metadata":{"imrcp-range":"2.7 - 3.0"}, "source-layer":"DPHLIQ32", "paint":{"fill-color":"#90f"}},
+			{"id":"DPHLIQ36", "metadata":{"imrcp-range":"3.0 - 3.3"}, "source-layer":"DPHLIQ36", "paint":{"fill-color":"#c0f"}},
+			{"id":"DPHLIQ40", "metadata":{"imrcp-range":"3.3 - 3.6"}, "source-layer":"DPHLIQ40", "paint":{"fill-color":"#f0f"}},
+			{"id":"DPHLIQ43", "metadata":{"imrcp-range":"3.6 - 3.9"}, "source-layer":"DPHLIQ43", "paint":{"fill-color":"#f90"}},
+			{"id":"DPHLIQ47", "metadata":{"imrcp-range":"Above 3.9"}, "source-layer":"DPHLIQ47", "paint":{"fill-color":"#f00"}}
+		]
+	},
+        "Kriged Pavement Temp (F)":
+        {
+                "group":"Area",
+                "source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/tpvt/{z}/{x}/{y}"], "maxzoom":16},
+                "type":"fill",
+                "layers":
+                [
+			{"id":"TPVT-Infinity", "metadata":{"imrcp-range":"Below 0","obstype":"TPVT"}, "source-layer":"TPVT-Infinity", "paint":{"fill-color":"#c51b8a","fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"TPVT0", "metadata":{"imrcp-range":"0 - 20"}, "source-layer":"TPVT0", "paint":{"fill-color":"#5e4fa2"}},
+			{"id":"TPVT20", "metadata":{"imrcp-range":"20 - 30"}, "source-layer":"TPVT20", "paint":{"fill-color":"#313695"}},
+			{"id":"TPVT30", "metadata":{"imrcp-range":"30 - 34"}, "source-layer":"TPVT30", "paint":{"fill-color":"#3288bd"}},
+			{"id":"TPVT34", "metadata":{"imrcp-range":"34 - 45"}, "source-layer":"TPVT34", "paint":{"fill-color":"#238b45"}},
+			{"id":"TPVT45", "metadata":{"imrcp-range":"45 - 56"}, "source-layer":"TPVT45", "paint":{"fill-color":"#cccc00"}},
+			{"id":"TPVT56", "metadata":{"imrcp-range":"56 - 68"}, "source-layer":"TPVT56", "paint":{"fill-color":"#ff751a"}},
+			{"id":"TPVT68", "metadata":{"imrcp-range":"68 - 86"}, "source-layer":"TPVT68", "paint":{"fill-color":"#f46d43"}},
+			{"id":"TPVT86", "metadata":{"imrcp-range":"86 - 104"}, "source-layer":"TPVT86", "paint":{"fill-color":"#d53e4f"}},
+			{"id":"TPVT104", "metadata":{"imrcp-range":"Above 104"}, "source-layer":"TPVT104", "paint":{"fill-color":"#9e0142"}}
+		]
+        },
+	"Kriged Subsurface Temp (F)":
+        {
+                "group":"Area",
+                "source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/tssrf/{z}/{x}/{y}"], "maxzoom":16},
+                "type":"fill",
+                "layers":
+                [
+                        {"id":"TSSRF-Infinity", "metadata":{"imrcp-range":"Below 0","obstype":"TSSRF"}, "source-layer":"TSSRF-Infinity", "paint":{"fill-color":"#c51b8a", "fill-antialias":true, "fill-opacity":0.5}},
+                        {"id":"TSSRF0", "metadata":{"imrcp-range":"0 - 20"}, "source-layer":"TSSRF0", "paint":{"fill-color":"#5e4fa2"}},
+                        {"id":"TSSRF20", "metadata":{"imrcp-range":"20 - 30"}, "source-layer":"TSSRF20", "paint":{"fill-color":"#313695"}},
+                        {"id":"TSSRF30", "metadata":{"imrcp-range":"30 - 34"}, "source-layer":"TSSRF30", "paint":{"fill-color":"#3288bd"}},
+                        {"id":"TSSRF34", "metadata":{"imrcp-range":"34 - 45"}, "source-layer":"TSSRF34", "paint":{"fill-color":"#238b45"}},
+                        {"id":"TSSRF45", "metadata":{"imrcp-range":"45 - 56"}, "source-layer":"TSSRF45", "paint":{"fill-color":"#cccc00"}},
+                        {"id":"TSSRF56", "metadata":{"imrcp-range":"56 - 68"}, "source-layer":"TSSRF56", "paint":{"fill-color":"#ff751a"}},
+                        {"id":"TSSRF68", "metadata":{"imrcp-range":"68 - 86"}, "source-layer":"TSSRF68", "paint":{"fill-color":"#f46d43"}},
+                        {"id":"TSSRF86", "metadata":{"imrcp-range":"86 - 104"}, "source-layer":"TSSRF86", "paint":{"fill-color":"#d53e4f"}},
+                        {"id":"TSSRF104", "metadata":{"imrcp-range":"Above 104"}, "source-layer":"TSSRF104", "paint":{"fill-color":"#9e0142"}}
+		]
+        },
+	"NWS Alerts":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/cap/1000:1112/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"EVT1000", "metadata":{"imrcp-range":"Fire","obstype":"EVT"}, "source-layer":"EVT1000", "paint":{"fill-color":"#f00", "fill-antialias":true, "fill-opacity":0.5}},
+			{"id":"EVT1004", "metadata":{"imrcp-range":"Heat"}, "source-layer":"EVT1004", "paint":{"fill-color":"#ff751a"}},
+			{"id":"EVT1007", "metadata":{"imrcp-range":"Storm/Tornado"}, "source-layer":"EVT1007", "paint":{"fill-color":"#ffc700"}},
+			{"id":"EVT1014", "metadata":{"imrcp-range":"Wind/Fog/Smoke"}, "source-layer":"EVT1014", "paint":{"fill-color":"#a6a6a6"}},
+			{"id":"EVT1023", "metadata":{"imrcp-range":"Air Quality"}, "source-layer":"EVT1023", "paint":{"fill-color":"#960"}},
+			{"id":"EVT1025", "metadata":{"imrcp-range":"Earthquake/Volcano"}, "source-layer":"EVT1025", "paint":{"fill-color":"#dbc3a3"}},
+			{"id":"EVT1029", "metadata":{"imrcp-range":"Winter Storm"}, "source-layer":"EVT1029", "paint":{"fill-color":"#80ffff"}},
+			{"id":"EVT1043", "metadata":{"imrcp-range":"Freeze"}, "source-layer":"EVT1043", "paint":{"fill-color":"#ff4bf6"}},
+			{"id":"EVT1052", "metadata":{"imrcp-range":"Cold"}, "source-layer":"EVT1052", "paint":{"fill-color":"#8b4aff"}},
+			{"id":"EVT1057", "metadata":{"imrcp-range":"Flood"}, "source-layer":"EVT1057", "paint":{"fill-color":"#1a1aff"}},
+			{"id":"EVT1066", "metadata":{"imrcp-range":"Lake/Marine/Coastal"}, "source-layer":"EVT1066", "paint":{"fill-color":"#00007f"}},
+			{"id":"EVT1096", "metadata":{"imrcp-range":"Tropical Storm"}, "source-layer":"EVT1096", "paint":{"fill-color":"#00af20"}},
+			{"id":"EVT1110", "metadata":{"imrcp-range":"Special Weather"}, "source-layer":"EVT1110", "paint":{"fill-color":"#8c1515"}},
+			{"id":"EVT1112", "metadata":{"imrcp-range":"Other"}, "source-layer":"EVT1112", "paint":{"fill-color":"#99ffa1"}},
+			{"id":"EVT100000", "metadata":{"imrcp-range":"Other"}, "source-layer":"EVT100000", "paint":{"fill-color":"#000"}}
+		]
+	},
+        "Tropical Storm Cone":
+        {
+                "group":"Area",
+                "source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/trscne/{z}/{x}/{y}"], "maxzoom":4},
+                "type":"fill",
+                "layers":
+                [
+                        {"id":"TRSCNE37345", "metadata":{"imrcp-range":"Subtropical Depression","obstype":"TRSCNE"}, "source-layer":"TRSCNE37345", "paint":{"fill-antialias":true, "fill-opacity":0.5, "fill-color":"#009cf7", "fill-outline-color": "#000000"}},
+                        {"id":"TRSCNE37360", "metadata":{"imrcp-range":"Subtropical Storm"}, "source-layer":"TRSCNE37360", "paint":{"fill-color":"#00ff00"}},
+                        {"id":"TRSCNE1057", "metadata":{"imrcp-range":"Tropical Depression"}, "source-layer":"TRSCNE1057", "paint":{"fill-color":"#008c00"}},
+                        {"id":"TRSCNE1072", "metadata":{"imrcp-range":"Tropical Storm"}, "source-layer":"TRSCNE1072", "paint":{"fill-color":"#ffff00"}},
+                        {"id":"TRSCNE642", "metadata":{"imrcp-range":"Hurricane"}, "source-layer":"TRSCNE642", "paint":{"fill-color":"#d60000"}},
+                        {"id":"TRSCNE809", "metadata":{"imrcp-range":"Major Hurricane"}, "source-layer":"TRSCNE809", "paint":{"fill-color":"#9c52c6"}}
+                ]
+        },
+	"#Traffic Detectors":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/ladotd/{z}/{x}/{y}"], "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"LADOTD", "metadata":{"imrcp-range":"Traffic Detectors"}, "source-layer":"LADOTD", "layout":{"icon-image":"detector"}}
+		]
+	},
+	"#Stormwatch Stations":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/stormw/{z}/{x}/{y}"], "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"STORMW", "metadata":{"imrcp-range":"Stormwatch ESS"}, "source-layer":"STORMW", "layout":{"icon-image":"detector"}}
+		]
+	},
+	"Field Sensors":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/varies/{z}/{x}/{y}"], "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"AHPS", "metadata":{"imrcp-range":"Flood"}, "source-layer":"AHPS", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"], "icon-halo-width": ["case", ["boolean", ["feature-state", "hover"], false], 0, 0], "icon-halo-color": "#000"}, "layout":{"icon-image":"chevron", "text-allow-overlap":true, "icon-allow-overlap":true}},
+			{"id":"WxDE", "metadata":{"imrcp-range":"ESS"}, "source-layer":"WXDE", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"]}, "layout":{"icon-image":"hexagon"}},
+			{"id":"CV", "metadata":{"imrcp-range":"CV Data"}, "source-layer":"CV", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", ["case", ["boolean", ["get", "onlyspeed"], true], "#000", "#f0c"]]}, "layout":{"icon-image":"detector"}}
+		]
+	},
+	"#Traffic Alerts":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/301:304,306,307/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"EVT301", "metadata":{"imrcp-range":"Incident","obstype":"EVT"}, "source-layer":"EVT301", "layout":{"icon-image":"incident", "text-allow-overlap":true, "icon-allow-overlap":true}},
+			{"id":"EVT302", "metadata":{"imrcp-range":"Workzone"}, "source-layer":"EVT302", "layout":{"icon-image":"workzone"}},
+			{"id":"EVT303", "metadata":{"imrcp-range":"Slow Taffic"}, "source-layer":"EVT303", "layout":{"icon-image":"slow-traffic"}},
+			{"id":"EVT304", "metadata":{"imrcp-range":"Very Slow Traffic"}, "source-layer":"EVT304", "layout":{"icon-image":"very-slow-traffic"}},
+			{"id":"EVT306", "metadata":{"imrcp-range":"Lengthy Queue"}, "source-layer":"EVT306", "layout":{"icon-image":"lengthy-queue"}},
+			{"id":"EVT307", "metadata":{"imrcp-range":"Congestion"}, "source-layer":"EVT307", "layout":{"icon-image":"unusual-congestion"}}
+		]
+	},
+	"Traffic Alerts":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/301:304,306,307/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"EVT301", "metadata":{"imrcp-range":"Incident","obstype":"EVT"}, "source-layer":"EVT301", "layout":{"icon-image":"incident", "text-allow-overlap":true, "icon-allow-overlap":true}},
+			{"id":"EVT302", "metadata":{"imrcp-range":"Workzone"}, "source-layer":"EVT302", "layout":{"icon-image":"workzone"}}
+		]
+	},
+	"#Road Condition Alerts":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/107,201:204,305/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"EVT107", "metadata":{"imrcp-range":"Low Visibility","obstype":"EVT"}, "source-layer":"EVT107", "layout":{"icon-image":"low-visibility"}},
+			{"id":"EVT201", "metadata":{"imrcp-range":"Dew on Roadway"}, "source-layer":"EVT201", "layout":{"icon-image":"dew-on-roadway"}},
+			{"id":"EVT202", "metadata":{"imrcp-range":"Frost on Roadway"}, "source-layer":"EVT202", "layout":{"icon-image":"frost-on-roadway"}},
+			{"id":"EVT203", "metadata":{"imrcp-range":"Blowing Snow"}, "source-layer":"EVT203", "layout":{"icon-image":"blowing-snow"}},
+			{"id":"EVT204", "metadata":{"imrcp-range":"Ice on Roadway"}, "source-layer":"EVT204", "layout":{"icon-image":"ice-on-bridge"}},
+			{"id":"EVT305", "metadata":{"imrcp-range":"Flooded Roadway"}, "source-layer":"EVT305", "layout":{"icon-image":"flooded-road"}}
+		]
+	},
+	"Road Condition Alerts":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/107,201:204,305/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"EVT107", "metadata":{"imrcp-range":"Low Visibility","obstype":"EVT"}, "source-layer":"EVT107", "layout":{"icon-image":"low-visibility"}},
+			{"id":"EVT204", "metadata":{"imrcp-range":"Ice on Roadway"}, "source-layer":"EVT204", "layout":{"icon-image":"ice-on-bridge"}},
+			{"id":"EVT305", "metadata":{"imrcp-range":"Flooded Roadway"}, "source-layer":"EVT305", "layout":{"icon-image":"flooded-road"}}
+		]
+	},
+	"Weather Alerts":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/101:106,108:109/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"EVT102", "metadata":{"imrcp-range":"Medium Winter Precip"}, "source-layer":"EVT102", "layout":{"icon-image":"medium-winter-precip"}},
+			{"id":"EVT103", "metadata":{"imrcp-range":"Heavy Winter Precip"}, "source-layer":"EVT103", "layout":{"icon-image":"heavy-winter-precip"}},
+			{"id":"EVT105", "metadata":{"imrcp-range":"Medium Precip"}, "source-layer":"EVT105", "layout":{"icon-image":"medium-precip"}},
+			{"id":"EVT106", "metadata":{"imrcp-range":"Heavy Precip"}, "source-layer":"EVT106", "layout":{"icon-image":"heavy-precip"}},
+			{"id":"EVT108", "metadata":{"imrcp-range":"Flood Stage Action"}, "source-layer":"EVT108", "layout":{"icon-image":"stage-action"}},
+			{"id":"EVT109", "metadata":{"imrcp-range":"Flood Stage Flood"}, "source-layer":"EVT109", "layout":{"icon-image":"stage-flood"}}
+		]
+	},
+	"Tropical Storm Category":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/trscat/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"symbol",
+		"layers":
+		[
+                        {"id":"TRSCAT37345", "metadata":{"imrcp-range":"Subtropical Depression","obstype":"TRSCAT"}, "source-layer":"TRSCAT37345", "layout":{"icon-image":"nhc-sd"}},
+                        {"id":"TRSCAT37360", "metadata":{"imrcp-range":"Subtropical Storm"}, "source-layer":"TRSCAT37360", "layout":{"icon-image":"nhc-ss"}},
+                        {"id":"TRSCAT1057", "metadata":{"imrcp-range":"Tropical Depression"}, "source-layer":"TRSCAT1057", "layout":{"icon-image":"nhc-td"}},
+                        {"id":"TRSCAT1072", "metadata":{"imrcp-range":"Tropical Storm"}, "source-layer":"TRSCAT1072", "layout":{"icon-image":"nhc-ts"}},
+                        {"id":"TRSCAT642", "metadata":{"imrcp-range":"Hurricane"}, "source-layer":"TRSCAT642", "layout":{"icon-image":"nhc-hu"}},
+                        {"id":"TRSCAT809", "metadata":{"imrcp-range":"Major Hurricane"}, "source-layer":"TRSCAT809", "layout":{"icon-image":"nhc-mh"}}
+		]
+	}
+}
