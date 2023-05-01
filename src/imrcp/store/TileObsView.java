@@ -283,6 +283,7 @@ public class TileObsView extends BaseBlock
 		}
 		
 		ObsList oReturn = new ObsList();
+		oReturn.m_bHasData = oData.m_bHasData;
 		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		for (int i = 0; i < oData.size(); i++)
 		{
@@ -307,6 +308,8 @@ public class TileObsView extends BaseBlock
 	
 	public static int search(Path[] oBestFiles, long lSearchTime, long lSearchEnd, long lQueryTime, long lQueryEnd, long lRefTime, String sObsType, FilenameFormatter oFf, ResourceRecord oRR, ArrayList<String> oSearchedDirs)
 	{
+		if (oFf.getPattern().isEmpty())
+			return 0;
 		long[] lTimes = new long[3];
 		String sEndsWith = oFf.getExtension();
 		int nPathIndex = 0;

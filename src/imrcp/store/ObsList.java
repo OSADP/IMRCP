@@ -14,6 +14,7 @@ import java.util.ArrayList;
  */
 public class ObsList extends ArrayList<Obs>
 {
+	public boolean m_bHasData = false;
 	public ObsList()
 	{
 		super();
@@ -22,14 +23,5 @@ public class ObsList extends ArrayList<Obs>
 	public ObsList(int nInitCapicity)
 	{
 		super(nInitCapicity);
-	}
-	
-	
-	public Obs getFirst()
-	{
-		if (isEmpty())
-			return null;
-		
-		return get(0);
 	}
 }
