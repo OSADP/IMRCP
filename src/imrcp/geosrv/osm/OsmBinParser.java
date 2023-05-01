@@ -343,7 +343,7 @@ public class OsmBinParser
 	 * @param sFilter Array containing the values of the "highway" tag of the
 	 * roadway segments that are to be included in the list
 	 */
-	public void parseFileWithFilters(String sFile, ArrayList<OsmNode> oAllNodes, ArrayList<OsmWay> oAllWays, int[] nPolygon, int[] nBoundingBox, StringPool oMainPool, String[] sFilter)
+	public void parseFileWithFilters(String sFile, ArrayList<OsmNode> oAllNodes, ArrayList<OsmWay> oAllWays, int[] nPolygon, StringPool oMainPool, String[] sFilter)
 	{
 		try (DataInputStream oIn = new DataInputStream(Files.newInputStream(Paths.get(sFile))))
 		{
@@ -366,12 +366,12 @@ public class OsmBinParser
 			while (nCount-- > 0)
 			{
 				OsmWay oTemp = new OsmWay(oIn, oPool, oNodes, nFp);
-				if (!OsmUtil.include(oTemp.get("highway"), sFilter) || !GeoUtil.boundingBoxesIntersect(oTemp.m_nMinLon, oTemp.m_nMinLat, oTemp.m_nMaxLon, oTemp.m_nMaxLat, nBoundingBox[0], nBoundingBox[1], nBoundingBox[2], nBoundingBox[3])) // quick filter on highway tag and bounding box
+				if (!OsmUtil.include(oTemp.get("highway"), sFilter) || !GeoUtil.boundingBoxesIntersect(oTemp.m_nMinLon, oTemp.m_nMinLat, oTemp.m_nMaxLon, oTemp.m_nMaxLat, nPolygon[3], nPolygon[4], nPolygon[5], nPolygon[6])) // quick filter on highway tag and bounding box
 					continue;
 				for (OsmNode oNode : oTemp.m_oNodes)
 				{
-					if (GeoUtil.isInside(oNode.m_nLon, oNode.m_nLat, nBoundingBox[0], nBoundingBox[1], nBoundingBox[2], nBoundingBox[3], 0) && // first test if the node is inside the bounding box
-						GeoUtil.isInsidePolygon(nPolygon, oNode.m_nLon, oNode.m_nLat)) // this test if it is inside the polygon
+					if (GeoUtil.isInside(oNode.m_nLon, oNode.m_nLat, nPolygon[3], nPolygon[4], nPolygon[5], nPolygon[6], 0) && // first test if the node is inside the bounding box
+						GeoUtil.isPointInsideRingAndHoles(nPolygon, oNode.m_nLon, oNode.m_nLat)) // this test if it is inside the polygon
 					{
 						oTemp.updateRefs();
 						oWays.add(oTemp);
