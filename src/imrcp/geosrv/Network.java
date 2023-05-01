@@ -196,6 +196,11 @@ public class Network implements Comparable<Network>
 				
 				nGeoWBb = Arrays.addAndUpdate(nGeoWBb, nLon, nLat, 3);
 			}
+			if (nGeoWBb[7] == nGeoWBb[nGeoWBb[0] - 2] && nGeoWBb[8] == nGeoWBb[nGeoWBb[0] - 1]) // ensure the polygon is open
+			{
+				nGeoWBb[0] -= 2;
+				--nGeoWBb[2]; // decrease point count
+			}
 			m_nGeometry = nGeoWBb;
 		}
 		else // use the nodes to calculate the convex hull
@@ -226,6 +231,12 @@ public class Network implements Comparable<Network>
 				int nLat = (int)oPt.getY();
 
 				nGeoWBb = Arrays.addAndUpdate(nGeoWBb, nLon, nLat, 3);
+			}
+			
+			if (nGeoWBb[7] == nGeoWBb[nGeoWBb[0] - 2] && nGeoWBb[8] == nGeoWBb[nGeoWBb[0] - 1]) // ensure the polygon is open
+			{
+				nGeoWBb[0] -= 2;
+				--nGeoWBb[2]; // decrease point count
 			}
 			
 			m_nGeometry = nGeoWBb;
@@ -266,6 +277,7 @@ public class Network implements Comparable<Network>
 			int[] nPt = oIt.next();
 			oRing.put(new double[]{GeoUtil.fromIntDeg(nPt[0]), GeoUtil.fromIntDeg(nPt[1])});
 		}
+		oRing.put(new double[]{GeoUtil.fromIntDeg(m_nGeometry[7]), GeoUtil.fromIntDeg(m_nGeometry[8])});
 		oCoords.put(oRing);
 		oGeo.put("coordinates", oCoords);
 		
@@ -283,6 +295,12 @@ public class Network implements Comparable<Network>
 	public int[] getBoundingBox()
 	{
 		return new int[]{m_nGeometry[3], m_nGeometry[4], m_nGeometry[5], m_nGeometry[6]};
+	}
+	
+	
+	public int[] getGeometry()
+	{
+		return java.util.Arrays.copyOf(m_nGeometry, m_nGeometry.length);
 	}
 	
 	

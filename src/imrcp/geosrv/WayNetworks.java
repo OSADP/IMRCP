@@ -18,6 +18,7 @@ import imrcp.system.Introsort;
 import imrcp.system.JSONUtil;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
+import imrcp.web.SessMgr;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
@@ -208,28 +209,36 @@ public class WayNetworks extends BaseBlock
 		{
 			synchronized (m_oMetadata)
 			{
-				try (DataInputStream oIn = new DataInputStream(Files.newInputStream(Paths.get(sGeoFile.replace("geo.bin", "spdlimit.bin"))))) // read speed limit file
+				Path oSpdLimitFile = Paths.get(sGeoFile.replace("geo.bin", "spdlimit.bin"));
+				if (Files.exists(oSpdLimitFile))
 				{
-					while (oIn.available() > 0)
+					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oSpdLimitFile))) // read speed limit file
 					{
-						WayMetadata oMetadata = new WayMetadata(new Id(oIn));
-						oMetadata.m_nSpdLimit = oIn.readByte();
-						m_oMetadata.add(oMetadata);
+						while (oIn.available() > 0)
+						{
+							WayMetadata oMetadata = new WayMetadata(new Id(oIn));
+							oMetadata.m_nSpdLimit = oIn.readByte();
+							m_oMetadata.add(oMetadata);
+						}
 					}
 				}
 
 				Introsort.usort(m_oMetadata, (WayMetadata o1, WayMetadata o2) -> Id.COMPARATOR.compare(o1.m_oId, o2.m_oId));
-				try (DataInputStream oIn = new DataInputStream(Files.newInputStream(Paths.get(sGeoFile.replace("geo.bin", "lanes.bin"))))) // read lanes file
+				Path oLanesFile = Paths.get(sGeoFile.replace("geo.bin", "lanes.bin"));
+				if (Files.exists(oLanesFile))
 				{
-					while (oIn.available() > 0)
-					{
-						WayMetadata oMetadata = new WayMetadata(new Id(oIn));
-						oMetadata.m_nLanes = oIn.readByte();
-						int nIndex = Collections.binarySearch(m_oMetadata, oMetadata);
-						if (nIndex < 0)
-							m_oMetadata.add(~nIndex, oMetadata);
-						else
-							m_oMetadata.get(nIndex).m_nLanes = oMetadata.m_nLanes;
+					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oLanesFile))) // read lanes file
+					{	
+						while (oIn.available() > 0)
+						{
+							WayMetadata oMetadata = new WayMetadata(new Id(oIn));
+							oMetadata.m_nLanes = oIn.readByte();
+							int nIndex = Collections.binarySearch(m_oMetadata, oMetadata);
+							if (nIndex < 0)
+								m_oMetadata.add(~nIndex, oMetadata);
+							else
+								m_oMetadata.get(nIndex).m_nLanes = oMetadata.m_nLanes;
+						}
 					}
 				}
 				
@@ -701,6 +710,8 @@ public class WayNetworks extends BaseBlock
 					oIds.add(oWay.m_oId);
 				oNetwork.m_oSegmentIds = oIds;
 				oNetwork.m_bFinalized = true; // set finalized flag
+				SessMgr.getInstance().addNetwork(oNetwork.m_sNetworkId);
+				loadNetwork(oNetwork.toGeoJsonFeature(), false);
 				writeNetworkFile(); // save changes
 			}
 			catch (Exception oEx)
@@ -722,18 +733,19 @@ public class WayNetworks extends BaseBlock
 	 * used to create the Network.
 	 */
 	public void createNetwork(String sId, String sLabel, String[] sOptions, String sCoords)
+		throws IOException
 	{
 		String[] sCoordArray = sCoords.split(",");
 		int[] nGeo = Arrays.newIntArray(sCoordArray.length + 7); // add 4 for the bounding box, 1 for hole flag, and 2 for the first point repeated to close the polygon
-		nGeo = Arrays.add(nGeo, 0); // hole flag
+		nGeo = Arrays.add(nGeo, 1); // 1 ring
+		nGeo = Arrays.add(nGeo, sCoordArray.length / 2); // number of points
 		nGeo = Arrays.add(nGeo, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE}); // initialize the bounding box
 		for (int nIndex = 0; nIndex < sCoordArray.length;)
 		{
 			int nLon = GeoUtil.toIntDeg(Double.parseDouble(sCoordArray[nIndex++]));
 			int nLat = GeoUtil.toIntDeg(Double.parseDouble(sCoordArray[nIndex++]));
-			nGeo = Arrays.addAndUpdate(nGeo, nLon, nLat); // add point to the array
+			nGeo = Arrays.addAndUpdate(nGeo, nLon, nLat, 3); // add point to the array
 		}
-		nGeo = Arrays.add(nGeo, nGeo[5], nGeo[6]); // close the polygon
 		Network oNetwork = new Network(sId, sLabel, sOptions, nGeo);
 		
 		synchronized (m_oNetworks)
@@ -741,6 +753,7 @@ public class WayNetworks extends BaseBlock
 			int nIndex = Collections.binarySearch(m_oNetworks, oNetwork); // add the network to the list in sorted order
 			if (nIndex < 0)
 				m_oNetworks.add(~nIndex, oNetwork);
+			writeNetworkFile();
 		}
 	}
 	
@@ -760,10 +773,11 @@ public class WayNetworks extends BaseBlock
 			{
 				oFeatures.put(oNetwork.toGeoJsonFeature());
 			}
-		}
-		try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(Paths.get(m_sNetworkFile), FileUtil.WRITEOPTS), "UTF-8"))) // rewrite the entire file
-		{
-			oFeatures.write(oOut);
+		
+			try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(Paths.get(m_sNetworkFile), FileUtil.WRITEOPTS), "UTF-8"))) // rewrite the entire file
+			{
+				oFeatures.write(oOut);
+			}
 		}
 	}
 	

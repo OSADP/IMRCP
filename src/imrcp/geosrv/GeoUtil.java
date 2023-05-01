@@ -31,7 +31,9 @@ public abstract class GeoUtil
 
 
 	public static native void freePolygon(long lPolygonRef);
-	
+	public final static StringBuilder DEBUG = new StringBuilder();
+	public static String[] COLORS = new String[]{"black", "blue", "red", "green", "pink", "yellow"};
+	public static int COLOR = 0;
 	
 	/**
 	 * Approximate radius of the earth in km
@@ -1028,18 +1030,18 @@ public abstract class GeoUtil
 		long lWinding = 0;
 		while (nPolyPos < nPolyEnd)
 		{
-			int nX1 = nPoly[nPolyPos];
-			int nY1 = nPoly[nPolyPos + 1];
-			int nX2 = nPoly[nPolyPos + 2];
-			int nY2 = nPoly[nPolyPos + 3];
+			long nX1 = nPoly[nPolyPos];
+			long nY1 = nPoly[nPolyPos + 1];
+			long nX2 = nPoly[nPolyPos + 2];
+			long nY2 = nPoly[nPolyPos + 3];
 			lWinding += (nX2 - nX1) * (nY2 + nY1);
 			
 			nPolyPos += 2;
 		}
-		int nX1 = nPoly[nPolyPos];
-		int nY1 = nPoly[nPolyPos + 1];
-		int nX2 = nPoly[nFirstIndex];
-		int nY2 = nPoly[nFirstIndex + 1];
+		long nX1 = nPoly[nPolyPos];
+		long nY1 = nPoly[nPolyPos + 1];
+		long nX2 = nPoly[nFirstIndex];
+		long nY2 = nPoly[nFirstIndex + 1];
 		lWinding += (nX2 - nX1) * (nY2 + nY1);
 		
 		return lWinding;
@@ -1256,6 +1258,25 @@ public abstract class GeoUtil
 		return nQueryRing;
 	}
 	
+	
+	public static void reverseRing(int[] nPoly, int nPolyPos)
+	{
+		int nNumPoints = nPoly[nPolyPos];
+		nPolyPos += 5; // skip number of points and bounding box
+		int nFirstIndex = nPolyPos;
+		int nPolyEnd = nPolyPos + nNumPoints * 2;
+		int[] nTemp = new int[nNumPoints * 2];
+		int nIndex = nTemp.length - 2;
+		while (nPolyPos < nPolyEnd)
+		{
+			nTemp[nIndex] = nPoly[nPolyPos++];
+			nTemp[nIndex + 1] = nPoly[nPolyPos++];
+			nIndex -= 2;
+		}
+		
+		System.arraycopy(nTemp, 0, nPoly, nFirstIndex, nTemp.length);
+	}
+	
 	public static void polygonGeoJson(StringBuilder sBuf, int[] nGeo, String sColor, double dOpacity)
 	{
 		if (sBuf == null)
@@ -1270,13 +1291,64 @@ public abstract class GeoUtil
 			sBuf.append('[');
 			int nPoints = nGeo[nPos];
 			nPos += 5;
+			int nFirstPoint = nPos;
 			for (int nPoint = 0; nPoint < nPoints; nPoint++)
 				sBuf.append(String.format("[%2.7f,%2.7f],", fromIntDeg(nGeo[nPos++]), fromIntDeg(nGeo[nPos++])));
+			sBuf.append(String.format("[%2.7f,%2.7f],", fromIntDeg(nGeo[nFirstPoint]), fromIntDeg(nGeo[nFirstPoint + 1])));
 			sBuf.setLength(sBuf.length() - 1);
 			sBuf.append(']').append(',');
 		}
 		sBuf.setLength(sBuf.length() - 1);
 		sBuf.append("]}");
 		sBuf.append("},");
+	}
+	
+	public static void resetDebug()
+	{
+		DEBUG.setLength(0);
+		DEBUG.append("{\"type\":\"FeatureCollection\",\"features\":[");
+	}
+	
+	
+	public static void debug(int[] nGeo)
+	{
+		synchronized (DEBUG)
+		{
+			GeoUtil.polygonGeoJson(DEBUG, nGeo, COLORS[COLOR++ % COLORS.length], 0.4);
+		}
+	}
+	
+	public static void endDebug()
+	{
+		if (DEBUG.indexOf("\"Feature\"") >= 0)
+			DEBUG.setLength(DEBUG.length() - 1);
+		DEBUG.append("]}");
+	}
+	
+	public static void getPolygons(ArrayList<int[]> oOuters, ArrayList<int[]> oHoles)
+	{
+		for (int[] nHole : oHoles)
+		{
+			Iterator<int[]> oIt = Arrays.iterator(nHole, new int[2], 7, 2);
+			boolean bInside = false;
+			for (int nOuterIndex = 0; nOuterIndex < oOuters.size(); nOuterIndex++)
+			{
+				int[] nOuter = oOuters.get(nOuterIndex);
+				while (!bInside && oIt.hasNext())
+				{
+					int[] nPt = oIt.next();
+					bInside = isPointInsideRingAndHoles(nOuter, nPt[0], nPt[1]);
+				}
+				if (bInside)
+				{
+					nOuter = Arrays.ensureCapacity(nOuter, nHole[0]);
+					oOuters.set(nOuterIndex, nOuter); // reference could have changed
+					System.arraycopy(nHole, 2, nOuter, nOuter[0], nHole[0] - 2); // don't copy ring count or insertion point
+					nOuter[0] += nHole[0] - 2;
+					++nOuter[1]; // increment ring count
+					break;
+				}
+			}
+		}
 	}
 }
