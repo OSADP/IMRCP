@@ -8,33 +8,34 @@
 #include "Tile.h"
 
 
-static void Tile_write_ring(Tile* pThis, Mercator* pM, LinkPt* pStart, int nLen, bool bRotate, DataBuffer* pOut, FILE* pFile)
+static void Tile_write_ring(Tile* pThis, Mercator* pM, LinkPt* pStart, int nLen, bool bIsHole, DataBuffer* pOut, FILE* pFile)
 {
 //	fprintf(pFile, "%d,", nLen);
 	int nPts[nLen << 1]; // array for transforming points
 	int* pPtIter = nPts;
 	LinkPt* pPt = pStart;
-	if (bRotate)
+	if (bIsHole)
 	{
 		int nX = pPt->m_nX, nY = pPt->m_nY;
-		LinkPt* pPtTL = NULL; // loop will set this
+		LinkPt* pPtTL = pPt;
 		do
 		{
 			if (pPt->m_nY < nY) // check for top-most row
 			{
-				nY = pPt->m_nY;
+				nY = pPt->m_nY; // set new vertical
+				nX = pPt->m_nX; // reset horizontal
 				pPtTL = pPt;
 			}
-
-			if (pPt->m_nY == nY && pPt->m_nX <= nX)
+			else if (pPt->m_nY == nY) // in top-most row
 			{
-				nX = pPt->m_nX; // in top-most row check left-most cell
-				pPtTL = pPt;
+				if (pPt->m_nX < nX) // check for left-most cell
+				{
+					nX = pPt->m_nX; // set new horizontal
+					pPtTL = pPt;
+				}
+				else if (pPt->m_nX == nX && pPt->m_dX < pPtTL->m_dX)
+					pPtTL = pPt; // set left-most point of top-left cell
 			}
-
-			if (pPt->m_nX < pPtTL->m_nX)
-				pPtTL = pPt; // get left-most point of top-left cell
-
 			pPt = pPt->m_pNext;
 		}
 		while (pPt != pStart);
@@ -90,7 +91,7 @@ Tile* Tile_new(int nX, int nY, int nZoom, Mercator* pM)
 //	for (int nPos = 0; nPos < 1000; nPos++)
 //		pThis->m_nHoleHist[nPos] = pThis->m_nPolyHist[nPos] = 0;
 
-	pThis->m_fVal = -9990.0;
+	pThis->m_fVal = -9999.0;
 //	pThis->m_nCount = 0; // debugging counter
 	pThis->m_nX = nX;
 	pThis->m_nY = nY;
@@ -165,18 +166,25 @@ void Tile_add_cell(Tile* pThis, int nCellX, int nCellY, double* dVals)
 	}
 	else
 	{
-		pCell = Strip_new(pStrips->m_nSize, nCellX, nCellY, dVals);
-		List_append(pStrips, pCell); // add incomplete cell
-
-		List* pTempList = pThis->m_pPrevRow; // swap row lists
-		pThis->m_pPrevRow = pThis->m_pCurrRow;
-		pThis->m_pCurrRow = pTempList;
+		if (nCellY - pThis->m_nCurrRow == 1) // cell y should be greater
+		{
+			List* pTempList = pThis->m_pPrevRow; // swap row lists
+			pThis->m_pPrevRow = pThis->m_pCurrRow;
+			pThis->m_pCurrRow = pTempList;
+			pThis->m_nPrevMin = pThis->m_nCurrMin;
+			pThis->m_nPrevMax = pThis->m_nCurrMax;
+		}
+		else // clear prev row no need to swap
+		{
+			pThis->m_pPrevRow->m_nSize = 0;
+			pThis->m_nPrevMin = pThis->m_nPrevMax = -1;
+		}
 		pThis->m_pCurrRow->m_nSize = 0; // new cell conditions
-
-		pThis->m_nPrevMin = pThis->m_nCurrMin;
-		pThis->m_nPrevMax = pThis->m_nCurrMax;
 		pThis->m_nCurrMin = pThis->m_nCurrMax = nCellX; // setup for range fill later
 		pThis->m_nCurrRow = nCellY;
+
+		pCell = Strip_new(pStrips->m_nSize, nCellX, nCellY, dVals);
+		List_append(pStrips, pCell); // add incomplete cell
 	}
 
 	if (pTop == NULL) // skipped when inside corner
@@ -185,7 +193,7 @@ void Tile_add_cell(Tile* pThis, int nCellX, int nCellY, double* dVals)
 		if (nCellX < pThis->m_nPrevMax && nCellX >= pThis->m_nPrevMin) // range check handles shifts and gaps
 		{
 			Strip* pTest = (Strip*)pThis->m_pPrevRow->m_pElems[nCellX - pThis->m_nPrevMin];
-			if (pTest->m_fVal == dVals[8])  // value match check
+			if (pTest->m_fVal == fVal)  // value match check
 			{
 				double dBotTR = dVals[2];
 				pTopBR = pTest->m_pBR;

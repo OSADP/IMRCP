@@ -37,6 +37,12 @@ const double ORIGIN_SHIFT_180 = ORIGIN_SHIFT / 180.0;
 const double M_PI_360 = M_PI / 360.0;
 
 
+static double nearest(double dVal, double dScale)
+{
+	return round(dVal * dScale) / dScale;
+}
+
+
 /**
 * Default constructor. Wrapper for {@link Mercator#Mercator(int)} with tile
 * size 256.
@@ -191,12 +197,12 @@ void Mercator_lon_lat_bounds(Mercator* pThis, double dXt, double dYt, int nZoom,
 
 	double dLonLat[2];
 	Mercator_meters_to_lon_lat(dMeterBounds[0], dMeterBounds[1], dLonLat);
-	dBounds[0] = dLonLat[0];
-	dBounds[1] = dLonLat[1];
+	dBounds[0] = nearest(dLonLat[0], 10000000.0);
+	dBounds[1] = nearest(dLonLat[1], 10000000.0);
 
 	Mercator_meters_to_lon_lat(dMeterBounds[2], dMeterBounds[3], dLonLat);
-	dBounds[2] = dLonLat[0];
-	dBounds[3] = dLonLat[1];
+	dBounds[2] = nearest(dLonLat[0], 10000000.0);
+	dBounds[3] = nearest(dLonLat[1], 10000000.0);
 }
 
 
