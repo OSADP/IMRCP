@@ -77,7 +77,7 @@ public class PcCat extends TileFileWriter
 				nContribSource[1] = oRR.getSourceId();
 				oRateRR = oRR;
 				oRates = oObsView.getData(ObsType.RTEPC, lTimestamp, oInfo.m_lEnd, m_nAreaToProcess[1], m_nAreaToProcess[3], m_nAreaToProcess[0], m_nAreaToProcess[2], oInfo.m_lRef, nContribSource);
-				m_oLogger.debug(String.format("%d for %s", oRates.size(), Integer.toString(nContribSource[0], 36)));
+				m_oLogger.debug(String.format("%d %s for %s", oRates.size(), "RTEPC", Integer.toString(nContribSource[0], 36)));
 			}
 			if (oRates.isEmpty())
 				return;
@@ -164,7 +164,7 @@ public class PcCat extends TileFileWriter
 			nContribSource[0] = oSecondaryRR.getContribId();
 			nContribSource[1] = oSecondaryRR.getSourceId();
 			oSecondaryObsList = oObsView.getData(nSecondaryObsType, lTimestamp, oInfo.m_lEnd, nQueryLat1, nQueryLat2, nQueryLon1, nQueryLon2, oInfo.m_lRef, nContribSource);
-			m_oLogger.debug(String.format("%d for %s", oSecondaryObsList.size(), Integer.toString(nContribSource[0], 36)));
+			m_oLogger.debug(String.format("%d %s for %s", oSecondaryObsList.size(), Integer.toString(nSecondaryObsType, 36), Integer.toString(nContribSource[0], 36)));
 
 			if (oSecondaryObsList.isEmpty())
 				return;
@@ -190,8 +190,8 @@ public class PcCat extends TileFileWriter
 				}
 			}
 
-			ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-			Future oFirstTask = null;
+			ThreadPoolExecutor oTP = createThreadPool();
+			ArrayList<Future> oTasks = new ArrayList();
 
 			ArrayList<TileForPoly> oAllTiles = new ArrayList();
 			long lFileStart = 0;
@@ -202,7 +202,8 @@ public class PcCat extends TileFileWriter
 			{
 				oProcess.add(new PcCatTile(oEntry.getKey()[0], oEntry.getKey()[1], oEntry.getValue()[0], oEntry.getValue()[1], oAlgorithm));
 			}
-			 
+			
+			boolean bSetTimes = true;
 			for (Future<TileForPoly> oFuture : oTP.invokeAll(oProcess))
 			{
 				TileForPoly oTFP = oFuture.get();
@@ -218,10 +219,10 @@ public class PcCat extends TileFileWriter
 					oTFP.m_oSP = null;
 					oTFP.m_oRR = oPcCatRR;
 					oTFP.m_oM = oM;
-					Future oTask = oTP.submit(oTFP);
-					if (oTask != null && oFirstTask == null)
+					oTasks.add(oTP.submit(oTFP));
+					if (bSetTimes)
 					{
-						oFirstTask = oTask;
+						bSetTimes = false;
 						lFileStart = oTFP.m_oData.get(0).m_lStart;
 						lFileEnd = oTFP.m_oData.get(0).m_lEnd;
 						lFileRecv = oTFP.m_oData.get(0).m_lRecv;
@@ -229,9 +230,6 @@ public class PcCat extends TileFileWriter
 					oAllTiles.add(oTFP);
 				}	
 			}
-
-			if (oFirstTask == null)
-				return;
 
 			m_oLogger.info(oAllTiles.size());
 			FilenameFormatter oFF = new FilenameFormatter(oPcCatRR.getTiledFf());
@@ -258,9 +256,9 @@ public class PcCat extends TileFileWriter
 				oOut.writeByte(oPcCatRR.getZoom()); // tile zoom level
 				oOut.writeByte(oPcCatRR.getTileSize());
 
-				oFirstTask.get();
+				for (Future oTask : oTasks)
+					oTask.get();
 				oTP.shutdown();
-				oTP.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
 				int nIndex = oAllTiles.size();
 				while (nIndex-- > 0) // remove possible empty tiles
 				{
@@ -421,6 +419,7 @@ public class PcCat extends TileFileWriter
 		double getCategory(double dRate, double dType)
 		{
 			double dCat = Double.NaN;
+			dType = Math.round(dType);
 			if (dType == m_dNone || dRate <= 0.0) // ignore no precip
 				return dCat;
 			else if (dType == m_dRain)

@@ -5,10 +5,7 @@
  */
 package imrcp.comp;
 
-import imrcp.collect.NWSTileFileWriter;
-import imrcp.system.FilenameFormatter;
 import imrcp.geosrv.GeoUtil;
-import imrcp.geosrv.Mercator;
 import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.store.ProjProfile;
@@ -20,19 +17,12 @@ import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.TileFileInfo;
 import imrcp.system.TileFileWriter;
-import imrcp.system.Util;
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import org.json.JSONObject;
 import ucar.unidata.geoloc.projection.LatLonProjection;
 
@@ -470,17 +460,9 @@ public class DataAssimilation extends TileFileWriter
 			
 			int[] nContrib = new int[]{Integer.valueOf("wxde", 36), Integer.MIN_VALUE};
 			ProjProfile oProj = ProjProfiles.getInstance().getProfile(m_nHrz, m_nVrt, m_dStartHrz, m_dStartVrt, m_dEndHrz, m_dEndVrt);
-			ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-			double[] dCorners = new double[8];
+
 			for (ResourceRecord oRR : oInfo.m_oRRs)
 			{
-				int nZoom = oRR.getZoom();
-				int nTileSize = oRR.getTileSize();
-				int nPPT = (int)Math.pow(2, nTileSize) - 1;
-				int[] nTile = new int[2];
-				Mercator oM = new Mercator(nPPT);
-				FilenameFormatter oTiledFf = new FilenameFormatter(oRR.getTiledFf());
-				
 				int nFreq = oRR.getTileFileFrequency();
 				long lTimestamp = oInfo.m_lStart / nFreq * nFreq + oRR.getDelay();
 				long lEnd = oInfo.m_lEnd / nFreq * nFreq + nFreq + oRR.getDelay();
@@ -489,9 +471,7 @@ public class DataAssimilation extends TileFileWriter
 				{
 					try
 					{
-						NWSTileFileWriter.Tile oTile;
-						ArrayList<NWSTileFileWriter.Tile> oTiles = new ArrayList();
-
+						long lFileEnd = lTimestamp + oRR.getRange();
 						
 						ObsList oData = ((TileObsView)Directory.getInstance().lookup("ObsView")).getData(oRR.getObsTypeId(), lTimestamp, lTimestamp + 1, nLat1, nLat2, nLon1, nLon2, oInfo.m_lRef, nContrib); // query the configured store to get the last 20 minutes of observations
 						Introsort.usort(oData, Obs.g_oCompObsByTime);
@@ -527,167 +507,7 @@ public class DataAssimilation extends TileFileWriter
 							return;
 
 						estimate(dGrid, nMinMax);
-
-						int nStart = nMinMax[1];
-						int nEnd = nMinMax[3];
-						int nStep = 1;
-						if (!oProj.m_bUseReverseY)
-						{
-							nStart = nMinMax[3];
-							nEnd = nMinMax[1];
-							nStep = -1;
-						}
-						
-						int nMeasured = 0;
-						int nEstimates = 0;
-						for (int nY = nStart; nY != nEnd; nY += nStep)
-						{
-							for (int nX = nMinMax[0]; nX < nMinMax[2]; nX++)
-							{
-								double dVal = dGrid[nY][nX];
-								if (!Double.isFinite(dVal))
-									continue;
-
-								if (dVal > m_dMinVal)
-								{
-									++nMeasured;
-								}
-								else
-								{
-									dVal += m_dBias;
-									++nEstimates;
-								}
-
-								dVal = nearest(dVal, oRR.getRound());
-
-								oProj.getCell(nX, nY, dCorners);
-								
-								double dMinX = Math.min(dCorners[ProjProfile.xTL], dCorners[ProjProfile.xBL]);
-								double dMinY = Math.min(dCorners[ProjProfile.yBL], dCorners[ProjProfile.yBR]);
-								double dMaxX = Math.max(dCorners[ProjProfile.xTR], dCorners[ProjProfile.xBR]);
-								double dMaxY = Math.max(dCorners[ProjProfile.yTL], dCorners[ProjProfile.yTR]);
-								oM.lonLatToTile(dMinX, dMaxY, nZoom, nTile);
-								int nStartX = nTile[0]; // does this handle lambert conformal?
-								int nStartY = nTile[1];
-								oM.lonLatToTile(dMaxX, dMinY, nZoom, nTile);
-								int nEndX = nTile[0];
-								int nEndY = nTile[1];
-								for (int nTileY = nStartY; nTileY <= nEndY; nTileY++)
-								{
-									for (int nTileX = nStartX; nTileX <= nEndX; nTileX++)
-									{
-										nTile[0] = nTileX;
-										nTile[1] = nTileY;
-										int nIndex = Collections.binarySearch(oTiles, nTile);
-										if (nIndex < 0)
-										{
-											oTile = new NWSTileFileWriter.Tile(nTileX, nTileY, oM, oRR);
-											oTiles.add(~nIndex, oTile); // append new tile to list
-										}
-										else
-											oTile = oTiles.get(nIndex);
-
-										NWSTileFileWriter.Chain oCell = new NWSTileFileWriter.Chain(
-											dCorners[ProjProfile.xTL], dCorners[ProjProfile.yTL], 
-											dCorners[ProjProfile.xTR], dCorners[ProjProfile.yTR], 
-											dCorners[ProjProfile.xBR], dCorners[ProjProfile.yBR], 
-											dCorners[ProjProfile.xBL], dCorners[ProjProfile.yBL]);
-
-										if (!oTile.containsKey(dVal))
-										{
-											ArrayList<NWSTileFileWriter.Chain> oChains = new ArrayList();
-											oChains.add(oCell);
-											oTile.put(dVal, oChains);
-										}
-										else
-										{
-											ArrayList<NWSTileFileWriter.Chain> oChains = oTile.get(dVal);
-											NWSTileFileWriter.Chain oLast = (NWSTileFileWriter.Chain)oChains.get(oChains.size() - 1);
-											if (!oLast.add(oCell)) // attempt to add cell chain to existing chain
-												oChains.add(oCell); // otherwise start new chain
-										}
-									}
-								}
-							}
-						}
-			
-						m_oLogger.debug("Tiles " + oTiles.size() + " Measured " + nMeasured + " Estimated " + nEstimates);
-						int nLastPos = 0;
-						while (nLastPos < oTiles.size())
-						{
-							NWSTileFileWriter.Tile oSubTile = oTiles.get(nLastPos++);
-							oSubTile.m_nState = 0;
-							oTP.submit(oSubTile);
-						}
-						Path oPath = oRR.getFilename(lTimestamp, lTimestamp, lTimestamp + oRR.getRange(), oTiledFf);
-						Files.createDirectories(oPath.getParent());
-						
-						int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-						for (int nMinMaxIndex = 0; nMinMaxIndex < nMinMax.length;)
-						{
-							oProj.getCell(nMinMax[nMinMaxIndex++], nMinMax[nMinMaxIndex++], dCorners);
-							for (int nCornersIndex = 0; nCornersIndex < dCorners.length;)
-							{
-								int nX = GeoUtil.toIntDeg(dCorners[nCornersIndex++]);
-								int nY = GeoUtil.toIntDeg(dCorners[nCornersIndex++]);
-								
-								if (nX < nBB[0])
-									nBB[0] = nX;
-								if (nY < nBB[1])
-									nBB[1] = nY;
-								if (nX > nBB[2])
-									nBB[2] = nX;
-								if (nY > nBB[3])
-									nBB[3] = nY;
-							}
-						}
-						
-						
-						try (DataOutputStream oWrap = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oPath))))
-						{
-							oWrap.write(new byte[52 + oTiles.size() * 8]); // reserve 51 bytes for header and tile metadata records are 8-bytes each
-
-							int nPos = 0;
-							while (nPos < oTiles.size())
-							{
-								oTile = oTiles.get(nPos++);
-								synchronized(oTile)
-								{
-									if (oTile.m_nState <= 0)
-										oTile.wait(); // wait for tile completion
-								}
-								oWrap.write(oTile.m_yData);
-							}
-						}
-
-						try (DataOutputStream oWrap = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oPath, StandardOpenOption.WRITE))))
-						{
-							oWrap.writeByte(1); // version
-							oWrap.writeInt(nBB[0]); // bounds min x
-							oWrap.writeInt(nBB[1]); // bounds min y
-							oWrap.writeInt(nBB[2]); // bounds max x
-							oWrap.writeInt(nBB[3]); // bounds max y
-							oWrap.writeInt(oRR.getObsTypeId()); // obsversation type
-							oWrap.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
-							oWrap.writeByte(Obs.POLYGON); // geo type
-							oWrap.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
-							oWrap.writeByte(0b00000000); // don't assoc with an obj and timestamp formats, all zero since times for obs are found in header
-							oWrap.writeLong(lTimestamp);
-							oWrap.writeInt((int)((lTimestamp + oRR.getRange() - lTimestamp) / 1000)); // end time offset from received time
-							oWrap.writeByte(1); // 1 start time
-							oWrap.writeInt(0); // start time and received time are the same. offset from received time
-							oWrap.writeInt(0); // no string pool
-
-							oWrap.writeByte(nZoom); // tile zoom level
-							oWrap.writeByte(nTileSize);
-							oWrap.writeInt(oTiles.size());
-							for (NWSTileFileWriter.Tile oDoneTile : oTiles) // finish writing tile metadata
-							{
-								oWrap.writeShort(oDoneTile.m_nX);
-								oWrap.writeShort(oDoneTile.m_nY);
-								oWrap.writeInt(oDoneTile.m_yData.length);
-							}
-						}
+						new DATileFileWriter().write(oProj, dGrid, oRR, lTimestamp, lFileEnd, nMinMax, m_dMinVal, m_dBias);
 					}
 					catch (Exception oEx)
 					{
@@ -702,5 +522,6 @@ public class DataAssimilation extends TileFileWriter
 		{
 			m_oLogger.error(oEx, oEx);
 		}
+		m_oLogger.debug("create files done");
 	}
 }
