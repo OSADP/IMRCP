@@ -645,7 +645,20 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 		
 		return oContribRRs;	
 	}
-
+	
+	public static ResourceRecord getRR(ArrayList<ResourceRecord> oRRs, int nObstype)
+	{
+		int nIndex = oRRs.size();
+		while (nIndex-- > 0)
+		{
+			ResourceRecord oTemp = oRRs.get(nIndex);
+			if (oTemp.getObsTypeId() == nObstype)
+				return oTemp;
+		}
+		
+		return null;
+	}
+	
 	
 	/**
 	 * This object is what gets registered into the Directory representing all 

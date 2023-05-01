@@ -22,6 +22,7 @@ public class Emails extends BaseBlock
 	private int m_nSmtpPort;
 	private String m_sSmtpHost;
 	private String m_sDomain;
+	private String m_sFrom;
 		
 	
 	@Override
@@ -30,9 +31,12 @@ public class Emails extends BaseBlock
 		super.reset(oBlockConfig);
 		m_sEmail = oBlockConfig.getString("email");
 		m_sPw = oBlockConfig.getString("pw");
-		m_nSmtpPort = oBlockConfig.getInt("smtpport");
+		m_nSmtpPort = oBlockConfig.optInt("smtpport", 587);
 		m_sSmtpHost = oBlockConfig.getString("smtphost");
 		m_sDomain = oBlockConfig.getString("domain");
+		m_sFrom = oBlockConfig.optString("from", "");
+		if (m_sFrom.isEmpty())
+			m_sFrom = "donotreply@" + m_sDomain;
 	}
 	
 	
@@ -79,7 +83,7 @@ public class Emails extends BaseBlock
 
 			oMessage.setSubject(sSubject);
 			oMessage.setText(sBody);
-			oMessage.setFrom("donotreply@" + m_sDomain);
+			oMessage.setFrom(m_sFrom);
 			
 			Transport oTransport = oSession.getTransport("smtp");
 			oTransport.connect();

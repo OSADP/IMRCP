@@ -450,6 +450,7 @@ public class ObsType
 	
 	public static final int RESRN = Integer.valueOf(OBS_TYPES[61][0], 36);
 	public static final int RESSN = Integer.valueOf(OBS_TYPES[62][0], 36);
+	public static final int VSLLNK = Integer.valueOf(OBS_TYPES[63][0], 36);
 	
 	
 	/**
@@ -466,7 +467,7 @@ public class ObsType
 		   DNFLNK, CTLEFT, DURGRN, CTTHRU, CTMID, TSSRF, DPHLIQ, DPHSN,
 		   FLWCAT, SPDCAT, OCCCAT, QPRLNK, DPHLNK, PCCAT, TRFLNK, TDNLNK,
 		   TIMERT, RDR0, NOTIFY, TRSCAT, TRSTRK, TRSCNE, KRTPVT, KTSSRF, SSCST, VARIES,
-		   RTSLDM, RTLIQM, RTPREM, TPSLDM, TPLIQM, TPPREM, MPLOW, WPLOW, TPLOW, SPDVEH, RESRN, RESSN
+		   RTSLDM, RTLIQM, RTPREM, TPSLDM, TPLIQM, TPPREM, MPLOW, WPLOW, TPLOW, SPDVEH, RESRN, RESSN, VSLLNK
 	   };
 
 	

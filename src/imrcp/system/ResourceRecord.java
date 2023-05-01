@@ -111,6 +111,7 @@ public class ResourceRecord
 		m_nMaxFcst = nMaxFcst;
 		m_nDelay = nDelay;
 		m_nTileSearchOffset = nTileSearchOffset;
+		m_nArchiveSearchOffset = nArchiveSearchOffset;
 		m_bInVaries = bInVaries;
 		m_sWriter = sWriter;
 		m_bReprocess = bReprocess;
@@ -123,14 +124,22 @@ public class ResourceRecord
 	{
 		try
 		{
+			String sWriter = oConfig.getString("writer");
+			BaseBlock oWriter = Directory.getInstance().lookup(sWriter);
+			if (oWriter == null)
+				return;
 			int nContribId = Integer.valueOf(oConfig.getString("contrib"), 36);
 			int nSourceId = oConfig.has("sourceid") ? Integer.valueOf(oConfig.getString("sourceid"), 36) : nContribId;
-			String sArchive = oConfig.optString("archiveff");
+			String sArchive = oConfig.optString("archiveff");				
 			if (sArchive.startsWith("/"))
 				sArchive = sArchive.substring(1);
+			if (!sArchive.isEmpty())
+				sArchive = oWriter.m_sArchPath + sArchive;
 			String sTile = oConfig.getString("tileff");
 			if (sTile.startsWith("/"))
 				sTile = sTile.substring(1);
+			if (!sTile.isEmpty())
+				sTile = oWriter.m_sDataPath + sTile;
 			String sHrz = oConfig.optString("hrz");
 			String sVrt = oConfig.optString("vrt");
 			String sTime = oConfig.optString("time");
@@ -151,17 +160,14 @@ public class ResourceRecord
 			int nArchiveSearchOffset = oConfig.optInt("archivesearchoffset", 0);
 			boolean bReprocess = oConfig.optBoolean("reprocess", true);
 			boolean bInVaries = oConfig.optBoolean("varies", false);
-			String sWriter = oConfig.getString("writer");
-			BaseBlock oWriter = Directory.getInstance().lookup(sWriter);
-			if (oWriter == null)
-				return;
+			
 			int[] nBoundingBox = JSONUtil.optIntArray(oConfig, "boundingbox", UNBOUNDED);
 			int[] nValueTypes = JSONUtil.getIntArray(oConfig, "valuetype");
 			for (int nIndex = 0; nIndex < sObsTypes.length; nIndex++)
 			{
 				byte yPref = nPref.length == 0 ? Byte.MAX_VALUE : (byte)nPref[nIndex];
 				String[] sLabels = JSONUtil.getStringArray(oConfig, sObsTypes[nIndex]);
-				oResources.add(new ResourceRecord(nContribId, Integer.valueOf(sObsTypes[nIndex], 36), nSourceId, oWriter.m_sArchPath + sArchive, oWriter.m_sDataPath + sTile, 
+				oResources.add(new ResourceRecord(nContribId, Integer.valueOf(sObsTypes[nIndex], 36), nSourceId, sArchive, sTile, 
 					sHrz, sVrt, sTime, sLabels, nRange, nFreq, nArchiveFreq, sSrcUnits[nIndex], dRound[nIndex], nZoom, 
 					sClassNames[nIndex].isEmpty() ? "imrcp.collect.NWSTileFileWriterJni" : sClassNames[nIndex], yPref, nTileSize, 
 					nMaxFcst, nDelay, nTileSearchOffset, nArchiveSearchOffset, bInVaries, sWriter, bReprocess, nBoundingBox, (byte)nValueTypes[nIndex]));
