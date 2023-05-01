@@ -38,7 +38,7 @@ import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -244,6 +244,16 @@ public class NWS extends Collector
 			}
 		}
 		
+		if (m_nSourceId != Integer.MIN_VALUE)
+		{
+			int nIndex = oResourceRecords.size();
+			while (nIndex-- > 0)
+			{
+				if (oResourceRecords.get(nIndex).getSourceId() != m_nSourceId)
+					oResourceRecords.remove(nIndex);
+			}
+		}
+		
 		
 		FilenameFormatter oArchiveFile = new FilenameFormatter(oResourceRecords.get(0).getArchiveFf());
 		String sExt = oArchiveFile.getExtension();
@@ -288,15 +298,26 @@ public class NWS extends Collector
 				}
 				catch (Exception oEx)
 				{
-					m_oLogger.error(oEx, oEx);
-					if (m_nIndexFails[i]++ > 6)
+					if (m_nIndexFails[i]++ > 3) // failed 3 collections in a row for the given directory
 					{
-						setError();
-						return;
+						m_nIndexFails[i] = 0;
+						m_oLogger.error(oEx, oEx);
+						if (oEx instanceof FileNotFoundException)
+						{
+							int nTemp = m_nErrorRetry;
+							m_nErrorRetry = 1800000;
+							setError();
+							m_nErrorRetry = nTemp;
+						}
+						else
+						{
+							setError();
+						}
+						continue;
 					}
-					continue;
 				}
 
+				m_nIndexFails[i] = 0;
 				int nStart = sIndex.indexOf(m_sInitSkip); // skip to where files are listed
 				nStart = sIndex.indexOf(m_sStart, nStart); // find the first file entry
 				int nEnd = sIndex.indexOf(m_sEnd, nStart);
@@ -418,8 +439,10 @@ public class NWS extends Collector
 	@Override
 	public boolean start() throws Exception
 	{
-		Scheduling.getInstance().scheduleOnce(this, 10000);
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bCollectRT)
+		{
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		}
 		return true;
 	}
 	
@@ -515,12 +538,24 @@ public class NWS extends Collector
 			long lStart = oInfo.m_lStart;
 			long lEnd = oInfo.m_lEnd;
 			long lRecv = oInfo.m_lRef;
-			ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
+			ThreadPoolExecutor oTP = createThreadPool();
+			ArrayList<Future> oTasks = new ArrayList();
 			for (Path oFile : oArchiveFiles)
 			{
 				String sFilepath = oFile.toString();
 				if (!oCachedFiles.containsKey(sFilepath))
-					oCachedFiles.put(sFilepath, NetcdfFile.open(sFilepath));
+				{
+					NetcdfFile oNcFile;
+					try
+					{
+						oNcFile = NetcdfFile.open(sFilepath);
+						oCachedFiles.put(sFilepath, oNcFile);
+					}
+					catch (IOException oEx)
+					{
+						Files.deleteIfExists(oFile);
+					}
+				}
 			}
 			for (ResourceRecord oRR : oInfo.m_oRRs)
 			{
@@ -529,13 +564,12 @@ public class NWS extends Collector
 				FilenameFormatter oArchive = new FilenameFormatter(oRR.getArchiveFf());
 				for (Path oFile : oArchiveFiles)
 				{
+					if (!Files.exists(oFile))
+						continue;
 					oArchive.parse(oFile.toString(), lParsedTimes);
+					lRecv = lParsedTimes[FilenameFormatter.VALID];
 					NetcdfFile oNcFile = oCachedFiles.get(oFile.toString());
-
-					m_oLogger.info(String.format("Starting tile file for %s %s", Integer.toString(oRR.getContribId(), 36), Integer.toString(oRR.getObsTypeId(), 36)));
 					
-					
-						
 					double[] dHrz = fromArray(oNcFile, oRR.getHrz()); // sort order varies
 					double[] dVrt = fromArray(oNcFile, oRR.getVrt());
 					double[] dTime = fromArray(oNcFile, oRR.getTime());
@@ -611,19 +645,19 @@ public class NWS extends Collector
 						nBB = new int[]{nMinMax[1], nMinMax[2], nMinMax[3], nMinMax[4]};
 					else
 						nBB = oRR.getBoundingBox();
+					Array oMerged = null;
 					try
 					{
-//						NWSTileFileWriter oTFWriter = (NWSTileFileWriter)Class.forName(oRR.getClassName()).getDeclaredConstructor().newInstance();
-						NWSTileFileWriterJni oTFWriter = (NWSTileFileWriterJni)Class.forName(oRR.getClassName()).getDeclaredConstructor().newInstance();
-						oTFWriter.merge(oGrids, oRR);
 						for (int nT = 0; nT < dTime.length; nT++)
 						{
-							if (dTime[nT] < lStart || dTime[nT] >= lEnd)
+							if (dTime.length > 1 && (dTime[nT] < lStart || dTime[nT] >= lEnd))
 								continue;
-							m_oLogger.info(String.format("Writing tile file for %s for time %d",  Integer.toString(oRR.getObsTypeId(), 36), nT));
-//							oTFWriter.write(oTP, oProj, oVar, dHrz, dVrt, dTime, nT, oRR, lParsedTimes[FilenameFormatter.END], lRecv, nBB);
-							oTFWriter.write(oProj, oVar, dHrz, dVrt, dTime, nT, oRR, lParsedTimes[FilenameFormatter.END], lRecv, nBB);
-							m_oLogger.info(String.format("Finished file for %s for time %d",  Integer.toString(oRR.getObsTypeId(), 36), nT));
+							NWSTileFileWriterJni oTFWriter = (NWSTileFileWriterJni)Class.forName(oRR.getClassName()).getDeclaredConstructor().newInstance();
+							oTFWriter.merge(oGrids, oRR, oMerged);
+							if (oMerged == null)
+								oMerged = oTFWriter.getDataArray();
+							oTFWriter.setValuesForCall(oProj, oVar, dHrz, dVrt, dTime, nT, oRR, lParsedTimes[FilenameFormatter.END], lRecv, nBB, m_oLogger, oFile.toString());
+							oTasks.add(oTP.submit(oTFWriter));
 						}
 					}
 					catch (Exception oEx)
@@ -632,6 +666,10 @@ public class NWS extends Collector
 					}
 				}
 			}
+			
+			for (Future oTask : oTasks)
+				oTask.get();
+			oTP.shutdown();
 			for (NetcdfFile oNcFile : oCachedFiles.values())
 			{
 				oNcFile.close();

@@ -310,8 +310,8 @@ public class WxDESub extends Collector
 
 				m_oLogger.info(oTiles.size());
 				ArrayList<String> oSPList = oSP.toList();
-				ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-				Future oFirstTask = null;
+				ThreadPoolExecutor oTP = createThreadPool();
+				ArrayList<Future> oTasks = new ArrayList(oTiles.size());
 				int nStringFlag = 0;
 				for (int nString = 0; nString < m_nStrings; nString++)
 					nStringFlag = Obs.addFlag(nStringFlag, nString);
@@ -327,14 +327,8 @@ public class WxDESub extends Collector
 					oTile.m_bWriteRecv = true;
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
-					Future oTask = oTP.submit(oTile);
-					if (oTask != null && oFirstTask == null)
-						oFirstTask = oTask;
+					oTasks.add(oTP.submit(oTile));
 				}
-				if (oFirstTask != null)
-					oFirstTask.get();
-				oTP.shutdown();
-				oTP.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
 				try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTiledFile))))
 				{
 					oOut.writeByte(1); // version
@@ -367,6 +361,9 @@ public class WxDESub extends Collector
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
 					oOut.writeInt(oTiles.size());
+					for (Future oTask : oTasks)
+						oTask.get();
+					oTP.shutdown();
 					for (TileForPoint oTile : oTiles) // finish writing tile metadata
 					{
 						oOut.writeShort(oTile.m_nX);

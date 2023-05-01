@@ -40,6 +40,8 @@ public abstract class Collector extends TileFileWriter
 	protected int m_nStrings;
 	
 	protected int m_nSourceId;
+	
+	protected boolean m_bCollectRT;
 	/**
 	 *
 	 */
@@ -61,6 +63,7 @@ public abstract class Collector extends TileFileWriter
 		m_nSourceId = Integer.valueOf(oBlockConfig.optString("sourceid", "0"), 36);
 		if (m_nSourceId == 0)
 			m_nSourceId = Integer.MIN_VALUE;
+		m_bCollectRT = oBlockConfig.optBoolean("collectrt", true);
 	}
 	
 	

@@ -46,6 +46,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
+import org.json.JSONObject;
 
 /**
  *
@@ -53,11 +54,21 @@ import java.util.zip.GZIPInputStream;
  */
 public class Traffic extends Collector
 {
-
+	private int m_nEndOffset;
+	private boolean m_bLog = true;
+	@Override
+	public void reset(JSONObject oBlockConfig)
+	{
+		super.reset(oBlockConfig);
+		m_nEndOffset = oBlockConfig.optInt("endoffset", 60000);
+	}
+	
+	
 	@Override
 	public boolean start() throws Exception
 	{
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bCollectRT)
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 	
@@ -69,6 +80,8 @@ public class Traffic extends Collector
 			ArrayList<ResourceRecord> oRRs = Directory.getResourcesByContribSource(m_nContribId, m_nSourceId);
 			long lNow = System.currentTimeMillis();
 			lNow = lNow / 60000 * 60000;
+			if (lNow % 86400000 == 0)
+				m_bLog = true;
 			processRealTime(oRRs, lNow, lNow, lNow);
 		}
 		catch (Exception oEx)
@@ -150,6 +163,8 @@ public class Traffic extends Collector
 							long lStart = oSdf.parse(oIn.parseString(2)).getTime();
 							++nColumn;
 							long lEnd = oSdf.parse(oIn.parseString(3)).getTime();
+							if (lStart >= lEnd)
+								lEnd = lStart + m_nEndOffset;
 							++nColumn;
 							double dSpeed = oIn.isNull(4) ? Double.NaN : oIn.parseDouble(4);
 							++nColumn;
@@ -228,8 +243,12 @@ public class Traffic extends Collector
 						}
 						catch (Exception oEx)
 						{
-							m_oLogger.error(String.format("Error parsing line %d column %d", nLine, nColumn));
-							m_oLogger.error(oEx, oEx);
+							if (m_bLog)
+							{
+								m_oLogger.error(String.format("Error parsing line %d column %d in file %s", nLine, nColumn, oPath.toString()));
+								m_oLogger.error(oEx, oEx);
+								m_bLog = false;
+							}
 						}
 					}
 				}
@@ -316,8 +335,8 @@ public class Traffic extends Collector
 						if (oTiles.isEmpty())
 							continue;
 						
-						ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-						Future oFirstTask = null;
+						ThreadPoolExecutor oTP = createThreadPool();
+						ArrayList<Future> oTasks = new ArrayList(oTiles.size());
 						ArrayList<String> oSPList = oSP.toList();
 						for (TileForPoint oTile : oTiles)
 						{
@@ -331,9 +350,8 @@ public class Traffic extends Collector
 							oTile.m_bWriteStart = true;
 							oTile.m_bWriteEnd = true;
 							oTile.m_bWriteObsType = false;
-							Future oTask = oTP.submit(oTile);
-							if (oTask != null && oFirstTask == null)
-								oFirstTask = oTask;
+							oTasks.add(oTP.submit(oTile));
+
 						}
 						FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
 						Path oTiledFile = oRR.getFilename(lFileTime, lStartTime, lEndTime, oFF);
@@ -372,10 +390,9 @@ public class Traffic extends Collector
 							oOut.writeByte(oRR.getTileSize());
 							oOut.writeInt(oTiles.size());
 
-							if (oFirstTask != null)
-								oFirstTask.get();
+							for (Future oTask : oTasks)
+								oTask.get();
 							oTP.shutdown();
-							oTP.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
 
 							for (TileForPoint oTile : oTiles) // finish writing tile metadata
 							{

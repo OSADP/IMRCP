@@ -11,6 +11,7 @@ import imrcp.store.Obs;
 import imrcp.store.ProjProfile;
 import imrcp.store.ProjProfiles;
 import imrcp.system.FilenameFormatter;
+import imrcp.system.LibImrcpWriter;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.TileFileWriter;
@@ -23,6 +24,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.Callable;
+import org.apache.logging.log4j.Logger;
 import ucar.ma2.Array;
 import ucar.ma2.Index;
 import ucar.nc2.Dimension;
@@ -34,112 +37,129 @@ import ucar.unidata.geoloc.ProjectionImpl;
  *
  * @author aaron.cherney
  */
-public class NWSTileFileWriterJni
+public class NWSTileFileWriterJni extends LibImrcpWriter implements Callable
 {
-	static
-	{
-		System.loadLibrary("imrcp");
-	}
-
 	protected Array m_oData = null;
-
+	protected ProjectionImpl m_oProj;
+	protected VariableDS m_oVar;
+	protected double[] m_dHrz;
+	protected double[] m_dVrt;
+	protected double[] m_dTime;
+	protected int m_nT;
+	protected ResourceRecord m_oRR;
+	protected long m_lExpectedEnd;
+	protected long m_lRecv;
+	protected int[] m_nBB;
+	protected Logger m_oLogger;
+	protected String m_sFile;
 	
 	public NWSTileFileWriterJni()
 	{
 	}
-
-
-	private static native long init(int nPPT, int nZoom);
-
-
-	private static native int addCell(long lTileWriterRef, int nX, int nY, double[] dCell);
-
-
-	private static native void process(long lTileWriterRef, int[] nTileInfo, int nLevel, int nIndex);
-
-
-	private static native void getData(long lTileWriterRef, byte[] yBuf, int nIndex);
-
-
-	private static native void free(long lTileWriterRef);
 	
 	
-	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR)
+	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR, Array oMerged)
 		throws IOException
 	{
-		if (m_oData == null)
+		if (oMerged == null)
 			m_oData = oGrids.get(0).getVariable().read();
+		else
+			m_oData = oMerged;
 	}
 	
 	
-	public void write(ProjectionImpl oProj, VariableDS oVar, double[] dHrz, double[] dVrt, double[] dTime, int nT, ResourceRecord oRR, long lExpectedEnd, long lRecv, int[] nBB)
+	public Array getDataArray()
+	{
+		return m_oData;
+	}
+	
+	public void setValuesForCall(ProjectionImpl oProj, VariableDS oVar, double[] dHrz, double[] dVrt, double[] dTime, int nT, ResourceRecord oRR, long lExpectedEnd, long lRecv, int[] nBB, Logger oLogger, String sFile)
 		throws Exception
 	{
-		int nZoom = oRR.getZoom();
-		int nTileSize = oRR.getTileSize();
+		m_oProj = oProj;
+		m_oVar = oVar;
+		m_dHrz = dHrz;
+		m_dVrt = dVrt;
+		m_dTime = dTime;
+		m_nT = nT;
+		m_oRR = oRR;
+		m_lExpectedEnd = lExpectedEnd;
+		m_lRecv = lRecv;
+		m_nBB = nBB;
+		m_oLogger = oLogger;
+		m_sFile = sFile;
+		
+	}
+
+	@Override
+	public Object call() throws Exception
+	{
+		m_oLogger.info(String.format("Writing tile file for %s for time %d - %s",  Integer.toString(m_oRR.getObsTypeId(), 36), m_nT, m_sFile));
+		int nZoom = m_oRR.getZoom();
+		int nTileSize = m_oRR.getTileSize();
 		long lTileWriterRef = init((int)Math.pow(2, nTileSize) - 1, nZoom);
 		double[] dCell = new double[9]; // 4 corner points and 1 data value
-		ProjProfile oProfile = ProjProfiles.getInstance().newProfile(dHrz, dVrt, oProj, 0);
+		ProjProfile oProfile = ProjProfiles.getInstance().newProfile(m_dHrz, m_dVrt, m_oProj, 0);
 		
-		String sTimeName = oRR.getTime();
-		for (Dimension oDim : oVar.getDimensions())
+		String sTimeName = m_oRR.getTime();
+		for (Dimension oDim : m_oVar.getDimensions())
 		{
 			if (oDim.getShortName().startsWith(sTimeName))
 				sTimeName = oDim.getShortName();
 		}
 		Index oIndex = m_oData.getIndex();
-		int nHrzIndex = oVar.findDimensionIndex(oRR.getHrz());
-		int nVrtIndex = oVar.findDimensionIndex(oRR.getVrt());
-		int nTimeIndex = oVar.findDimensionIndex(sTimeName);
-		oIndex.setDim(nTimeIndex, nT);
+		int nHrzIndex = m_oVar.findDimensionIndex(m_oRR.getHrz());
+		int nVrtIndex = m_oVar.findDimensionIndex(m_oRR.getVrt());
+		int nTimeIndex = m_oVar.findDimensionIndex(sTimeName);
+		oIndex.setDim(nTimeIndex, m_nT);
 		
 		
-		long lStart = (long)dTime[nT];
+		long lStart = (long)m_dTime[m_nT];
 		long lEnd;
-		if (nT == dTime.length - 1)
+		if (m_nT == m_dTime.length - 1)
 		{
-			if (dTime.length == 1)
-				lEnd = lExpectedEnd;
+			if (m_dTime.length == 1)
+				lEnd = m_lExpectedEnd;
 			else
-				lEnd = (long)dTime[dTime.length - 1] - (long)dTime[dTime.length - 2] + (long)dTime[dTime.length - 1];
+				lEnd = (long)m_dTime[m_dTime.length - 1] - (long)m_dTime[m_dTime.length - 2] + (long)m_dTime[m_dTime.length - 1];
 		}
 		else
-			lEnd = (long)dTime[nT + 1];
+			lEnd = (long)m_dTime[m_nT + 1];
 
-		RangeRules oRules = ObsType.getRangeRules(oRR.getObsTypeId(), oRR.getSrcUnits());
-		FilenameFormatter oFf = new FilenameFormatter(oRR.getTiledFf());
-		Path oPath = oRR.getFilename(lRecv, lStart, lEnd, oFf);
-		if (Files.exists(oPath))
-			return;
+		RangeRules oRules = ObsType.getRangeRules(m_oRR.getObsTypeId(), m_oRR.getSrcUnits());
+		FilenameFormatter oFf = new FilenameFormatter(m_oRR.getTiledFf());
+		Path oPath = m_oRR.getFilename(m_lRecv, lStart, lEnd, oFf);
 		Files.createDirectories(oPath.getParent());
 		
 		int nStart = 0;
-		int nEnd = dVrt.length - 1;
+		int nEnd = m_dVrt.length - 1;
 		int nStep = 1;
 		if (!oProfile.m_bUseReverseY)
 		{
-			nStart = dVrt.length - 2;
+			nStart = m_dVrt.length - 2;
 			nEnd = nStep = -1;
 		}
 
 		int nTileCount = 0;
-		int[] nBounds = oRR.getBoundingBox();
+		int[] nBounds = m_oRR.getBoundingBox();
 		double[] dProcessBounds = new double[]{GeoUtil.fromIntDeg(nBounds[0]), GeoUtil.fromIntDeg(nBounds[1]), GeoUtil.fromIntDeg(nBounds[2]), GeoUtil.fromIntDeg(nBounds[3])};
 		Units oUnits = Units.getInstance();
-		UnitConv oConv = oUnits.getConversion(oRR.getSrcUnits(), ObsType.getUnits(oRR.getObsTypeId(), true));
+		UnitConv oConv = oUnits.getConversion(m_oRR.getSrcUnits(), ObsType.getUnits(m_oRR.getObsTypeId(), true));
 		int nPseudoY = 0; // ensure cell Y is zero-based
 		for (int nY = nStart; nY != nEnd; nY += nStep)
 		{
 			oIndex.setDim(nVrtIndex, nY);
-			for (int nX = 0; nX < dHrz.length - 1; nX++)
+			for (int nX = 0; nX < m_dHrz.length - 1; nX++)
 			{
 				oIndex.setDim(nHrzIndex, nX);
 				double dVal = m_oData.getDouble(oIndex);
-				if (!Double.isFinite(dVal) || oVar.isMissing(dVal) || oVar.isFillValue(dVal) || oVar.isInvalidData(dVal))
+				if (dVal > 0.7)
+					System.currentTimeMillis();
+				if (!Double.isFinite(dVal) || m_oVar.isMissing(dVal) || m_oVar.isFillValue(dVal) || m_oVar.isInvalidData(dVal))
 					continue;
 				
 				dVal = oConv.convert(dVal);
-				dVal = TileFileWriter.nearest(dVal, oRR.getRound());
+				dVal = TileFileWriter.nearest(dVal, m_oRR.getRound());
 				if (oRules.shouldDelete(oRules.groupValue(dVal)))
 					continue;
 				
@@ -152,7 +172,7 @@ public class NWSTileFileWriterJni
 				double dMaxY = Math.max(dCell[ProjProfile.yTL], dCell[ProjProfile.yTR]);
 				if (!GeoUtil.boundingBoxesIntersect(dMinX, dMinY, dMaxX, dMaxY, dProcessBounds[0], dProcessBounds[1], dProcessBounds[2], dProcessBounds[3]))
 					continue;
-
+				
 				nTileCount = addCell(lTileWriterRef, nX, nPseudoY, dCell);
 			}
 			++nPseudoY;
@@ -161,19 +181,19 @@ public class NWSTileFileWriterJni
 		try (DataOutputStream oWrap = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oPath))))
 		{
 			oWrap.writeByte(1); // version
-			oWrap.writeInt(nBB[0]); // bounds min x
-			oWrap.writeInt(nBB[1]); // bounds min y
-			oWrap.writeInt(nBB[2]); // bounds max x
-			oWrap.writeInt(nBB[3]); // bounds max y
-			oWrap.writeInt(oRR.getObsTypeId()); // obsversation type
-			oWrap.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
+			oWrap.writeInt(m_nBB[0]); // bounds min x
+			oWrap.writeInt(m_nBB[1]); // bounds min y
+			oWrap.writeInt(m_nBB[2]); // bounds max x
+			oWrap.writeInt(m_nBB[3]); // bounds max y
+			oWrap.writeInt(m_oRR.getObsTypeId()); // obsversation type
+			oWrap.writeByte(Util.combineNybbles(0, m_oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
 			oWrap.writeByte(Obs.POLYGON); // geo type
 			oWrap.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
 			oWrap.writeByte(0b00000000); // don't assoc with an obj and timestamp formats, all zero since times for obs are found in header
-			oWrap.writeLong(lRecv);
-			oWrap.writeInt((int)((lEnd - lRecv) / 1000)); // end time offset from received time
+			oWrap.writeLong(m_lRecv);
+			oWrap.writeInt((int)((lEnd - m_lRecv) / 1000)); // end time offset from received time
 			oWrap.writeByte(1); // 1 start time
-			oWrap.writeInt((int)((lStart - lRecv) / 1000)); // start time offset from received time
+			oWrap.writeInt((int)((lStart - m_lRecv) / 1000)); // start time offset from received time
 			oWrap.writeInt(0); // no string pool
 			
 			oWrap.writeByte(nZoom); // tile zoom level
@@ -204,5 +224,7 @@ public class NWSTileFileWriterJni
 			}
 		}
 		free(lTileWriterRef);
+		m_oLogger.info(String.format("Finished file for %s for time %d - %s",  Integer.toString(m_oRR.getObsTypeId(), 36), m_nT, m_sFile));
+		return null;
 	}
 }

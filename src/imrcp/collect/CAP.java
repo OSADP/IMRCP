@@ -3,7 +3,6 @@ package imrcp.collect;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.store.Obs;
-import imrcp.store.ObsList;
 import imrcp.system.Arrays;
 import imrcp.system.FilenameFormatter;
 import imrcp.system.dbf.DbfResultSet;
@@ -19,8 +18,6 @@ import imrcp.system.XzBuffer;
 import imrcp.system.shp.Header;
 import imrcp.system.shp.Polyline;
 import imrcp.system.shp.PolyshapeIterator;
-import java.awt.geom.Area;
-import java.awt.geom.Path2D;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -65,7 +62,8 @@ public class CAP extends Collector
 	@Override
 	public boolean start()
 	{
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bCollectRT)
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 
@@ -214,12 +212,12 @@ public class CAP extends Collector
 				
 				SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
 				oSdf.setTimeZone(Directory.m_oUTC);
-				ObsList oObs = new ObsList();
 				long lFileStart = Long.MAX_VALUE;
 				long lFileEnd = Long.MIN_VALUE;
 				ArrayList<TileForPoly> oAllTiles = new ArrayList();
 				int[] nFileBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
 				TileForPoly oSearch = new TileForPoly();
+				int nCount = 0;
 				try (DbfResultSet oDbf = new DbfResultSet(new BufferedInputStream(new ByteArrayInputStream(yDbf)));
 					 DataInputStream oShp = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(yShp))))
 				{
@@ -232,10 +230,13 @@ public class CAP extends Collector
 					int nIdCol = oDbf.findColumn("CAP_ID"); // cap id
 					int nTypeCol = oDbf.findColumn("PROD_TYPE"); // alert type
 					int nUrlCol = oDbf.findColumn("URL"); // cap url
-					ArrayList<int[]> oPolygons = new ArrayList();
-					int[] nPolygon;
+
+					ArrayList<int[]> oOuters = new ArrayList();
+					ArrayList<int[]> oHoles = new ArrayList();
 					while (oDbf.next()) // for each record in the .dbf
 					{
+						oOuters.clear();
+						oHoles.clear();
 						long lEventStart = oSdf.parse(oDbf.getString(nOnCol)).getTime();
 						long lEventEnd= oSdf.parse(oDbf.getString(nExCol)).getTime();
 						long lEventRecv = oSdf.parse(oDbf.getString(nIsCol)).getTime();
@@ -249,55 +250,46 @@ public class CAP extends Collector
 							oSP.intern(sStrings[nString]);
 						Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
 						oIter = oPoly.iterator(oIter);
-						oPolygons.clear();
-						nPolygon = Arrays.newIntArray();
-						nPolygon = Arrays.add(nPolygon, 0); // starts with zero rings
-						int nPointIndex = nPolygon[0];
-						nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
-						int nBbIndex = nPolygon[0];
-						nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 						
-						while (oIter.nextPart()) // can be a multipolygon so make sure to read each part of the polygon
+						while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
 						{
-							nPolygon[1] += 1; // increment ring count
+							int[] nPolygon = Arrays.newIntArray();
+							nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
+							int nPointIndex = nPolygon[0];
+							nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
+							int nBbIndex = nPolygon[0];
+							nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 							while (oIter.nextPoint())
 							{
 								nPolygon[nPointIndex] += 1; // increment point count
-								int nLon = oIter.getX();
-								int nLat = oIter.getY();
-								nPolygon = Arrays.addAndUpdate(nPolygon, nLon, nLat, nBbIndex);
+								nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
 							}
 							if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
 							{
 								nPolygon[nPointIndex] -= 1;
 								nPolygon[0] -= 2;
 							}
-							oPolygons.add(nPolygon);
-							
-							nPolygon = Arrays.newIntArray();
-							nPolygon = Arrays.add(nPolygon, 0); // starts with zero rings
-							nPointIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
-							nBbIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+							if (GeoUtil.isClockwise(nPolygon, 2))
+								oOuters.add(nPolygon);
+							else
+								oHoles.add(nPolygon);
 						}
-						for (int[] nRing : oPolygons)
+						GeoUtil.getPolygons(oOuters, oHoles);
+						for (int[] nPolygon : oOuters)
 						{
-							if (!GeoUtil.isClockwise(nRing, 2)) // ignore holes for now
-								continue;
-							if (nRing[3] < nFileBB[0])
-								nFileBB[0] = nRing[3];
-							if (nRing[4] < nFileBB[1])
-								nFileBB[1] = nRing[4];
-							if (nRing[5] > nFileBB[2])
-								nFileBB[2] = nRing[5];
-							if (nRing[6] > nFileBB[3])
-								nFileBB[3] = nRing[6];
+							if (nPolygon[3] < nFileBB[0])
+								nFileBB[0] = nPolygon[3];
+							if (nPolygon[4] < nFileBB[1])
+								nFileBB[1] = nPolygon[4];
+							if (nPolygon[5] > nFileBB[2])
+								nFileBB[2] = nPolygon[5];
+							if (nPolygon[6] > nFileBB[3])
+								nFileBB[3] = nPolygon[6];
 							
-							oM.lonLatToTile(GeoUtil.fromIntDeg(nRing[3]), GeoUtil.fromIntDeg(nRing[6]), oRR.getZoom(), nTile);
+							oM.lonLatToTile(GeoUtil.fromIntDeg(nPolygon[3]), GeoUtil.fromIntDeg(nPolygon[6]), oRR.getZoom(), nTile);
 							int nStartX = nTile[0]; 
 							int nStartY = nTile[1];
-							oM.lonLatToTile(GeoUtil.fromIntDeg(nRing[5]), GeoUtil.fromIntDeg(nRing[4]), oRR.getZoom(), nTile);
+							oM.lonLatToTile(GeoUtil.fromIntDeg(nPolygon[5]), GeoUtil.fromIntDeg(nPolygon[4]), oRR.getZoom(), nTile);
 							int nEndX = nTile[0];
 							int nEndY = nTile[1];
 							for (int nTileY = nStartY; nTileY <= nEndY; nTileY++)
@@ -314,14 +306,14 @@ public class CAP extends Collector
 										oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
 									}
 
-									((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(nRing, sStrings, lEventStart, lEventEnd, lEventRecv, dEventValue));
+									((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(nPolygon, sStrings, lEventStart, lEventEnd, lEventRecv, dEventValue));
 								}
 							}
 						}
 					}
 				}
-				ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-				Future oFirstTask = null;
+				ThreadPoolExecutor oTP = createThreadPool();
+				ArrayList<Future> oTasks = new ArrayList(oAllTiles.size());
 				ArrayList<String> oSPList = oSP.toList();
 				for (TileForPoly oTile : oAllTiles)
 				{
@@ -329,9 +321,7 @@ public class CAP extends Collector
 					oTile.m_bWriteRecv = true;
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
-					Future oTask = oTP.submit(oTile);
-					if (oTask != null && oFirstTask == null)
-						oFirstTask = oTask;
+					oTasks.add(oTP.submit(oTile));
 				}
 				m_oLogger.debug(oAllTiles.size());
 				
@@ -372,10 +362,10 @@ public class CAP extends Collector
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
 					
-					if (oFirstTask != null)
-						oFirstTask.get();
+					for (Future oTask : oTasks)
+						oTask.get();
 					oTP.shutdown();
-					oTP.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+
 					int nIndex = oAllTiles.size();
 					while (nIndex-- > 0) // remove possible empty tiles
 					{

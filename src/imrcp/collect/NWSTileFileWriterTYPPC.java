@@ -43,9 +43,14 @@ public class NWSTileFileWriterTYPPC extends NWSTileFileWriterJni
 	}
 	
 	@Override
-	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR)
+	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR, Array oMerged)
 		throws IOException
 	{
+		if (oMerged != null)
+		{
+			m_oData = oMerged;
+			return;
+		}
 		VariableDS[] oVars = new VariableDS[oGrids.size()];
 		Array[] oArrays = new Array[oGrids.size()];
 		double[] dVals = new double[oGrids.size()];

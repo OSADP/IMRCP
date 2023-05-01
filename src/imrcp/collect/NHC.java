@@ -26,8 +26,6 @@ import imrcp.system.Units;
 import imrcp.system.Units.UnitConv;
 import imrcp.system.Util;
 import imrcp.system.XzBuffer;
-import java.awt.geom.Area;
-import java.awt.geom.Path2D;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -418,7 +416,6 @@ public class NHC extends Collector
 			{
 				ConeParser oCP = null;
 				TrackParser oTP = null;
-				m_oLogger.debug(oPath.toString());
 				try (ZipInputStream oZip = new ZipInputStream(Files.newInputStream(oPath))) // decompress the zip file
 				{
 					ZipEntry oZe;
@@ -480,13 +477,16 @@ public class NHC extends Collector
 				oPressure.m_oGeoArray = oCone.m_oGeoArray = oCP.m_nGeo;
 				oCone.m_dValue = lookupStormType(oCP.m_sStormType);
 				oPressure.m_dValue = oPressureConv.convert(oTP.m_nMinPressure);
-				oObsMap.get(ObsType.TRSCNE).add(oCone);
-				oObsMap.get(ObsType.PRSUR).add(oPressure);
+				
+				if (oObsMap.containsKey(ObsType.TRSCNE))
+					oObsMap.get(ObsType.TRSCNE).add(oCone);
+				if (oObsMap.containsKey(ObsType.PRSUR))
+					oObsMap.get(ObsType.PRSUR).add(oPressure);
 				
 				SimpleDateFormat oSdf = new SimpleDateFormat("yyyyMMddHHmm");
 				oSdf.setTimeZone(Directory.m_oUTC);
 				double[] dPoint = new double[2];
-				double dAngleStep = (Math.PI * 2) / m_nPointsInCircle;
+				double dAngleStep = -(Math.PI * 2) / m_nPointsInCircle;
 				for (int nIndex = 0; nIndex < oTP.m_oPoints.size(); nIndex++)
 				{
 					Point oP = oTP.m_oPoints.get(nIndex);
@@ -513,7 +513,7 @@ public class NHC extends Collector
 							int nLat = (int)(oP.m_nY + dDeltaY * nTime);
 							double dLon = GeoUtil.fromIntDeg(nLon);
 							double dLat = GeoUtil.fromIntDeg(nLat);
-							Iterator<int[]> oPoly = Arrays.iterator(oCone.m_oGeoArray, new int[2], 1, 2);
+							Iterator<int[]> oPoly = Arrays.iterator(oCone.m_oGeoArray, new int[2], 7, 2);
 							double dMinDist = Double.MAX_VALUE;
 							while (oPoly.hasNext()) // set the radius of the hurricane center to the minimum distance to a point on the cone of probability
 							{
@@ -530,18 +530,22 @@ public class NHC extends Collector
 							oWindCenter.m_lObsTime2 = oWindCenter.m_lObsTime1 + 3600000;
 							
 							oWindCenter.m_sStrings = sStrings;
-							int[] nGeo = Arrays.newIntArray(m_nPointsInCircle * 2);
+							int[] nGeo = Arrays.newIntArray(m_nPointsInCircle * 2 + 6);
+							nGeo = Arrays.add(nGeo, 1 , 0); // 1 ring start with zero holes
+							nGeo = Arrays.add(nGeo, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 							
 							for (int nStep = 0; nStep < m_nPointsInCircle; nStep++)
 							{
 								double dTheta = nStep * dAngleStep;
 								GeoUtil.getPoint(dLon, dLat, dTheta, dMinDist, dPoint);
-								nGeo = Arrays.add(nGeo, GeoUtil.toIntDeg(dPoint[0]), GeoUtil.toIntDeg(dPoint[1]));
+								nGeo = Arrays.addAndUpdate(nGeo, GeoUtil.toIntDeg(dPoint[0]), GeoUtil.toIntDeg(dPoint[1]), 3);
+								++nGeo[2]; // increment point count
 							}
 							
 							oWindCenter.m_oGeoArray = nGeo;
 
-							oObsMap.get(ObsType.GSTWND).add(oWindCenter);
+							if (oObsMap.containsKey(ObsType.GSTWND))
+								oObsMap.get(ObsType.GSTWND).add(oWindCenter);
 						}
 					}
 					else
@@ -555,7 +559,7 @@ public class NHC extends Collector
 						double dLon = GeoUtil.fromIntDeg(oP.m_nX);
 						double dLat = GeoUtil.fromIntDeg(oP.m_nY);
 
-						Iterator<int[]> oPoly = Arrays.iterator(oCone.m_oGeoArray, new int[2], 1, 2);
+						Iterator<int[]> oPoly = Arrays.iterator(oCone.m_oGeoArray, new int[2], 7, 2);
 						double dMinDist = Double.MAX_VALUE;
 						while (oPoly.hasNext()) // set the radius of the hurricane center to the minimum distance to a point on the cone of probability
 						{
@@ -571,23 +575,28 @@ public class NHC extends Collector
 						oWindCenter.m_lObsTime1 = oP.m_lTime;
 						oWindCenter.m_lObsTime2 = oWindCenter.m_lObsTime1 + 3600000;
 						oWindCenter.m_sStrings = sStrings;
-						int[] nGeo = Arrays.newIntArray(m_nPointsInCircle * 2);
+						int[] nGeo = Arrays.newIntArray(m_nPointsInCircle * 2 + 6);
+						nGeo = Arrays.add(nGeo, 1 , 0); // 1 ring start with zero holes
+						nGeo = Arrays.add(nGeo, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 						
 						for (int nStep = 0; nStep < m_nPointsInCircle; nStep++)
 						{
 							double dTheta = nStep * dAngleStep;
 							GeoUtil.getPoint(dLon, dLat, dTheta, dMinDist, dPoint);
-							nGeo = Arrays.add(nGeo, GeoUtil.toIntDeg(dPoint[0]), GeoUtil.toIntDeg(dPoint[1]));
+							nGeo = Arrays.addAndUpdate(nGeo, GeoUtil.toIntDeg(dPoint[0]), GeoUtil.toIntDeg(dPoint[1]), 3);
+							++nGeo[2];
 						}
 						
 						oWindCenter.m_oGeoArray = nGeo;
 
-						oObsMap.get(ObsType.GSTWND).add(oWindCenter);
+						if (oObsMap.containsKey(ObsType.GSTWND))
+							oObsMap.get(ObsType.GSTWND).add(oWindCenter);
 					}
 					oCat.m_lTimeRecv = lStormRecv;
 					oCat.m_oGeoArray = Obs.createPoint(oP.m_nX, oP.m_nY);
 					oCat.m_dValue = lookupStormType(oP.m_sStormType);
-					oObsMap.get(ObsType.TRSCAT).add(oCat);
+					if (oObsMap.containsKey(ObsType.TRSCAT))
+						oObsMap.get(ObsType.TRSCAT).add(oCat);
 				}
 			}
 
@@ -609,8 +618,7 @@ public class NHC extends Collector
 				if (oRR == null)
 					throw new Exception("Missing resource record");
 
-				ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-				Future oFirstTask = null;
+				
 				
 				ArrayList<TileForFile> oAllTiles = new ArrayList();
 				TileForFile oSearch = new TileForPoly();
@@ -618,40 +626,12 @@ public class NHC extends Collector
 				if (nObstype == ObsType.TRSCNE || nObstype == ObsType.PRSUR || nObstype == ObsType.GSTWND) // polygons
 				{
 					yGeoType = Obs.POLYGON;
-					int[] nPt = new int[2];
 					for (Obs oObs : oEntry.getValue())
 					{
-						double[] dBB = new double[]{Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
-						Iterator<int[]> oPolyIt = Arrays.iterator(oObs.m_oGeoArray, nPt, 1, 2);
-						boolean bFirst = true;
-						Path2D.Double oPart = new Path2D.Double();
-						while (oPolyIt.hasNext())
-						{
-							oPolyIt.next();
-							double dX = GeoUtil.fromIntDeg(nPt[0]);
-							double dY = GeoUtil.fromIntDeg(nPt[1]);
-							if (dX < dBB[0])
-								dBB[0] = dX;
-							if (dY < dBB[1])
-								dBB[1] = dY;
-							if (dX > dBB[2])
-								dBB[2] = dX;
-							if (dY > dBB[3])
-								dBB[3] = dY;
-							
-							if (bFirst)
-							{
-								bFirst = false;
-								oPart.moveTo(dX, dY);
-							}
-							else
-								oPart.lineTo(dX, dY);
-						}
-						oPart.closePath();
-						oM.lonLatToTile(dBB[0], dBB[3], oRR.getZoom(), nTile);
+						oM.lonLatToTile(GeoUtil.fromIntDeg(oObs.m_oGeoArray[3]), GeoUtil.fromIntDeg(oObs.m_oGeoArray[6]), oRR.getZoom(), nTile);
 						int nStartX = nTile[0]; // does this handle lambert conformal?
 						int nStartY = nTile[1];
-						oM.lonLatToTile(dBB[2], dBB[1], oRR.getZoom(), nTile);
+						oM.lonLatToTile(GeoUtil.fromIntDeg(oObs.m_oGeoArray[5]), GeoUtil.fromIntDeg(oObs.m_oGeoArray[4]), oRR.getZoom(), nTile);
 						int nEndX = nTile[0];
 						int nEndY = nTile[1];
 						for (int nTileY = nStartY; nTileY <= nEndY; nTileY++)
@@ -668,7 +648,8 @@ public class NHC extends Collector
 									oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lStart, nStringFlag, m_oLogger));
 								}
 								
-								((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(new Area(oPart), oObs.m_sStrings, oObs.m_lObsTime1, oObs.m_lObsTime2, oObs.m_lTimeRecv, oObs.m_dValue));
+								
+								((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(oObs.m_oGeoArray, oObs.m_sStrings, oObs.m_lObsTime1, oObs.m_lObsTime2, oObs.m_lTimeRecv, oObs.m_dValue));
 							}
 						}
 					}
@@ -692,28 +673,25 @@ public class NHC extends Collector
 						
 						((TileForPoint)oAllTiles.get(nIndex)).m_oObsList.add(oObs);
 					}
-					for (TileForFile oTile : oAllTiles)
-					{
-						oTile.m_oM = oM;
-						oTile.m_oRR = oRR;
-						oTile.m_lFileRecv = lStart;
-						oTile.m_nStringFlag = nStringFlag;
-						oTile.m_bWriteObsFlag = false;
-						oTile.m_bWriteRecv = true;
-						oTile.m_bWriteStart = true;
-						oTile.m_bWriteEnd = true;
-						oTile.m_bWriteObsType = false;
-					}
 				}
 				else
 					continue;
 				
+				ThreadPoolExecutor oTP = createThreadPool();
+				ArrayList<Future> oTasks = new ArrayList(oAllTiles);
 				for (TileForFile oTile : oAllTiles)
 				{
 					oTile.m_oSP = oSPList;
-					Future oTask = oTP.submit(oTile);
-					if (oTask != null && oFirstTask == null)
-						oFirstTask = oTask;
+					oTile.m_oM = oM;
+					oTile.m_oRR = oRR;
+					oTile.m_lFileRecv = lStart;
+					oTile.m_nStringFlag = nStringFlag;
+					oTile.m_bWriteObsFlag = false;
+					oTile.m_bWriteRecv = true;
+					oTile.m_bWriteStart = true;
+					oTile.m_bWriteEnd = true;
+					oTile.m_bWriteObsType = false;
+					oTasks.add(oTP.submit(oTile));
 				}
 				m_oLogger.debug(Integer.toString(oRR.getObsTypeId(), 36) + " " + oAllTiles.size());
 				FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
@@ -751,10 +729,10 @@ public class NHC extends Collector
 
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
-					if (oFirstTask != null)
-						oFirstTask.get();
+					for (Future oTask : oTasks)
+						oTask.get();
 					oTP.shutdown();
-					oTP.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+
 					int nIndex = oAllTiles.size();
 					while (nIndex-- > 0) // remove possible empty tiles
 					{
@@ -812,29 +790,39 @@ public class NHC extends Collector
 			SimpleDateFormat oCreateSdf = new SimpleDateFormat("MM-dd-yyyy - HH:mm z");
 			m_lCreated = oCreateSdf.parse(sCreated).getTime();
 			int[] nGeo = Arrays.newIntArray();
+			nGeo = Arrays.add(nGeo, 1);
+			nGeo = Arrays.add(nGeo, 0);
+			nGeo = Arrays.add(nGeo, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+			
 			nStart = sBuf.indexOf("<coordinates>") + "<coordinates>".length();
 			String[] sCoords = sBuf.substring(nStart, sBuf.indexOf("</coordinates>", nStart)).trim().split(" "); // find the coordinates of the cone which are a space separate list
 			for (String sCoord : sCoords) // set the bounding box and the points of the polygon by reading the coordinates
 			{
 				String[] sVals = sCoord.split(",");
-				int nX = GeoUtil.toIntDeg(Double.parseDouble(sVals[0]));
-				int nY = GeoUtil.toIntDeg(Double.parseDouble(sVals[1]));
-				if (nX < nBB[0])
-					nBB[0] = nX;
-				if (nY < nBB[1])
-					nBB[1] = nY;
-				if (nX > nBB[2])
-					nBB[2] = nX;
-				if (nY > nBB[3])
-					nBB[3] = nY;
-				
-				nGeo = Arrays.add(nGeo, nX, nY);
+				nGeo = Arrays.addAndUpdate(nGeo, GeoUtil.toIntDeg(Double.parseDouble(sVals[0])), GeoUtil.toIntDeg(Double.parseDouble(sVals[1])), 3);
+				++nGeo[2];
 			}
 			
 			int nPolySize = Arrays.size(nGeo);
-			if (nGeo[1] == nGeo[nPolySize - 2] && nGeo[2] == nGeo[nPolySize - 1]) // ensure the polygon is open
+			if (nGeo[7] == nGeo[nPolySize - 2] && nGeo[8] == nGeo[nPolySize - 1]) // ensure the polygon is open
+			{
 				nGeo[0] -= 2;
+				--nGeo[2];
+			}
 			
+			if (nGeo[3] < nBB[0])
+				nBB[0] = nGeo[3];
+			if (nGeo[4] < nBB[1])
+				nBB[1] = nGeo[4];
+			if (nGeo[5] > nBB[2])
+				nBB[2] = nGeo[5];
+			if (nGeo[6] > nBB[3])
+				nBB[3] = nGeo[6];
+			
+			if (!GeoUtil.isClockwise(nGeo, 2))
+			{
+				GeoUtil.reverseRing(nGeo, 2);
+			}
 			m_nGeo = nGeo;
 			nStart = sBuf.indexOf("<Data name=\"stormType\">"); // get the storm type
 			nStart = sBuf.indexOf("<value>", nStart) + "<value>".length();

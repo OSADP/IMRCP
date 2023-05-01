@@ -26,9 +26,14 @@ public class NWSTileFileWriterSPDWNDuv extends NWSTileFileWriterJni
 	}
 	
 	@Override
-	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR)
+	public void merge(List<GridDatatype> oGrids, ResourceRecord oRR, Array oMerged)
 		throws IOException
 	{
+		if (oMerged != null)
+		{
+			m_oData = oMerged;
+			return;
+		}
 		VariableDS[] oVars = new VariableDS[oGrids.size()];
 		Array[] oArrays = new Array[oGrids.size()];
 		for (int nIndex = 0; nIndex < oGrids.size(); nIndex++)
@@ -49,8 +54,6 @@ public class NWSTileFileWriterSPDWNDuv extends NWSTileFileWriterJni
 		int nVrtIndex = oVars[0].findDimensionIndex(oRR.getVrt());
 		int nTimeIndex = oVars[0].findDimensionIndex(sTimeName);
 		Array oReturn = oArrays[0].copy();
-		if (nTimeIndex  < 0)
-			System.currentTimeMillis();
 		int nTime = oIndex.getShape(nTimeIndex);
 		int nHrz = oIndex.getShape(nHrzIndex);
 		int nVrt = oIndex.getShape(nVrtIndex);
