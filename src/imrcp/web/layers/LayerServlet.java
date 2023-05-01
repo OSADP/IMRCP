@@ -141,6 +141,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 		}
 		catch (Exception oEx)
 		{
+			m_oLogger.error(oEx, oEx);
 			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 	}

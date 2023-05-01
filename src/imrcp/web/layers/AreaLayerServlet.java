@@ -78,7 +78,6 @@ public class AreaLayerServlet extends LayerServlet
 		{
 			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
 			ObsList oData = ((TileObsView)Directory.getInstance().lookup("ObsView")).getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef());
-			
 			for (Obs oNewObs : oData)
 			{
 				ObsInfo oInfo = new ObsInfo(nObstype, oNewObs.m_nContribId); // store observations by observation type and contributor id
