@@ -354,6 +354,34 @@ public abstract class TileUtil
 	}
 	
 	
+	public static void addPolyOutline(VectorTile.Tile.Feature.Builder oFeatureBuilder, int[] nCur, double[] dMercBounds, int nExtent, int[] nPoly, int[] nPointBuffer)
+	{
+		int nRings = nPoly[1];
+		int nPolyPos = 2;
+		int nPosX;
+		int nPosY;
+		nPointBuffer[0] = 1;
+		for (int nRingIndex = 0; nRingIndex < nRings; nRingIndex++)
+		{
+			int nNumPoints = nPoly[nPolyPos];
+			nPolyPos += 5; // skip bounding box
+			int nFirstPoint = nPolyPos;
+			int nEnd = nPolyPos + nNumPoints * 2;
+			while (nPolyPos < nEnd)
+			{
+				nPosX = getPos(Mercator.lonToMeters(GeoUtil.fromIntDeg(nPoly[nPolyPos++])), dMercBounds[0], dMercBounds[2], nExtent, false);
+				nPosY = getPos(Mercator.latToMeters(GeoUtil.fromIntDeg(nPoly[nPolyPos++])), dMercBounds[1], dMercBounds[3], nExtent, true);
+				nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY); // add tile coordinates to the array
+			}
+			nPosX = getPos(Mercator.lonToMeters(GeoUtil.fromIntDeg(nPoly[nFirstPoint++])), dMercBounds[0], dMercBounds[2], nExtent, false);
+			nPosY = getPos(Mercator.latToMeters(GeoUtil.fromIntDeg(nPoly[nFirstPoint])), dMercBounds[1], dMercBounds[3], nExtent, true);
+			nPointBuffer = Arrays.add(nPointBuffer, nPosX, nPosY); // add tile coordinates to the array
+			writePointBuffer(oFeatureBuilder, nPointBuffer, nCur, false); // write the geometry commands to the tile
+			nPointBuffer[0] = 1;
+		}
+	}
+	
+	
 	/**
 	 * Adds the point defined by the given longitude and latitude as a Feature to the 
 	 * FeatureBuilder.
