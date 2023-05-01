@@ -1,8 +1,3 @@
-.marginbottom12
-{
-	margin-bottom: 12px;
-}
-
 #grouplist,#selectScenarios,#legendlist
 {
 	list-style: none;
@@ -126,18 +121,6 @@
 #btnDone
 {
 	width: 120px;
-}
-
-.highlightborder
-{
-	border-radius: 5px;
-	border: 2px solid #15396c;
-}
-
-.transparentborder
-{
-	border-radius: 5px;
-	border: 2px solid transparent;
 }
 
 .ui-button-disabled

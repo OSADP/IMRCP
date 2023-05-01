@@ -823,3 +823,20 @@ table.network-table td:nth-child(2)
 {
 	flex: 10;
 }
+
+.highlightborder
+{
+	border-radius: 5px;
+	border: 2px solid #15396c;
+}
+
+.transparentborder
+{
+	border-radius: 5px;
+	border: 2px solid transparent;
+}
+
+.marginbottom12
+{
+	margin-bottom: 12px;
+}
