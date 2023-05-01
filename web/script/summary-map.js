@@ -101,8 +101,8 @@ const buildSourceMap = (sourceData, spriteDef) =>
 					break;
 				case 'symbol':
 					const img = layer.layout['icon-image'];
-					if (img && spriteDef[img])
-						legendElements.push({label, style: spriteDef[img]});
+					if (img)
+						legendElements.push({label, style: img});
 					break;
 			}
 

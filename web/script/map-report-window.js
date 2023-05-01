@@ -296,7 +296,7 @@ class ReportSelectionManager
 
 				let oPoly = mymap.getSource('poly-outline');
 				let oFeature = oPoly._data;
-				oFeature.geometry.coordinates.push(oFeature.geometry.coordinates[0]);
+				oFeature.geometry.coordinates.push(oFeature.geometry.coordinates);
 				oData.features.push(oFeature);
 				oSrc.setData(oData);
 				removeSource('poly-outline', mymap);

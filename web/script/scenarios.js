@@ -235,7 +235,7 @@ function geoSuccess(oData, sStatus, oJqXHR)
 	
 	g_oMap.getSource('geo-lines').setData(oLineData);
 	g_oMap.on('sourcedata', finishedStyling);
-	if (g_oMap.getLayer('road-number-sheild') !== undefined)
+	if (g_oMap.getLayer('road-number-shield') !== undefined)
 		g_oMap.addLayer(g_oLayers['geo-lines-scenario'], 'road-number-shield');
 	else
 		g_oMap.addLayer(g_oLayers['geo-lines-scenario']);
@@ -477,7 +477,7 @@ function buildGroupListDialog()
 	let sHtml = `<div class="flexbox marginbottom12"><div class="flex3"><input id="scenarioName" type="text" placeholder="Enter name of scenario"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="saveScenario" style="width:120px; white-space:nowrap">Save</button></div></div>
 				<div class="flexbox marginbottom12"><div class="flex3"><select style="width: 95%;" id="modelstorun">
-				</select></div><div class="flex1 flexbox"><div class="flex1" style="width:120px; white-space:nowrap"></div></div></div>
+				</select></div><div class="flex1 flexbox"><div class="flex1" style="width:120px; white-space:nowrap"><label for="checkboxShare" class="flex1">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div></div></div>
 				<div class="flexbox marginbottom12"><div class="flex3"><input id="groupname" type="text" placeholder="Enter name of new group"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="btnNewGroup" style="width:120px; white-space:nowrap">Add Group</button></div></div>
 				<ul id="grouplist"></ul>`;
@@ -594,6 +594,8 @@ function addGroup(oSaved, sGroup)
 		{
 			let nIndex = g_oImrcpIds[sId];
 			let oFeature = oFeatures[nIndex];
+			if (oFeature === undefined)
+				continue;
 			if (nSpdLimit === Number.MIN_SAFE_INTEGER)
 			{
 				nSpdLimit = oFeature.properties.spdlimit;
@@ -1071,33 +1073,52 @@ function buildLoad()
 	{
 		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#map-container"});
 	});
+	
+	let sHtml = `<div id="scenariotabs">
+		<ul>
+			<li><a href="#userscenarios">User</a></li>
+			<li><a href="#sharedscenarios">Shared</a></li>
+		</ul><div id="userscenarios" style="padding-left:0;"></div><div id="sharedscenarios" style="padding-left:0;"></div></div><br>
+<div>Select a scenario template to load, then click 'Load'. Click <div class="fa fa-times"></div> to delete a template. Loading a scenario template will overwrite any unsaved settings.`;
+	oDialog.html(sHtml);
+	$('#scenariotabs').tabs();
 }
 
 
 function setLoadHtml()
 {
-	$('#selectScenarios').remove();
+	$('#userscenarios').empty();
+	$('#sharedscenarios').empty();
 	g_nSelectedScenario = -1;
 	g_oScenarios.sort((a, b) => a.name.localeCompare(b.name));
-	let sHtml = `<ul id="selectScenarios">`;
+	let sUsersHtml = `<ul id="selectUserScenarios">`;
+	let sSharedHtml = `<ul id="selectSharedScenarios">`;
 	for (let nIndex = 0; nIndex < g_oScenarios.length; nIndex++)
 	{
 		let oScenario = g_oScenarios[nIndex];
 		if (oScenario.network === g_sLoadedNetwork)
-			sHtml += `<li id="scenario${nIndex}" class="clickable flexbox"><div class="flex10">${oScenario.name}</div><div id="delete${nIndex}" class="flex1 flexbox delete"><div class="fa fa-times clickable"></div></div></li>`;
+		{
+			let sHtml = `<li id="scenario${nIndex}" class="clickable flexbox"><div class="flex10">${oScenario.name}</div><div id="delete${nIndex}" class="flex1 flexbox delete"><div class="fa fa-times clickable"></div></div></li>`;
+			if (oScenario.isshared)
+				sSharedHtml += sHtml;
+			else
+				sUsersHtml += sHtml;
 	}
-	sHtml += `</ul><div>Select a scenario template to load, then click 'Load'. Click <div class="fa fa-times"></div> to delete a template. Loading a scenario template will overwrite any unsaved settings.`;
+	}
+	sUsersHtml += `</ul>`;
+	sSharedHtml += `</ul>`;
 	
-	$('#dlgLoad').html(sHtml);
+	$('#userscenarios').html(sUsersHtml);
+	$('#sharedscenarios').html(sSharedHtml);
 	
-	$('#selectScenarios > li .delete').on('click', function()
+	$('#selectUserScenarios > li .delete,#selectSharedScenarios > li .delete').on('click', function()
 	{
 		let nNum = $(this).prop('id').substring('delete'.length);
 		let oDialog = $('#dlgConfirmDeleteTemplate');
 		oDialog.dialog('option', 'title', `Confirm Delete - ${g_oScenarios[nNum].name}`);
 		$('#dlgConfirmDeleteTemplate').dialog('open');
 	});
-	$('#selectScenarios > li').on('click', function() 
+	$('#selectUserScenarios > li,#selectSharedScenarios > li').on('click', function() 
 	{
 		if (g_nSelectedScenario >= 0)
 			$('#scenario' + g_nSelectedScenario).removeClass('w3-fhwa-navy');
@@ -1118,6 +1139,7 @@ function setLoadHtml()
 		else
 			$(this).removeClass('w3-fhwa-navy hoverScenario');
 	});
+	$('#scenariotabs').tabs('option', 'active', 0);
 }
 
 
@@ -1352,7 +1374,7 @@ function saveScenario(bOverwrite)
 {
 	if (validate())
 	{
-		let oScenario = {'name': $('#scenarioName').val(), 'run': false, 'groups': [], 'network': g_sLoadedNetwork};
+		let oScenario = {'name': $('#scenarioName').val(), 'run': false, 'groups': [], 'network': g_sLoadedNetwork, 'share': $('#checkboxShare').prop('checked')};
 		let sModel = $('#modelstorun').val();
 		if (sModel === 'Both')
 			oScenario.trafficmodel = oScenario.roadwxmodel = true;
@@ -1366,15 +1388,32 @@ function saveScenario(bOverwrite)
 			oScenario.trafficmodel = false;
 			oScenario.roadwxmodel = true;
 		}
-		if (!bOverwrite)
-		{
 			let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
+		let bIsShared = false;
+		let sUser;
 			if (nIndex >= 0)
 			{
+		sUser = g_oScenarios[nIndex].user;
+		bIsShared = g_oScenarios[nIndex].isshared;
+		}
+		if (!bOverwrite)
+		{
+			if (sUser)
+			{
+				if (bIsShared)
+				{
+					if (sUser !== sessionStorage.uname)
+					{
+						status('Cannot Overwrite Shared Template', 'This Shared Scenario Template does not belong to you. To save your own copy, change the name of the Scenario Template');
+						return;
+					}
+				}
+
 				$('#dlgConfirmOverwrite').dialog('open');
 				return;
 			}
 		}
+		oScenario.isshared = bIsShared;
 		let oData = {'token': sessionStorage.token, 'scenario': oScenario};
 		for (let oGroup of g_aGroups)
 		{
@@ -1411,6 +1450,14 @@ function saveScenario(bOverwrite)
 			else
 			{
 				g_oScenarios[nIndex] = oRes.saved;
+			}
+			if (oRes.shared)
+			{
+				nIndex = binarySearch(g_oScenarios, oRes.shared, (a,b) => a.name.localeCompare(b.name));
+				if (nIndex < 0)
+					g_oScenarios.splice(~nIndex, 0, oRes.shared);
+				else
+					g_oScenarios[nIndex] = oRes.shared;
 			}
 			switchState(VIEWGROUPS, VIEWGROUPS);
 		}).always(function(oRes)
@@ -1658,9 +1705,9 @@ function validate()
 		status('Name Scenario', 'You must enter a scenario name before saving.');
 		return false;
 	}
-	else if (!/^[a-zA-Z0-9\-_]+$/.exec(sText))
+	else if (!/^[a-zA-Z0-9\-_@\.]+$/.exec(sText))
 	{
-		status('Name Scenario', 'Scenario names can only contain a-z, A-Z, 0-9, -, and _');
+		status('Name Scenario', 'Scenario names can only contain a-z, A-Z, 0-9, -, @, ., and _');
 		return false;
 	}
 	

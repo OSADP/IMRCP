@@ -37,8 +37,11 @@ function startAddUser()
 {
 	let oDialog = $('#dlgEditUser');
 	oDialog.dialog('option', 'title', 'Add User');
-	$('#inputUserName').val('').prop('disabled', false);
+	$('#inputUserName').val('').prop('disabled', false).removeClass('popup');
+	$('#inputPassword').val('');
+	$('#pwinfodiv').hide();
 	$('#selectUserGroup').val('imrcp-user');
+	$('#userenableddiv').hide();
 	$('#radioOptEnabled').prop('checked', true);
 	sOriginalGroup = sOriginalDeactivation = 'null';
 	oDialog.dialog('open');
@@ -50,7 +53,10 @@ function startEditUser()
 	let oTableData = oTable.row(this).data();
 	let oDialog = $('#dlgEditUser');
 	oDialog.dialog('option', 'title', 'Edit User');
-	$('#inputUserName').val(oTableData[0]).prop('disabled', true);
+	$('#inputUserName').val(oTableData[0]).prop('disabled', true).removeClass('popup');
+	$('#inputPassword').val('');
+	$('#pwinfodiv').show();
+	$('#userenableddiv').show();
 	sOriginalGroup = oTableData[1];
 	$('#selectUserGroup').val(oTableData[1]);
 	if (oTableData[2])
@@ -83,7 +89,7 @@ function saveUser()
 		'url': 'api/user/save',
 		'method': 'POST',
 		'dataType': 'json',
-		'data': {'token': sessionStorage.token, 'name': $('#inputUserName').val(), 'group': $('#selectUserGroup').val(), 'deactivation': sDeactivation}
+		'data': {'token': sessionStorage.token, 'pw': $('#inputPassword').val(), 'name': $('#inputUserName').val(), 'group': $('#selectUserGroup').val(), 'deactivation': sDeactivation}
 	}).done(function()
 	{
 		oTable.ajax.reload();	
@@ -116,19 +122,22 @@ function buildEditDialog()
 		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#main-content"});
 	});
 	let sHtml = `<div class="flexbox marginbottom12"><label class="flex1">User</label><div class="flex3"><input style="width:100%;" placeholder="Enter email address" id="inputUserName" type="text"></div></div>
-<div class="flexbox marginbottom12" style="height:35px;"><label class="flex1">User Group</label><div class="flex3"><select style="width:100%;" id="selectUserGroup"><option value="imrcp-user">imrcp-user</option><option value="imrcp-admin">imrcp-admin</option></select></div></div>
-<div class="flexbox marginbottom 12" style="height:35px;"><input class="flex1" style="width:auto;" type="radio" id="radioOptEnabled" name="radioEnabled"><label for="radioOptEnabled">Enabled</label><input class="flex1" style="width:auto;" type="radio" id="radioOptDisabled" name="radioEnabled"><label for="radioOptDisabled">Disabled</label><div>`;
+	<div id="pwinfodiv" class="flexbox marginbottom12"><div class="flex1"></div><div class="flex3" style="font-size:80%">leave password field blank for no change</div></div> 
+	<div class="flexbox marginbottom12"><label class="flex1">Password</label><div class="flex3"><input style="width:100%;" id="inputPassword" type="text"></div></div>
+<div id="usergroupdiv" class="flexbox marginbottom12" style="height:35px;"><label class="flex1">User Group</label><div class="flex3"><select style="width:100%;" id="selectUserGroup"><option value="imrcp-user">imrcp-user</option><option value="imrcp-admin">imrcp-admin</option></select></div></div>
+<div id="userenableddiv" class="flexbox marginbottom 12" style="height:35px;"><input class="flex1" style="width:auto;" type="radio" id="radioOptEnabled" name="radioEnabled"><label for="radioOptEnabled">Enabled</label><input class="flex1" style="width:auto;" type="radio" id="radioOptDisabled" name="radioEnabled"><label for="radioOptDisabled">Disabled</label><div>`;
 	oDialog.html(sHtml);
 	$('#inputUserName').on('keyup', delayCheck);
 	$('#inputUserName').on('focusout', checkUserName);
 	$('#selectUserGroup, input[name|="radioEnabled"]').on('change', checkDirty);
+	$('#inputPassword').on('keyup', checkDirty);
 }
 
 
 function checkDirty()
 {
 	let sEnabled = $('input[name|="radioEnabled"]:checked').prop('id');
-	if (((sOriginalDeactivation.length === 0 && sEnabled === 'radioOptEnabled') || (sOriginalDeactivation.length > 0 && sEnabled === 'radioOptDisabled')) && sOriginalGroup === $('#selectUserGroup').val())
+	if ($('#inputPassword').val().length === 0 && ((sOriginalDeactivation.length === 0 && sEnabled === 'radioOptEnabled') || (sOriginalDeactivation.length > 0 && sEnabled === 'radioOptDisabled')) && sOriginalGroup === $('#selectUserGroup').val())
 	{
 		$('#btnSaveUser').prop('disabled', true);
 		$('#btnSaveUser').addClass('ui-button-disabled ui-state-disabled');

@@ -6,7 +6,7 @@ const featureInSources = sources => feature => sources.has(feature.source);
 
 let g_oLayers = 
 {
-	'network-polygons': {'id': 'network-polygons', 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hover'], false], 1.0, ['boolean', ['get', 'hidden'], false], 0.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
+	'network-polygons': {'id': 'network-polygons', 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hidden'], false], 0.0, ['boolean', ['feature-state', 'hover'], false], 1.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
 	'network-polygons-map': {'id': 'network-polygons-map', 'minzoom':0, 'maxzoom':6, 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hover'], false], 1.0, ['boolean', ['get', 'hidden'], false], 0.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
 	'network-polygons-report': {'id': 'network-polygons-report', 'minzoom':0, 'maxzoom':10, 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 1.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
 	'network-polygons-del': {'id': 'network-polygons-del', 'type': 'fill', 'source': 'network-polygons', 'paint': {'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 1.0, 0], 'fill-pattern': 'delete'}},
@@ -255,7 +255,6 @@ const removeSourceAndLayers = (map, source) => {
 };
 const addSourceAndLayers = (map, source, sLastLayer = undefined) => {
 
-  console.log(source.id);
   map.addSource(source.id, source.mapboxSource);
   for (let layer of source.layers)
   {
@@ -352,6 +351,7 @@ function startDrawPoly()
 		ctx.textBaseline = "middle";
 		ctx.fillText("\uf00c", 12, 12);
 		g_sCheckmarkPng = oCan.toDataURL('image/png');
+		addStyleRule('.checkcursor', `cursor: url('${g_sCheckmarkPng}') 12 12, auto`);
 	}
 	removeSource('poly-outline', oMap);
 	removeSource('poly-bounds', oMap);
@@ -495,16 +495,13 @@ function finishDrawPoly()
 	oOutlineSource.setData(oOutlineData);
 	oBoundsSource.setData(oBoundsData);
 	
-	console.log(oOutlineData.geometry.coordinates);
-	console.log(oBoundsData.geometry.coordinates[0]);
 	$(oMap.getCanvas()).removeClass('notallowedcursor checkcursor crosshaircursor');
 	if (this.finishDraw)
-		this.finishDraw(oBoundsData.geometry);
+		this.finishDraw(oOutlineData.geometry);
 
 	mapOffBoundFn(oMap, 'click', clickInitPoly.name);
 	mapOffBoundFn(oMap, 'mousemove', moveDrawingPoly.name);
 	mapOffBoundFn(oMap, 'click', clickDrawingPoly.name);
-	mapOffBoundFn(oMap, 'dblclick', finishDrawPoly.name);
 	jqueryOffBoundFn(document, 'keyup', cancelDrawPoly.name);
 }
 
@@ -519,8 +516,8 @@ function cancelDrawPoly(oEvent)
 		mapOffBoundFn(oMap, 'click', clickInitPoly.name);
 		mapOffBoundFn(oMap, 'mousemove', moveDrawingPoly.name);
 		mapOffBoundFn(oMap, 'click', clickDrawingPoly.name);
-		mapOffBoundFn(oMap, 'dblclick', finishDrawPoly.name);
 		jqueryOffBoundFn(document, 'keyup', cancelDrawPoly.name);
+		$(oMap.getCanvas()).removeClass('notallowedcursor checkcursor crosshaircursor');
 		if (this.cancelDraw)
 		{
 			setTimeout(this.cancelDraw, 10);

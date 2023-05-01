@@ -1,5 +1,5 @@
 import {g_oMap, g_oDialogs, g_oInstructions, instructions, submitNetwork, cancelNetwork, toggleDialog, turnOffAddRemove,
-	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess} from './network.js';
+	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess, closeNetworkSelect} from './network.js';
 import {toggleDetectorEdit, nextDetector, saveDetector, revertDetector, exitDetectorEdit, detChange, startDetector, selectFile} from './detectors.js';
 import {g_oLayers, removeSource} from './map-util.js';
 
@@ -288,6 +288,21 @@ function buildReprocessDialog()
 	oDialog.parent().find('button[title|="Close"]').on('click', cancelReprocess);
 }
 
+function buildNetworkSelectDialog()
+{
+	let oDialog = $('#dlgNetworkSelect');
+	g_oDialogs['networkselect'] = '#dlgNetworkSelect';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#map-container"}, resizable: false, width: 300, maxHeight:200, draggable: false,
+	close: closeNetworkSelect});
+	$(window).resize(function()
+	{
+		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#map-container"});
+	});
+	oDialog.dialog('option', 'title', 'Select A Network');
+	oDialog.html('<ul style="padding: 0px 0px 0px 10px; list-style: none;" id="networkselectlist"</ul>');
+
+}
+
 export {buildNetworkDialog,
 		buildRoadLegendDialog,
 		buildCancelDialog,
@@ -298,4 +313,5 @@ export {buildNetworkDialog,
 		buildDetectorStatusDialog,
 		buildUploadConfirmDialog,
 		buildNetworkMetadataDialog,
-		buildReprocessDialog};
+		buildReprocessDialog,
+		buildNetworkSelectDialog};

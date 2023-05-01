@@ -1,5 +1,7 @@
 import {pointToPaddedBounds} from './map-util.js';
 
+//let g_sMapboxAccessToken = '<mapbox access token>';
+let g_sMapboxStyle = 'mapbox://styles/mapbox/light-v9';
 let g_sGeojson;
 let g_oMap;
 let g_oGeojsons = {};
@@ -8,8 +10,6 @@ let g_oDefaults = {'opacity': 1, 'color': '#000', 'width': 3};
 let g_oLayers = {};
 let g_oPopup;
 let g_aQueryLayers = [];
-let g_sMapboxAccessToken = '<mapbox access token>';
-let g_sMapboxStyle = 'mapbox://styles/mapbox/light-v9';
 let g_oIcons = ["workzone","slow-traffic","very-slow-traffic","unusual-congestion","lengthy-queue","incident","low-visibility","dew-on-roadway","frost-on-roadway","ice-on-bridge","blowing-snow","flooded-road","detector-sdf","diamond-mgray","diamond-lblue","diamond-dblue","precip-light","precip-medium","precip-heavy","winter-precip-light","winter-precip-medium","winter-precip-heavy","light-precip","medium-precip","heavy-precip","light-winter-precip","medium-winter-precip","heavy-winter-precip","stage-action","stage-flood","nhc-sd","nhc-td","nhc-ss","nhc-ts","nhc-hu","nhc-mh","delete","chevron-sdf","hexagon-sdf"];
 
 function getNetworksAjax()
