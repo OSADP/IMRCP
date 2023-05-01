@@ -59,7 +59,7 @@ public class CommonMapServlet extends SecureBaseBlock
 		for (String sId : oSession.m_oProfile.m_sNetworks)
 		{
 			Network oNetwork = oWayNetworks.getNetwork(sId);
-			if (oNetwork != null)
+			if (oNetwork != null && oNetwork.m_bFinalized)
 			{
 				JSONObject oNetworkObj = new JSONObject();
 				oNetworkObj.put("id", sId);

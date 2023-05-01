@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import jakarta.servlet.http.Cookie;
+import java.io.BufferedReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -390,11 +391,15 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 	
 	void updateUser(Session oUser)
 	{
+		boolean bNew = false;
 		synchronized (USERS)
 		{
 			int nIndex = Collections.binarySearch(USERS, oUser, oUser);
 			if (nIndex < 0)
+			{
 				USERS.add(~nIndex, oUser);
+				bNew = true;
+			}
 			else
 				USERS.get(nIndex).update(oUser);
 			writeUserFile();
@@ -413,6 +418,35 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 				}
 			}
 		}
+		
+		if (bNew)
+		{
+			StringBuilder sBuf = new StringBuilder();
+			WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+			ArrayList<Network> oFinalizedNetworks = oWayNetworks.getNetworks();
+			for (Network oNetwork : oFinalizedNetworks)
+			{
+				sBuf.append(oNetwork.m_sNetworkId).append(',');
+			}
+			if (!oFinalizedNetworks.isEmpty())
+				sBuf.setLength(sBuf.length() - 1);
+			sBuf.append('\n');
+			
+			Path oPath = Paths.get(String.format(m_sUserProfileFf, oUser.m_sName));
+			try
+			{
+				Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
+				try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.WRITE), StandardCharsets.UTF_8)))
+				{
+					oOut.append(sBuf);
+				}
+			}
+			catch (Exception oEx)
+			{
+				LOGGER.error(oEx, oEx);
+			}
+		}
+		
 	}
 	
 	
@@ -429,6 +463,60 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 				oUserArray.put(oUser.m_sGroup);
 				oUserArray.put(oUser.m_sDeactivation);
 				oData.put(oUserArray);
+			}
+		}
+	}
+
+	public void addNetwork(String sNetworkId)
+	{
+		ArrayList<Session> oUsers = new ArrayList();
+		synchronized (USERS)
+		{
+			for (Session oUser : USERS)
+				oUsers.add(oUser);
+		}
+		StringBuilder sBuf = new StringBuilder();
+		for (Session oUser : oUsers)
+		{
+			Path oPath = Paths.get(String.format(m_sUserProfileFf, oUser.m_sName));
+			sBuf.setLength(0);
+			if (Files.exists(oPath))
+			{
+				try (BufferedReader oIn = Files.newBufferedReader(oPath))
+				{
+					String sNetworksLine = oIn.readLine();
+					sBuf.append(sNetworksLine);
+					if (sBuf.indexOf(sNetworkId) < 0)
+						sBuf.append(',').append(sNetworkId);
+					sBuf.append('\n');
+				}
+				catch (Exception oEx)
+				{
+					LOGGER.error(oEx, oEx);
+				}
+			}
+	
+			try
+			{
+				Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
+				try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.WRITE), StandardCharsets.UTF_8)))
+				{
+					oOut.append(sBuf);
+				}
+			}
+			catch (Exception oEx)
+			{
+				LOGGER.error(oEx, oEx);
+			}
+		}
+		synchronized (SESSIONS)
+		{
+			for (Session oSess : SESSIONS)
+			{
+				String[] sTemp = new String[oSess.m_oProfile.m_sNetworks.length + 1];
+				System.arraycopy(oSess.m_oProfile.m_sNetworks, 0, sTemp, 0, oSess.m_oProfile.m_sNetworks.length);
+				sTemp[sTemp.length - 1] = sNetworkId;
+				oSess.m_oProfile.m_sNetworks = sTemp;
 			}
 		}
 	}

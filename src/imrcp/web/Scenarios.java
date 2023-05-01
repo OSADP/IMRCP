@@ -10,7 +10,6 @@ import imrcp.geosrv.osm.OsmNode;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
 import imrcp.geosrv.WayNetworks.WayMetadata;
-import imrcp.forecast.mlp.MLPProcess;
 import imrcp.forecast.mdss.MetroProcess;
 import imrcp.system.Directory;
 import imrcp.system.FileUtil;
@@ -548,13 +547,13 @@ public class Scenarios extends SecureBaseBlock
 			{
 				m_oLogger.debug("Processing scenario: " + oScenario.m_sId);
 				
-				MLPProcess oMlp = new MLPProcess();
-				m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
-				if (oScenario.m_bRunTraffic)
-					oMlp.process(oScenario, m_sBaseDir, m_oLogger); // traffic prediction
-				else
-					oMlp.m_oOutputs = new HashMap();
-				m_oLogger.debug("Finished mlp for: " + oScenario.m_sId);
+//				MLPProcess oMlp = new MLPProcess();
+//				m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
+//				if (oScenario.m_bRunTraffic)
+//					oMlp.process(oScenario, m_sBaseDir, m_oLogger); // traffic prediction
+//				else
+//					oMlp.m_oOutputs = new HashMap();
+//				m_oLogger.debug("Finished mlp for: " + oScenario.m_sId);
 				MetroProcess oMetro = new MetroProcess(oScenario.m_oGroups[0].m_bPlowing.length); 
 				m_oLogger.debug("Starting metro for: " + oScenario.m_sId);
 				if (oScenario.m_bRunRoadWeather)
@@ -598,25 +597,26 @@ public class Scenarios extends SecureBaseBlock
 						}
 						oProps.put("spdlimit", oMetadata.m_nSpdLimit);
 						oProps.put("lanecount", oMetadata.m_nLanes);
-						if (oMlp.m_oOutputs.containsKey(oId.toString()))
-						{
-							double[] dSpeeds = oMlp.m_oOutputs.get(oId.toString());
-							int[] nTraffic = new int[dSpeeds.length];
-							double dLimit = oMetadata.m_nSpdLimit;
-							for (int nIndex = 0; nIndex < dSpeeds.length; nIndex++)
-							{
-								if (Double.isNaN(dSpeeds[nIndex]))
-									nTraffic[nIndex] = -1;
-								else
-									nTraffic[nIndex] = (int)Math.round((dSpeeds[nIndex] / dLimit) * 100);
-							}
-							
-							oProps.put("trflnk", nTraffic);
-						}
-						else
-						{
-							oProps.put("trflnk", NODATA);
-						}
+//						if (oMlp.m_oOutputs.containsKey(oId.toString()))
+//						{
+//							double[] dSpeeds = oMlp.m_oOutputs.get(oId.toString());
+//							int[] nTraffic = new int[dSpeeds.length];
+//							double dLimit = oMetadata.m_nSpdLimit;
+//							for (int nIndex = 0; nIndex < dSpeeds.length; nIndex++)
+//							{
+//								if (Double.isNaN(dSpeeds[nIndex]))
+//									nTraffic[nIndex] = -1;
+//								else
+//									nTraffic[nIndex] = (int)Math.round((dSpeeds[nIndex] / dLimit) * 100);
+//							}
+//							
+//							oProps.put("trflnk", nTraffic);
+//						}
+//						else
+//						{
+//							oProps.put("trflnk", NODATA);
+//						}
+						oProps.put("trflnk", NODATA); // mlp5 not implemented yet
 						oFeature.put("type", "Feature");
 						oFeature.put("properties", oProps);
 						oFeature.put("geometry", oGeo);

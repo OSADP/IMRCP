@@ -95,6 +95,7 @@ public class MonitorServlet extends BaseBlock
 		{
 			setName(oSConfig.getServletName());
 			setLogger();
+			reset();
 			register();
 		}
 		catch (Exception oEx)

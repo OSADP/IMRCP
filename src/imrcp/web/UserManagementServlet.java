@@ -48,6 +48,7 @@ public class UserManagementServlet extends SecureBaseBlock
 			String sUserName = oReq.getParameter("name");
 			String sGroup = oReq.getParameter("group");
 			String sDeactivation = oReq.getParameter("deactivation");
+			String sPw = oReq.getParameter("pw");
 			if (sUserName == null || sGroup == null || sDeactivation == null || oSession.m_sName.compareTo(sUserName) == 0)
 				return HttpServletResponse.SC_BAD_REQUEST;
 			
@@ -60,16 +61,33 @@ public class UserManagementServlet extends SecureBaseBlock
 				oUser = new Session();
 				byte[] ySalt = new byte[32]; // use 256-bit algorithm
 				oRng.nextBytes(ySalt);
-				byte[] yPass = new byte[32]; // random password must be reset for first login
-				oRng.nextBytes(yPass);
+				if (sPw == null || sPw.isEmpty())
+				{
+					byte[] yPass = new byte[32]; // random password must be reset for first login
+					oRng.nextBytes(yPass);
+					sPw = Text.toHexString(yPass);
+				}
 
 				StringBuilder sHash = new StringBuilder();
-				SessMgr.getSecurePassword(Text.toHexString(yPass), ySalt, sHash);
+				SessMgr.getSecurePassword(sPw, ySalt, sHash);
 				oUser.m_sName = sUserName;
 				oUser.m_ySalt = ySalt;
 				oUser.m_sPass = sHash.toString();
 				oUser.m_sContact = sUserName;
 			}
+			
+			if (sPw != null && !sPw.isEmpty())
+			{
+				SecureRandom oRng = SecureRandom.getInstance("SHA1PRNG");
+				byte[] ySalt = new byte[32]; // use 256-bit algorithm
+				oRng.nextBytes(ySalt);
+				
+				StringBuilder sHash = new StringBuilder();
+				SessMgr.getSecurePassword(sPw, ySalt, sHash);
+				oUser.m_ySalt = ySalt;
+				oUser.m_sPass = sHash.toString();
+			}
+			
 			oUser.m_sGroup = sGroup;
 			if ((oUser.m_sDeactivation == null || oUser.m_sDeactivation.isEmpty()) && sDeactivation.length() > 0) // deactivating a user, give the user a random password
 			{

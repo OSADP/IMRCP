@@ -26,8 +26,6 @@ import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
-import java.awt.geom.Area;
-import java.awt.geom.Path2D;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -55,8 +53,6 @@ import java.text.DecimalFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import jakarta.servlet.ServletException;
@@ -196,7 +192,8 @@ public class NetworkGeneration extends SecureBaseBlock
 	public void reset(JSONObject oBlockConfig)
 	{
 		super.reset(oBlockConfig);
-		m_sStateShp = oBlockConfig.optString("statefile", "");
+		m_sStateShp = oBlockConfig.getString("statefile");
+		m_sStateShp = m_sStateShp;
 		m_nOffset = oBlockConfig.optInt("offset", 0);
 		m_nPeriod = oBlockConfig.optInt("period", 1800);
 		m_sOsmDownload = oBlockConfig.optString("osm", "http://download.geofabrik.de/north-america/us/%s-latest.osm.bz2");
@@ -529,33 +526,21 @@ public class NetworkGeneration extends SecureBaseBlock
 				m_bSave = true; // always save a newly processed network unless it gets deleted while processing
 
 				ArrayList<String> oFilter = new ArrayList();
-				boolean bAddMLink = true;
-				boolean bAddTLink = true;
 				boolean bRamps = false;
 				boolean bConnectors = false;
 				for (int nOptIndex = 0; nOptIndex < oNetwork.m_sOptions.length; nOptIndex++) // read options and set the necessary flags
 				{
 					String sOpt = oNetwork.m_sOptions[nOptIndex];
-					if (sOpt.compareTo("ramp") == 0)
+					if (sOpt.compareTo("ramp") == 0 || sOpt.compareTo("trunk_link") == 0)
 						bRamps = true;
-					else if (sOpt.compareTo("connector") == 0)
+					else if (sOpt.compareTo("connector") == 0 || sOpt.compareTo("motorway_link") == 0)
 						bConnectors = true;
-					else if (sOpt.compareTo("motorway_link") == 0)
-					{
-						bAddMLink = false;
-						oFilter.add(sOpt);
-					}
-					else if (sOpt.compareTo("trunk_link") == 0)
-					{
-						bAddTLink = false;
-						oFilter.add(sOpt);
-					}
 					else
 						oFilter.add(sOpt);
 				}
-				if (bAddMLink)
+				if (bConnectors)
 					oFilter.add("motorway_link");
-				if (bAddTLink)
+				if (bRamps)
 					oFilter.add("trunk_link");
 				
 				oNetwork.m_sFilter = new String[oFilter.size()];
@@ -568,113 +553,98 @@ public class NetworkGeneration extends SecureBaseBlock
 
 			}
 		
-			int[] nPolygonBb = oNetwork.getBoundingBox();
-			int[] nPolygonPts = new int[oNetwork.getCoordinateCount()];
-			Path2D.Double oPolygonPath = new Path2D.Double(); // used to create an Area object for intersection algorithm
-			int nPtsCnt = 0;
-			Iterator<int[]> oIt = oNetwork.getPointIterator();
-			if (oIt.hasNext()) // have to moveTo the first point
-			{
-				int[] nPt = oIt.next();
-				nPolygonPts[nPtsCnt++] = nPt[1];
-				nPolygonPts[nPtsCnt++] = nPt[0];
-				oPolygonPath.moveTo(nPt[0], nPt[1]);
-			}
-			while (oIt.hasNext()) // then lineTo the rest of the points
-			{
-				int[] nPt = oIt.next();
-				nPolygonPts[nPtsCnt++] = nPt[1];
-				nPolygonPts[nPtsCnt++] = nPt[0];
-				oPolygonPath.lineTo(nPt[0], nPt[1]);
-			}
 			
-			oPolygonPath.closePath(); // close the polygon
-
 			long lFileTimeout = System.currentTimeMillis() - m_lFileTimeout;
-			Area oPolygonArea = new Area(oPolygonPath);
 		
 			DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
 			DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp));
 			Header oHeader = new Header(oShp);
 			PolyshapeIterator oIter = null;
 			int[] nPt = new int[2];
-			HashMap<String, ArrayList<int[]>> oStates = new HashMap();
-			while (oDbf.next()) // find states the network intersects
+			ArrayList<String> oStates = new ArrayList();
+			ArrayList<int[]> oOuters = new ArrayList();
+			ArrayList<int[]> oHoles = new ArrayList();
+			int[] nNetworkGeo = oNetwork.getGeometry();
+			long lNetworkRef = GeoUtil.makePolygon(nNetworkGeo);
+			try
 			{
-				Polyline oLine = new Polyline(oShp, true);
-				oIter = oLine.iterator(oIter);
-				String sState = oDbf.getString("NAME");
-				ArrayList<int[]> oBorder = new ArrayList();
-				Path2D.Double oStatePath = new Path2D.Double();
-				int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-				while (oIter.nextPart())
+				while (oDbf.next()) // find states the network intersects
 				{
-					int[] nPart = Arrays.newIntArray();
-					
-					if (oIter.nextPoint())
+					String sState = oDbf.getString("NAME");
+					oOuters.clear();
+					oHoles.clear();
+					Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
+					oIter = oPoly.iterator(oIter);
+
+					while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
 					{
-						int nX = oIter.getX();
-						int nY = oIter.getY();
-						if (nX < nBB[0])
-							nBB[0] = nX;
-						if (nY < nBB[1])
-							nBB[1] = nY;
-						if (nX > nBB[2])
-							nBB[2] = nX;
-						if (nY > nBB[3])
-							nBB[3] = nY;
-						nPart = Arrays.add(nPart, nX, nY);
-					
+						int[] nPolygon = Arrays.newIntArray();
+						nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
+						int nPointIndex = nPolygon[0];
+						nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
+						int nBbIndex = nPolygon[0];
+						nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 						while (oIter.nextPoint())
 						{
-							nX = oIter.getX();
-							nY = oIter.getY();
-							if (nX < nBB[0])
-								nBB[0] = nX;
-							if (nY < nBB[1])
-								nBB[1] = nY;
-							if (nX > nBB[2])
-								nBB[2] = nX;
-							if (nY > nBB[3])
-								nBB[3] = nY;
-							nPart = Arrays.add(nPart, nX, nY);
-							
+							nPolygon[nPointIndex] += 1; // increment point count
+							nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
+						}
+						if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
+						{
+							nPolygon[nPointIndex] -= 1;
+							nPolygon[0] -= 2;
+						}
+						if (GeoUtil.isClockwise(nPolygon, 2))
+							oOuters.add(nPolygon);
+						else
+							oHoles.add(nPolygon);
+					}
+					GeoUtil.getPolygons(oOuters, oHoles);
+					boolean bIntersects = false;
+					int nRingIndex = 0;
+					
+					
+					while (!bIntersects && nRingIndex < oOuters.size())
+					{
+						int[] nStateGeo = oOuters.get(nRingIndex++);
+						if (!GeoUtil.boundingBoxesIntersect(nNetworkGeo[3], nNetworkGeo[4], nNetworkGeo[5], nNetworkGeo[6], nStateGeo[3], nStateGeo[4], nStateGeo[5], nStateGeo[6]))
+							continue;
+						long lStateRef = GeoUtil.makePolygon(nStateGeo);
+						try
+						{
+							long[] lClipRef = new long[]{0L, lNetworkRef, lStateRef};
+							int nResults = GeoUtil.clipPolygon(lClipRef);
+							bIntersects = nResults > 0;
+							while (nResults-- > 0)
+							{
+								GeoUtil.popResult(lClipRef[0]);
+							}
+						}
+						finally
+						{
+							GeoUtil.freePolygon(lStateRef);
 						}
 					}
-					int nLen = Arrays.size(nPart);
-					if (nPart[1] == nPart[nLen - 2] && nPart[2] == nPart[nLen - 1])
-						nPart[0] = nLen - 2;
-					oStatePath.moveTo(nPart[1], nPart[2]);
-					oIt = Arrays.iterator(nPart, nPt, 3, 2);
-					while (oIt.hasNext())
+					if (bIntersects)
 					{
-						oIt.next();
-						oStatePath.lineTo(nPt[0], nPt[1]);
+						oStates.add(sState.toLowerCase().replaceAll(" ", "-"));
 					}
-					oStatePath.closePath();
-					
-					nPart = Arrays.add(nPart, nPart[1], nPart[2]);
-					oBorder.add(nPart);
-				}
-				if (!GeoUtil.boundingBoxesIntersect(nPolygonBb[0], nPolygonBb[1], nPolygonBb[2], nPolygonBb[3], nBB[0], nBB[1], nBB[2], nBB[3]))
-					continue;
-				
-				Area oStateArea = new Area(oStatePath);
-				oStateArea.intersect(oPolygonArea);
-				if (!oStateArea.isEmpty())
-				{
-					oStates.put(sState.toLowerCase().replaceAll(" ", "-"), oBorder);
 				}
 			}
+			finally
+			{
+				GeoUtil.freePolygon(lNetworkRef);
+			}
+				
 			oShp.close();
 			oDbf.close();
 			
 			ArrayList<OsmWay> oWays = new ArrayList();
 			ArrayList<OsmNode> oNodes = new ArrayList();
 			StringPool oStringPool = new StringPool();
-			String[] sStates = new String[oStates.keySet().size()];
+			String[] sStates = new String[oStates.size()];
 			int nStateCount = 0;
-			for (String sState : oStates.keySet()) // for each state
+			for (String sState : oStates) // for each state
 			{
 				sStates[nStateCount++] = sState;
 				m_oLogger.info(String.format("Processing: %s", sState));
@@ -715,7 +685,7 @@ public class NetworkGeneration extends SecureBaseBlock
 				}
 				
 				m_oLogger.info(String.format("Parsing file: %s", sBin));
-				new OsmBinParser().parseFileWithFilters(sBin, oNodes, oWays, nPolygonPts, nPolygonBb, oStringPool, oNetwork.m_sFilter); // extract the nodes, ways, and key/value strings from the file
+				new OsmBinParser().parseFileWithFilters(sBin, oNodes, oWays, nNetworkGeo, oStringPool, oNetwork.m_sFilter); // extract the nodes, ways, and key/value strings from the file
 			}
 			
 			oNetwork.m_sStates = sStates;
