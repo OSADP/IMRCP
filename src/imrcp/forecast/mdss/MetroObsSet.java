@@ -6,13 +6,13 @@
 
 package imrcp.forecast.mdss;
 
+import imrcp.geosrv.GeoUtil;
+import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.store.TileObsView;
 import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import java.util.Calendar;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
  *
@@ -42,13 +42,13 @@ public class MetroObsSet
 	double[] m_dFTime;
 	double[] m_dFTimeSeconds;
 	
-	private static int[] RTMACONTRIB = new int[]{Integer.valueOf("rtma", 36), Integer.MIN_VALUE};
-	private static int[] RAPCONTRIB = new int[]{Integer.valueOf("rap", 36), Integer.MIN_VALUE};
-	private static int[] NDFDCONTRIB = new int[]{Integer.valueOf("ndfd", 36), Integer.MIN_VALUE};
-	private static int[] MRMSCONTRIB = new int[]{Integer.valueOf("mrms", 36), Integer.MIN_VALUE};
-	private static int[] METROCONTRIB = new int[]{Integer.valueOf("metro", 36), Integer.MIN_VALUE};
-	private static int[] IMRCPCONTRIB = new int[]{Integer.valueOf("imrcp", 36), Integer.MIN_VALUE};
-	private static int[] IMRCPMETRO = new int[]{IMRCPCONTRIB[0], Integer.MIN_VALUE, METROCONTRIB[0], Integer.MIN_VALUE};
+	private final static int[] RTMACONTRIB = new int[]{Integer.valueOf("rtma", 36), Integer.MIN_VALUE};
+	private final static int[] RAPCONTRIB = new int[]{Integer.valueOf("rap", 36), Integer.MIN_VALUE};
+	private final static int[] NDFDCONTRIB = new int[]{Integer.valueOf("ndfd", 36), Integer.MIN_VALUE};
+	private final static int[] MRMSCONTRIB = new int[]{Integer.valueOf("mrms", 36), Integer.MIN_VALUE};
+	private final static int[] METROCONTRIB = new int[]{Integer.valueOf("metro", 36), Integer.MIN_VALUE};
+	private final static int[] IMRCPCONTRIB = new int[]{Integer.valueOf("imrcp", 36), Integer.MIN_VALUE};
+	private final static int[] IMRCPMETRO = new int[]{IMRCPCONTRIB[0], Integer.MIN_VALUE, METROCONTRIB[0], Integer.MIN_VALUE};
 	
 	
 	MetroObsSet(int nObsHrs, int nFcstHrs)
@@ -77,7 +77,6 @@ public class MetroObsSet
 	
 	public void getData(int[] nBb, long lStartTime)
 	{
-		Logger oLog = LogManager.getLogger(getClass().getName());
 		long lObservation = lStartTime - (3600000 * m_oObsAirTemp.length);
 		long lForecast = lStartTime - 3600000; // the first "forecast" actually uses observed values
 		TileObsView oOV = (TileObsView)Directory.getInstance().lookup("ObsView");
@@ -126,6 +125,71 @@ public class MetroObsSet
 				m_oFcstPrecipRate[i] = oOV.getData(ObsType.RTEPC, lQueryStart,lQueryEnd, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, RAPCONTRIB);
 				m_oFcstPrecipType[i] = oOV.getData(ObsType.TYPPC, lQueryStart,lQueryEnd, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, RAPCONTRIB);
 			}
+		}
+	}
+
+	void fillObsSet(MetroObsSet oAllObs, int[] nBB)
+	{
+		int[] nBoundingGeo = GeoUtil.getBoundingPolygon(nBB[0], nBB[1], nBB[2], nBB[3]);
+		m_dObsTime = oAllObs.m_dObsTime;
+		m_dFTime = oAllObs.m_dFTime;
+		m_dFTimeSeconds = oAllObs.m_dFTimeSeconds;
+		for (int i = 0; i < m_oObsAirTemp.length; i++)
+		{
+			fillObsList(oAllObs.m_oObsAirTemp[i], m_oObsAirTemp, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oObsDewPoint[i], m_oObsDewPoint, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oObsWindSpeed[i], m_oObsWindSpeed, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oObsTpvt[i], m_oObsTpvt, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oObsTssrf[i], m_oObsTssrf, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oObsRoadCond[i], m_oObsRoadCond, i, nBoundingGeo);
+		}
+		
+		for (int i = 0; i < m_oFcstAirTemp.length; i++)
+		{
+			if (i == 0)
+			{
+				m_oFcstAirTemp[i] = m_oObsAirTemp[m_oObsAirTemp.length - 1];
+				m_oFcstDewPoint[i] = m_oObsDewPoint[m_oObsDewPoint.length - 1];
+				m_oFcstWindSpeed[i] = m_oObsWindSpeed[m_oObsWindSpeed.length - 1];
+				fillObsList(oAllObs.m_oFcstCloudCover[i], m_oFcstCloudCover, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstSfcPres[i], m_oFcstSfcPres, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstPrecipRate[i], m_oFcstPrecipRate, i, nBoundingGeo);
+				m_oFcstPrecipType[i] = null;
+				fillObsList(oAllObs.m_oRainRes, m_oRainRes, nBoundingGeo);
+				fillObsList(oAllObs.m_oSnowRes, m_oSnowRes, nBoundingGeo);
+			}
+			else
+			{
+				fillObsList(oAllObs.m_oFcstAirTemp[i], m_oFcstAirTemp, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstDewPoint[i], m_oFcstDewPoint, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstWindSpeed[i], m_oFcstWindSpeed, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstCloudCover[i], m_oFcstCloudCover, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstSfcPres[i], m_oFcstSfcPres, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstPrecipRate[i], m_oFcstPrecipRate, i, nBoundingGeo);
+				fillObsList(oAllObs.m_oFcstPrecipType[i], m_oFcstPrecipType, i, nBoundingGeo);
+			}
+		}
+	}
+	
+	
+	void fillObsList(ObsList oAll, ObsList oFill, int[] nBoundingGeo)
+	{
+		for (Obs oObs : oAll)
+		{
+			if (oObs.spatialMatch(nBoundingGeo))
+				oFill.add(oObs);
+		}
+	}
+	
+	
+	void fillObsList(ObsList oAll, ObsList[] oFill, int nIndex, int[] nBoundingGeo)
+	{
+		oFill[nIndex] = new ObsList();
+		ObsList oList = oFill[nIndex];
+		for (Obs oObs : oAll)
+		{
+			if (oObs.spatialMatch(nBoundingGeo))
+				oList.add(oObs);
 		}
 	}
 }

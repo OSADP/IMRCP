@@ -6,7 +6,6 @@ import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.system.Directory;
 import imrcp.system.Introsort;
-import imrcp.system.JSONUtil;
 import imrcp.system.ObsType;
 import java.util.Calendar;
 import org.apache.logging.log4j.LogManager;
@@ -86,27 +85,6 @@ public class DoMetroWrapper implements Runnable
 	 * Value pressure is defaulted to if it is outside of he min and max
 	 */
 	private static final double m_dPRESSUREDEFAULT;
-
-	
-	/**
-	 * Time in milliseconds to query the RadarPrecipStore for past precipitation
-	 * for the first forecast hour
-	 */
-	private static final int m_nPASTPRECIP;
-
-	
-	/**
-	 * Array that contains configured values for initial road conditions if
-	 * there is not a previous METRo file to use
-	 */
-	private static String[] m_sInitRoadCond;
-
-	
-	/**
-	 * Array that contains configured values for initial road temperatures if
-	 * there is not a previous METRo file to use
-	 */
-	private static String[] m_sInitRoadTemp;
 
 	
 	/**
@@ -327,14 +305,6 @@ public class DoMetroWrapper implements Runnable
 	 */
 	public RoadcastData m_oOutput;
 	
-	
-	private static int[] RTMACONTRIB = new int[]{Integer.valueOf("rtma", 36)};
-	private static int[] RAPCONTRIB = new int[]{Integer.valueOf("rap", 36)};
-	private static int[] NDFDCONTRIB = new int[]{Integer.valueOf("ndfd", 36)};
-	private static int[] MRMSCONTRIB = new int[]{Integer.valueOf("mrms", 36)};
-	private static int[] METROCONTRIB = new int[]{Integer.valueOf("metro", 36)};
-	private static int[] IMRCPCONTRIB = new int[]{Integer.valueOf("imrcp", 36)};
-	
 
 	
 	/**
@@ -353,9 +323,6 @@ public class DoMetroWrapper implements Runnable
 		m_dPRESSUREMIN = oBlockConfig.optInt("prmin", 60000);
 		m_dPRESSUREDEFAULT = oBlockConfig.optInt("prdef", 101325);
 		m_dPRESSUREMAX = oBlockConfig.optInt("prmax", 110000);
-		m_nPASTPRECIP = oBlockConfig.optInt("precip", 1200000);
-		m_sInitRoadCond = JSONUtil.getStringArray(oBlockConfig, "initrc");
-		m_sInitRoadTemp = JSONUtil.getStringArray(oBlockConfig, "initrt");
 		m_dRAINCUTOFF = oBlockConfig.optDouble("raincut", 0.2);
 		m_dSNOWCUTOFF = oBlockConfig.optDouble("snowcut", 0.2);
 		
@@ -508,6 +475,8 @@ public class DoMetroWrapper implements Runnable
 		int nSegmentLatStart = nLat - nTol;
 		int nSegmentLonEnd = nLon + nTol;
 		int nSegmentLatEnd = nLat + nTol;
+		nLon -= 1;
+		nLat -= 1;
 		
 		//fill observation arrays
 		for (int i = 0; i < m_nObsHrs; i++)
@@ -575,7 +544,7 @@ public class DoMetroWrapper implements Runnable
 				m_dDewPoint[i] = m_dObsDewPoint[m_dObsDewPoint.length - 1];
 				m_dWindSpeed[i] = m_dObsWindSpeed[m_dObsWindSpeed.length - 1];
 				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nLon, nLat, nEndLon, nEndLat) / 12.5; // convert % to "octal"
-				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat);
+				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat) * 100; // convert mbar to Pa
 
 				m_dRainReservoir = getValue(oObsSet.m_oRainRes, nLon, nLat, nEndLon, nEndLat);
 				m_dSnowReservoir = getValue(oObsSet.m_oSnowRes, nLon, nLat, nEndLon, nEndLat);
@@ -626,7 +595,7 @@ public class DoMetroWrapper implements Runnable
 				m_dDewPoint[i] = getValue(oObsSet.m_oFcstDewPoint[i], nLon, nLat, nEndLon, nEndLat);
 				m_dWindSpeed[i] = getValue(oObsSet.m_oFcstWindSpeed[i], nLon, nLat, nEndLon, nEndLat);
 				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nLon, nLat, nEndLon, nEndLat) / 12.5; // convert % to "octal"
-				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat);
+				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat) * 100; // convert mbar to Pa
 
 				int nPrecipIndex = i * 120; // multiply by 120 because RAP precip values are valid for an hour
 				if (nPrecipIndex < m_dPrecipAmt.length)
@@ -671,7 +640,7 @@ public class DoMetroWrapper implements Runnable
 //				m_oLogger.debug("Forecast Wind Speed out of range: " + " " + m_dWindSpeed[i] + " at " + nLat + " " + nLon + " for hour " + i);
 				return false;
 			}
-			if (m_dSfcPres[i] < m_dPRESSUREMIN || m_dSfcPres[i] > m_dPRESSUREMAX)
+			if (Double.isNaN(m_dSfcPres[i]) || m_dSfcPres[i] < m_dPRESSUREMIN || m_dSfcPres[i] > m_dPRESSUREMAX)
 				m_dSfcPres[i] = m_dPRESSUREDEFAULT;  //METRo code set the Pressure to normal pressure if it was not in the correct range
 			if (Double.isNaN(m_dCloudCover[i]) || m_dCloudCover[i] < 0 || m_dCloudCover[i] > 8)
 			{

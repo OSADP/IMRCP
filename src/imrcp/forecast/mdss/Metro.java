@@ -7,6 +7,7 @@ import imrcp.geosrv.Mercator;
 import imrcp.geosrv.Network;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
+import imrcp.store.Obs;
 import imrcp.store.ProjProfile;
 import imrcp.system.CsvReader;
 import imrcp.system.Directory;
@@ -209,6 +210,8 @@ public class Metro extends BaseBlock
 	private String m_sLogTrigger;
 	
 	private ProjProfile[] m_oProjProfiles;
+	
+	private int[] m_nTotalBb = new int[4];
 
 	
 	@Override
@@ -467,7 +470,7 @@ public class Metro extends BaseBlock
 			{
 				if (m_oTiles.isEmpty())
 					return;
-
+				m_oLogger.info("Running METRo for " + new SimpleDateFormat("yyyy-MM-dd HH:mm").format(lRunTime) + " for " + m_oTiles.size() + " tiles");
 				m_nTotal.set(0);
 				m_nRuns.set(0);
 				m_nFailed.set(0);
@@ -485,6 +488,10 @@ public class Metro extends BaseBlock
 						nBB[3] = oTile.m_nWaysBb[3];
 				}
 				
+				MetroObsSet oObsSet = new MetroObsSet(m_nObsHours, m_nForecastHours);
+				oObsSet.getData(nBB, lRunTime);
+				for (MetroTile oTile : m_oTiles)
+					oTile.m_oAllObs = oObsSet;
 				long[] lStartTimes = new long[getObservationCount()];
 				lStartTimes[0] = lRunTime;
 				for (int nIndex = 1; nIndex < 30; nIndex++) // the first hour of values are 2 minutes apart
@@ -492,7 +499,8 @@ public class Metro extends BaseBlock
 				lStartTimes[30] = lRunTime + 3600000;
 				for (int nIndex = 31; nIndex < lStartTimes.length; nIndex++) // the rest of the values are 20 minutes apart
 					lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 1200000;
-				m_oLogger.info("Running METRo for " + new SimpleDateFormat("yyyy-MM-dd HH:mm").format(lRunTime) + " for " + m_oTiles.size() + " tiles");
+				
+				
 				m_oThreadPool.invokeAll(m_oTiles); // and run them all
 				
 				ArrayList<ResourceRecord> oRRs = m_oTiles.get(0).m_oRRs;
@@ -513,24 +521,25 @@ public class Metro extends BaseBlock
 						oOut.writeInt(nBB[2]); // bounds max x
 						oOut.writeInt(nBB[3]); // bounds max y
 						oOut.writeInt(oRR.getObsTypeId()); // obsversation type
-						oOut.writeByte(0b00000001); // obs flag = 0 (upper nybble) geo flag = 1 (lower nybble)
+						oOut.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
+						oOut.writeByte(Obs.POINT); // geo type
 						oOut.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
 						int nObjAndTimes = Id.SEGMENT;
 						nObjAndTimes <<= 4;
 						oOut.writeByte(nObjAndTimes); // associate with obj and timestamp flag, first nybble is Id.SEGMENT the lower bytes are all zero since times for obs are found in header
 						oOut.writeLong(lRunTime);
-						oOut.writeInt((int)(lEnd - lRunTime)); // end time offset from received time
+						oOut.writeInt((int)((lEnd - lRunTime) / 1000)); // end time offset from received time
 						if (oRR.getObsTypeId() == ObsType.RESRN || oRR.getObsTypeId() == ObsType.RESSN)
 						{
 							oOut.writeByte(1); // 1 start time
-							oOut.writeInt((int)(lStart - lRunTime)); // start time offset from received time
+							oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from received time
 						}
 						else
 						{
 							oOut.writeByte(lStartTimes.length);
-							oOut.writeInt((int)(lStart - lRunTime)); // start time offset from the received time for the first value
+							oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from the received time for the first value
 							for (int nIndex = 1; nIndex < lStartTimes.length; nIndex++) // the rest are offset from the previous value
-								oOut.writeInt((int)(lStartTimes[nIndex] - lStartTimes[nIndex - 1]));
+								oOut.writeInt((int)((lStartTimes[nIndex] - lStartTimes[nIndex - 1]) / 1000 ));
 						}
 						oOut.writeInt(0); // no string pool
 						
@@ -790,7 +799,7 @@ public class Metro extends BaseBlock
 		ArrayList<RoadcastData> m_oResult = new ArrayList();
 
 		byte[][] m_yDatas;
-
+		private MetroObsSet m_oAllObs;
 		
 		/**
 		 * Default constructor, which set {@link MetroTile#m_oLocations} to an
@@ -867,7 +876,7 @@ public class Metro extends BaseBlock
 				Mercator oM = new Mercator(nPPT);
 				int nTol = (int)Math.round(oM.RES[m_oRRs.get(0).getZoom()] * 50); // meters per pixel * 100 / 2
 				MetroObsSet oMOS = new MetroObsSet(m_nObsHours, m_nForecastHours);
-				oMOS.getData(m_nWaysBb, m_lRunTime);
+				oMOS.fillObsSet(m_oAllObs, m_nWaysBb);
 				boolean bLogFail = true;
 				for (MetroLocation oLoc : m_oLocations)
 				{
@@ -953,7 +962,6 @@ public class Metro extends BaseBlock
 			{
 				m_oLogger.error(oEx, oEx);
 			}
-			
 			return null;
 		}
 	}
