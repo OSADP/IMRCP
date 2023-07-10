@@ -25,8 +25,6 @@
 	"1800191045":{"name":"TRSCAT","desc":"tropical Storm Category"},
 	"1800213680":{"name":"TRSTRK","desc":"tropical Storm Track"},
 	"1800191498":{"name":"TRSCNE","desc":"tropical Storm Cone"},
-	"1256059721":{"name":"KRTPVT","desc":"kriged pavement temperature","unit":"F"},
-	"1259376027":{"name":"KTSSRF","desc":"kriged subsurface temperature","unit":"F"},
 	"48352205":{"name":"SSCST","desc":"extra tropical storm surge combined surge and tide","unit":"ft"},
 	"1682629690":{"name":"RTSLDM","desc":"solid material rate"},
 	"1682299678":{"name":"RTLIQM","desc":"liquid material rate"},
