@@ -478,14 +478,16 @@ public class DoMetroWrapper implements Runnable
 		nLon -= 1;
 		nLat -= 1;
 		
+		int[] nBoundingPolygon = GeoUtil.getBoundingPolygon(nLon, nLat, nEndLon, nEndLat);
+		int[] nSegmentPolygon = GeoUtil.getBoundingPolygon(nSegmentLonStart, nSegmentLatStart, nSegmentLonEnd, nSegmentLatEnd);
 		//fill observation arrays
 		for (int i = 0; i < m_nObsHrs; i++)
 		{
-			m_dObsAirTemp[i] = getValue(oObsSet.m_oObsAirTemp[i], nLon, nLat, nEndLon, nEndLat);
-			m_dObsDewPoint[i] = getValue(oObsSet.m_oObsDewPoint[i], nLon, nLat, nEndLon, nEndLat);
-			m_dObsWindSpeed[i] = getValue(oObsSet.m_oObsWindSpeed[i], nLon, nLat, nEndLon, nEndLat);
-			m_dObsRoadTemp[i] = getValue(oObsSet.m_oObsTpvt[i], nSegmentLonStart, nSegmentLatStart, nSegmentLonEnd, nSegmentLatEnd, nImrcpContrib);
-			m_dObsSubSurfTemp[i] = getValue(oObsSet.m_oObsTssrf[i], nSegmentLonStart, nSegmentLatStart, nSegmentLonEnd, nSegmentLatEnd, nImrcpContrib);
+			m_dObsAirTemp[i] = getValue(oObsSet.m_oObsAirTemp[i], nBoundingPolygon);
+			m_dObsDewPoint[i] = getValue(oObsSet.m_oObsDewPoint[i], nBoundingPolygon);
+			m_dObsWindSpeed[i] = getValue(oObsSet.m_oObsWindSpeed[i], nBoundingPolygon);
+			m_dObsRoadTemp[i] = getValue(oObsSet.m_oObsTpvt[i], nSegmentPolygon, nImrcpContrib);
+			m_dObsSubSurfTemp[i] = getValue(oObsSet.m_oObsTssrf[i], nSegmentPolygon, nImrcpContrib);
 			
 			if (Double.isNaN(m_dObsRoadTemp[i]))
 				m_dObsRoadTemp[i] = m_dObsAirTemp[i];
@@ -493,7 +495,7 @@ public class DoMetroWrapper implements Runnable
 			if (Double.isNaN(m_dObsSubSurfTemp[i]))
 				m_dObsSubSurfTemp[i] = m_dObsRoadTemp[i];
 			
-			m_lRoadCond[i] = imrcpToMetroRoadCond((int)getValue(oObsSet.m_oObsRoadCond[i], nSegmentLonStart, nSegmentLatStart, nSegmentLonEnd, nSegmentLatEnd, nImrcpContrib));
+			m_lRoadCond[i] = imrcpToMetroRoadCond((int)getValue(oObsSet.m_oObsRoadCond[i], nSegmentPolygon, nImrcpContrib));
 
 			//check that values fall within the correct range, if not exit the function and set that it failed so METRo isn't ran for the location
 			if (Double.isNaN(m_dObsRoadTemp[i]) || m_dObsRoadTemp[i] < m_dROADTEMPMIN || m_dObsRoadTemp[i] > m_dROADTEMPMAX)
@@ -534,7 +536,6 @@ public class DoMetroWrapper implements Runnable
 		{
 			long lTimestamp = lForecast + (3600000 * i);
 			long lQueryStart = lTimestamp;
-			long lQueryEnd = lQueryStart + 60000;
 			// for the first hour of forecast use RTMA and radar precip, after that use NDFD for air temp, dew point, wind speed, and cloud cover and RAP for other values
 			// the first hour of "forecast" is an hour in the past
 			if (i == 0)
@@ -543,31 +544,33 @@ public class DoMetroWrapper implements Runnable
 				m_dAirTemp[i] = m_dObsAirTemp[m_dObsAirTemp.length - 1];
 				m_dDewPoint[i] = m_dObsDewPoint[m_dObsDewPoint.length - 1];
 				m_dWindSpeed[i] = m_dObsWindSpeed[m_dObsWindSpeed.length - 1];
-				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nLon, nLat, nEndLon, nEndLat) / 12.5; // convert % to "octal"
-				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat) * 100; // convert mbar to Pa
+				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nBoundingPolygon) / 12.5; // convert % to "octal"
+				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nBoundingPolygon) * 100; // convert mbar to Pa
 
-				m_dRainReservoir = getValue(oObsSet.m_oRainRes, nLon, nLat, nEndLon, nEndLat);
-				m_dSnowReservoir = getValue(oObsSet.m_oSnowRes, nLon, nLat, nEndLon, nEndLat);
+				m_dRainReservoir = getValue(oObsSet.m_oRainRes, nBoundingPolygon);
+				m_dSnowReservoir = getValue(oObsSet.m_oSnowRes, nBoundingPolygon);
 				if (Double.isNaN(m_dRainReservoir))
 					m_dRainReservoir = 0;
 				if (Double.isNaN(m_dSnowReservoir))
 					m_dSnowReservoir = 0;
 				
-				ObsList oPrecip = getValues(oObsSet.m_oFcstPrecipRate[i], nLon, nLat, nEndLon, nEndLat);
+				ObsList oPrecip = getValues(oObsSet.m_oFcstPrecipRate[i], nBoundingPolygon);
 				if (!oPrecip.isEmpty())
 				{
 					Introsort.usort(oPrecip, Obs.g_oCompObsByTime);
 					int nPrecipIndex = 0;
 					Obs oPrecipObs = oPrecip.get(nPrecipIndex);
+					int nPrecipLimit = oPrecip.size();
 					long lType = m_dAirTemp[i] > -2 ? 1 : 2; // infer type from the air temp
 					for (int nIndex = 0; nIndex < 30; nIndex++) // fill in the precip arrays for every 30 secs
 					{
-						long lPrecipStart = lQueryStart + 120000 * i;
+						long lPrecipStart = lQueryStart + 120000 * nIndex;
 						double dVal = Double.NaN;
 						if (oPrecipObs.temporalMatch(lPrecipStart, lPrecipStart + 60000, lStartTime))
 						{
 							dVal = oPrecipObs.m_dValue / 3600000.0; // convert mm/hr to m/s
-							oPrecipObs = oPrecip.get(++nPrecipIndex);
+							if (++nPrecipIndex < nPrecipLimit)
+								oPrecipObs = oPrecip.get(nPrecipIndex);
 						}
 
 						int nArrIndex = nIndex * 4; // multiply by 4 since mrms files come every 2 minutes
@@ -591,17 +594,17 @@ public class DoMetroWrapper implements Runnable
 			}
 			else
 			{
-				m_dAirTemp[i] = getValue(oObsSet.m_oFcstAirTemp[i], nLon, nLat, nEndLon, nEndLat);
-				m_dDewPoint[i] = getValue(oObsSet.m_oFcstDewPoint[i], nLon, nLat, nEndLon, nEndLat);
-				m_dWindSpeed[i] = getValue(oObsSet.m_oFcstWindSpeed[i], nLon, nLat, nEndLon, nEndLat);
-				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nLon, nLat, nEndLon, nEndLat) / 12.5; // convert % to "octal"
-				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nLon, nLat, nEndLon, nEndLat) * 100; // convert mbar to Pa
+				m_dAirTemp[i] = getValue(oObsSet.m_oFcstAirTemp[i], nBoundingPolygon);
+				m_dDewPoint[i] = getValue(oObsSet.m_oFcstDewPoint[i], nBoundingPolygon);
+				m_dWindSpeed[i] = getValue(oObsSet.m_oFcstWindSpeed[i], nBoundingPolygon);
+				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nBoundingPolygon) / 12.5; // convert % to "octal"
+				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nBoundingPolygon) * 100; // convert mbar to Pa
 
 				int nPrecipIndex = i * 120; // multiply by 120 because RAP precip values are valid for an hour
 				if (nPrecipIndex < m_dPrecipAmt.length)
 				{
-					double dPrecip = getValue(oObsSet.m_oFcstPrecipRate[i], nLon, nLat, nEndLon, nEndLat);
-					double dPrecipType = getValue(oObsSet.m_oFcstPrecipType[i], nLon, nLat, nEndLon, nEndLat);
+					double dPrecip = getValue(oObsSet.m_oFcstPrecipRate[i], nBoundingPolygon);
+					double dPrecipType = getValue(oObsSet.m_oFcstPrecipType[i], nBoundingPolygon);
 					int nType;
 					if (Double.isNaN(dPrecipType) || dPrecipType == ObsType.lookup(ObsType.TYPPC, "none"))
 						nType = 0; //none
@@ -645,7 +648,7 @@ public class DoMetroWrapper implements Runnable
 			if (Double.isNaN(m_dCloudCover[i]) || m_dCloudCover[i] < 0 || m_dCloudCover[i] > 8)
 			{
 //				m_oLogger.debug("Forecast Cloud Cover out of range: " + " " + m_dCloudCover[i] + " at " + nLat + " " + nLon + " for hour " + i);
-				return false;
+			return false;
 			}
 		}
 		
@@ -803,23 +806,17 @@ public class DoMetroWrapper implements Runnable
 		{
 			int nProcessIndex = nStartObsIndex + i;
 			long lTimestamp = lObservation + (i * 3600000);
-			double dTpvt = oProcess.m_dKrigedTpvt[nProcessIndex];
-			if (Double.isNaN(dTpvt))
-				dTpvt = oProcess.m_dPavementTemp[nProcessIndex];
+			double dTpvt = oProcess.m_dPavementTemp[nProcessIndex];
 			
 			if (Double.isNaN(dTpvt))
 				dTpvt = oProcess.m_dAirTemp[nProcessIndex];
 			
-			double dTssrf = oProcess.m_dKrigedSubSurf[nProcessIndex];
-			if (Double.isNaN(dTssrf))
-				dTssrf = oProcess.m_dSubSurfTemp[nProcessIndex];
+			double dTssrf = oProcess.m_dSubSurfTemp[nProcessIndex];
 			if (Double.isNaN(dTssrf))
 				dTssrf = dTpvt;
 
 			m_dObsRoadTemp[i] = dTpvt;
 			m_dObsSubSurfTemp[i] = dTssrf;
-			
-
 			
 			int nRoadCond = oProcess.m_nPavementState[nProcessIndex];
 			if (nRoadCond == Integer.MIN_VALUE)
@@ -1037,11 +1034,11 @@ public class DoMetroWrapper implements Runnable
 //	}
 	
 	
-	public static double getValue(ObsList oData, int nLon, int nLat, int nEndLon, int nEndLat)
+	public static double getValue(ObsList oData, int[] nBoundingPolygon)
 	{
 		for (Obs oObs : oData)
 		{
-			if (oObs.spatialMatch(nLon, nLat, nEndLon, nEndLat))
+			if (oObs.spatialMatch(nBoundingPolygon))
 				return oObs.m_dValue;
 		}
 		
@@ -1049,13 +1046,13 @@ public class DoMetroWrapper implements Runnable
 	}
 	
 	
-	public static double getValue(ObsList oData, int nLon, int nLat, int nEndLon, int nEndLat, int nContrib)
+	public static double getValue(ObsList oData, int[] nBoundingPolygon, int nContrib)
 	{
 		double dReturn = Double.NaN;
 		
 		for (Obs oObs : oData)
 		{
-			if (oObs.spatialMatch(nLon, nLat, nEndLon, nEndLat))
+			if (oObs.spatialMatch(nBoundingPolygon))
 			{
 				dReturn = oObs.m_dValue;
 				if (oObs.m_nContribId == nContrib)
@@ -1067,12 +1064,12 @@ public class DoMetroWrapper implements Runnable
 	}
 	
 	
-	public static ObsList getValues(ObsList oData, int nLon, int nLat, int nEndLon, int nEndLat)
+	public static ObsList getValues(ObsList oData, int[] nBoundingPolygon)
 	{
 		ObsList oReturn = new ObsList(30);
 		for (Obs oObs : oData)
 		{
-			if (oObs.spatialMatch(nLon, nLat, nEndLon, nEndLat))
+			if (oObs.spatialMatch(nBoundingPolygon))
 				oReturn.add(oObs);
 		}
 		

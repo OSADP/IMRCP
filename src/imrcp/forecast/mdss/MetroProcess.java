@@ -5,6 +5,8 @@
  */
 package imrcp.forecast.mdss;
 
+import imrcp.geosrv.GeoUtil;
+import imrcp.geosrv.Mercator;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
 import imrcp.web.Scenario;
@@ -16,12 +18,10 @@ import imrcp.system.Directory;
 import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
+import imrcp.system.ResourceRecord;
 import imrcp.system.Units;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
 
 /**
  * Manages running the METRo model for Scenarios. For each segment in a Scenario
@@ -49,18 +49,6 @@ public class MetroProcess
 	 * Contains wind speed observations and forecasts
 	 */
 	public double[] m_dWindSpeed;
-
-	
-	/**
-	 * Contains kriged pavement temperature observations
-	 */
-	public double[] m_dKrigedTpvt;
-
-	
-	/**
-	 * Contains kriged subsurface temperature observations
-	 */
-	public double[] m_dKrigedSubSurf;
 
 	
 	/**
@@ -161,25 +149,7 @@ public class MetroProcess
 	public ArrayList<double[]> m_oTPvts = new ArrayList();
 	
 	public ArrayList<double[]> m_oDphsns = new ArrayList();
-	
-	
-	/**
-	 * Represents the order in which to use precipitation forecasts. RAP > NDFD > GFS
-	 */
-	private static int[] PREFERENCE = new int[]{Integer.valueOf("RAP", 36), Integer.valueOf("NDFD", 36), Integer.valueOf("GFS", 36)};
 
-	
-	/**
-	 * Obstype ids that are used as observation inputs to METRo
-	 */
-	private int[] m_nPastObsTypes = new int[]{ObsType.TAIR, ObsType.TDEW, ObsType.SPDWND, ObsType.TPVT, ObsType.TSSRF, ObsType.STPVT};
-
-	
-	/**
-	 * Obstype ids that are used as forecast inputs to METRo
-	 */
-	private int[] m_nFutureObsTypes = new int[]{ObsType.TAIR, ObsType.TDEW, ObsType.SPDWND, ObsType.COVCLD, ObsType.PRSUR, ObsType.TYPPC, ObsType.RTEPC};
-	
 	
 	/**
 	 * Allocates the memory for the observation/forecast array. The size of each
@@ -193,8 +163,6 @@ public class MetroProcess
 		m_dAirTemp = new double[nSize];
 		m_dDewPoint = new double[nSize];
 		m_dWindSpeed = new double[nSize];
-		m_dKrigedTpvt = new double[nSize];
-		m_dKrigedSubSurf = new double[nSize];
 		m_dPavementTemp = new double[nSize];
 		m_dSubSurfTemp = new double[nSize];
 		m_nPavementState = new int[nSize];
@@ -226,9 +194,10 @@ public class MetroProcess
 			lRefTime = lNow;
 		else
 			lRefTime = oScenario.m_lStartTime; // allows scenarios to be ran in the past using the "best" forecast at that time
-		
-		if (oScenario.m_sName.contains("metrotest_0_202212220800"))
-			lRefTime = 1671656400000L;
+		ResourceRecord oRR = Directory.getResource(Integer.valueOf("metro", 36), ObsType.TPVT);
+		int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
+		Mercator oM = new Mercator(nPPT);
+		int nTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
 		long lStartTime = oScenario.m_lStartTime - 3600000 * (m_nObsPerRun - 1); // the first forecast time is an hour after the reftime, for metro the run time is used for both the last observation hour and first forecast hour
 		long lEndTime = lStartTime + (m_dAirTemp.length * 3600000); // could use any of the array, they are the same length
 		for (int nIndex = 0; nIndex < m_lTimes.length; nIndex++) // fill time array
@@ -237,6 +206,8 @@ public class MetroProcess
 		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		DoMetroWrapper oMetro = new DoMetroWrapper(m_nObsPerRun, m_nFcstPerRun);
 		Units oUnits = Units.getInstance();
+		int nNonePrecip = (int)ObsType.lookup(ObsType.TYPPC, "none");
+		int nSnowPrecip = (int)ObsType.lookup(ObsType.TYPPC, "snow");
 		for (SegmentGroup oGroup : oScenario.m_oGroups) // for each group of the scenario
 		{
 			System.arraycopy(oGroup.m_bTreating, 0, m_bTreating, m_nObsPerRun - 1, oGroup.m_bTreating.length); // copy the treated and plowed booleans into the correct position
@@ -248,49 +219,53 @@ public class MetroProcess
 					continue;
 				resetArrays();
 				
+				int[] nWayBb = new int[]{oWay.m_nMidLon - nTol, oWay.m_nMidLat - nTol, oWay.m_nMidLon + nTol, oWay.m_nMidLat + nTol};
+				int[] nWayQuery = GeoUtil.getBoundingPolygon(nWayBb[0], nWayBb[1], nWayBb[2], nWayBb[3]);
+				
+				int[] nBb = new int[]{oWay.m_nMidLon - 1, oWay.m_nMidLat - 1, oWay.m_nMidLon + 1, oWay.m_nMidLat + 1};
+				int[] nQuery = GeoUtil.getBoundingPolygon(nBb[0], nBb[1], nBb[2], nBb[3]);
 				int[] nStPvt = new int[oGroup.m_bPlowing.length + 1]; // will store output pavement states
 				double[] dTPvt = new double [oGroup.m_bPlowing.length + 1]; // will store output pavement temperatures
 				double[] dDphsn = new double[oGroup.m_bPlowing.length + 1];
 				
-				// get the first hour of pavement temperature by first checking for a kriged pavement temperature observation
-				ObsList oData = oOv.getData(ObsType.KRTPVT, lRefTime, lRefTime + 60000, oWay.m_nMidLat, oWay.m_nMidLat + 1, oWay.m_nMidLon, oWay.m_nMidLon + 1, lRefTime); //
-				if (!oData.isEmpty())
+				// fill all the data arrays for the entire length of the scenario
+				for (int nIndex = 0; nIndex < m_lTimes.length; nIndex++)
 				{
-					Obs oObs = oData.get(0);
-					dTPvt[0] = oObs.m_dValue;
-				}
-				else // if there isn't there check if there is a previous metro run with a forecasted value
-				{
-					oData = oOv.getData(ObsType.TPVT, lRefTime, lRefTime + 60000, oWay.m_nMidLat, oWay.m_nMidLat + 1, oWay.m_nMidLon, oWay.m_nMidLon + 1, lRefTime);
-					if (!oData.isEmpty())
+					long lStartQuery = m_lTimes[nIndex];
+					long lEndQuery = lStartQuery + 3600000;
+					getData(oOv, ObsType.TPVT, nWayBb, nWayQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dPavementTemp, false);
+					getData(oOv, ObsType.TSSRF, nWayBb, nWayQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dSubSurfTemp, false);
+					getData(oOv, ObsType.STPVT, nWayBb, lStartQuery, lEndQuery, lRefTime, nIndex, m_nPavementState);
+					getData(oOv, ObsType.TAIR, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dAirTemp, false);
+					getData(oOv, ObsType.TDEW, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dDewPoint, false);
+					getData(oOv, ObsType.SPDWND, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dWindSpeed, false);
+					
+					getData(oOv, ObsType.COVCLD, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dCloudCover, false);
+					getData(oOv, ObsType.PRSUR, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dPressure, false);
+					getData(oOv, ObsType.DPHLIQ, nWayBb, nWayQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dRainRes, false);
+					getData(oOv, ObsType.DPHSN, nWayBb, nWayQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dSnowRes, false);
+					getData(oOv, ObsType.RTEPC, nBb, nQuery, lStartQuery, lEndQuery, lRefTime, nIndex, m_dPrecipRate, true);
+					getData(oOv, ObsType.TYPPC, nBb, lStartQuery, lEndQuery, lRefTime, nIndex, m_nPrecipType);
+					if (m_dPrecipRate[nIndex] == 0.0)
+						m_nPrecipType[nIndex] = 0;
+					else if (m_nPrecipType[nIndex] == Integer.MIN_VALUE)
 					{
-						Obs oObs = oData.get(0);
-						dTPvt[0] = oObs.m_dValue;
+						if (m_dAirTemp[nIndex] > -2) // if temp > -2C then precip type is rain
+							m_nPrecipType[nIndex] = 1;
+						else // if temp <= -2C then precip type is snow
+							m_nPrecipType[nIndex] = 2;
 					}
 					else
-						dTPvt[0] = Double.NaN;
+					{
+						int nPrecipType = m_nPrecipType[nIndex];
+						if (nPrecipType == nNonePrecip)
+							m_nPrecipType[nIndex] = 0; //none
+						else if (nPrecipType == nSnowPrecip)
+							m_nPrecipType[nIndex] = 2;  //snow
+						else
+							m_nPrecipType[nIndex] = 1;  //rain
+					}
 				}
-				
-				// get the first hour of pavement state by checking for a previous metro run with a forecasted value
-				oData = oOv.getData(ObsType.STPVT, lRefTime, lRefTime + 60000, oWay.m_nMidLat, oWay.m_nMidLat + 1, oWay.m_nMidLon, oWay.m_nMidLon + 1, lRefTime, oWay.m_oId);
-				if (!oData.isEmpty())
-					nStPvt[0] = (int)oData.get(0).m_dValue;
-				
-				// fill all the data arrays for the entire length of the scenario
-				fillArray(oOv, ObsType.TPVT, lStartTime, lEndTime, lRefTime, m_dPavementTemp, oWay, true);
-				fillArray(oOv, ObsType.TSSRF, lStartTime, lEndTime, lRefTime, m_dSubSurfTemp, oWay, true);
-				fillArray(oOv, ObsType.STPVT, lStartTime, lEndTime, lRefTime, m_nPavementState, oWay, true);
-				fillArray(oOv, ObsType.TAIR, lStartTime, lEndTime, lRefTime, m_dAirTemp, oWay, false);
-				fillPrecip(oOv, lStartTime, lEndTime, lRefTime, m_dPrecipRate, m_nPrecipType, m_dAirTemp, oWay);
-				fillArray(oOv, ObsType.TDEW, lStartTime, lEndTime, lRefTime, m_dDewPoint, oWay, false);
-				fillArray(oOv, ObsType.SPDWND, lStartTime, lEndTime, lRefTime, m_dWindSpeed, oWay, false);
-				fillArray(oOv, ObsType.KRTPVT, lStartTime, lEndTime, lRefTime, m_dKrigedTpvt, oWay, false);
-				fillArray(oOv, ObsType.KTSSRF, lStartTime, lEndTime, lRefTime, m_dKrigedSubSurf, oWay, false);
-				
-				fillArray(oOv, ObsType.COVCLD, lStartTime, lEndTime, lRefTime, m_dCloudCover, oWay, false);
-				fillArray(oOv, ObsType.PRSUR, lStartTime, lEndTime, lRefTime, m_dPressure, oWay, false);
-				fillArray(oOv, ObsType.DPHLIQ, lStartTime, lEndTime, lRefTime, m_dRainRes, oWay, true);
-				fillArray(oOv, ObsType.DPHSN, lStartTime, lEndTime, lRefTime, m_dSnowRes, oWay, true);
 				
 				int nIndex = m_nObsPerRun - 1; // this index is for the runtime of each metro run
 				for (int i = 0; i <= oGroup.m_bPlowing.length; i++) // start at 1 since the 0 hour of nStPvt and dTpvt got filled in above
@@ -304,10 +279,10 @@ public class MetroProcess
 					
 					float[] oMetroStpvt = oMetro.m_oOutput.m_oDataArrays.get(ObsType.STPVT);
 					float[] oMetroTpvt = oMetro.m_oOutput.m_oDataArrays.get(ObsType.TPVT);
-					float[] oMetroDphsn = oMetro.m_oOutput.m_oDataArrays.get(ObsType.TPVT);
+					float[] oMetroDphsn = oMetro.m_oOutput.m_oDataArrays.get(ObsType.DPHSN);
 					nStPvt[i] = (int)oMetroStpvt[nMetroForecastIndex];
-					dTPvt[i] = oUnits.convert("C", "F", oMetroTpvt[nMetroForecastIndex]);
-					dDphsn[i] = oUnits.convert("mmle", "in", oMetroDphsn[nMetroForecastIndex]);
+					dTPvt[i] = GeoUtil.round(oUnits.convert("C", "F", oMetroTpvt[nMetroForecastIndex]), 2);
+					dDphsn[i] = GeoUtil.round(Math.round(oUnits.convert("mmle", "in", oMetroDphsn[nMetroForecastIndex])), 2);
 					double dPlowedSnow = 0;
 					if (m_bPlowing[nIndex - 1])
 					{
@@ -346,226 +321,69 @@ public class MetroProcess
 		}
 		
 	}
-	
-	
-	/**
-	 * Fills the data array by querying ObsView with the given parameters by
-	 * averaging all the matching Obs
-	 * @param oOv ObsView instance
-	 * @param nObstype query ObsView for this obstype id
-	 * @param lStart start time of query in milliseconds since Epoch
-	 * @param lEnd end time of query in milliseconds since Epoch
-	 * @param lRef reference time of query in millisecond since Epoch
-	 * @param dArr data array to fill. Each element is an hour apart
-	 * @param oWay segment METRo is currently being ran on
-	 * @param bUseId flag indicating if oWay's id should be included in the
-	 * query to ObsView. false for areal observations/forecasts, true for
-	 * roadway observations/forecasts
-	 */
-	private void fillArray(TileObsView oOv, int nObstype, long lStart, long lEnd, long lRef, double[] dArr, OsmWay oWay, boolean bUseId)
+		
+	private void getData(TileObsView oOV, int nObstype, int[] nBb, int[] nQueryGeo, long lStartQuery, long lEndQuery, long lRef, int nIndex, double[] dArr, boolean bAverage)
 	{
-		ObsList oData = oOv.getData(nObstype, lStart, lEnd, oWay.m_nMidLat, oWay.m_nMidLat + 1, oWay.m_nMidLon, oWay.m_nMidLon + 1, lRef, bUseId ? oWay.m_oId : Id.NULLID);
-		Introsort.usort(oData, Obs.g_oCompObsByTime);
-		ArrayList<Obs> oMatches = new ArrayList();
-		Units oUnits = Units.getInstance();
-		String sUnits = ObsType.getUnits(nObstype, true);
-		for (int nIndex = 0; nIndex < dArr.length; nIndex++) // for each hour of the scenario
+		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
+		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
+		int[] nContribAndSource = new int[2];
+		ObsList oData = null;
+		for (ResourceRecord oTemp : oRRs)
 		{
-			long lHourStart = lStart + nIndex * 3600000;
-			long lHourEnd = lHourStart + 3600000;
-			oMatches.clear();
-			for (Obs oObs : oData) // check if any Obs match the temporal extents
-			{
-				if (oObs.m_lObsTime1 < lHourEnd && oObs.m_lObsTime2 >= lHourStart)
-					oMatches.add(oObs);
-			}
-			
-			double dVal = Double.NaN;
-			int nSize = oMatches.size();
-			if (nSize > 0) // calculate the average of all the matches, if any
-			{
-				dVal = 0.0;
-				for (Obs oObs : oMatches)
-				{
-					dVal += oObs.m_dValue;
-				}
-				
-				dVal = dVal / nSize;
-			}
-			dArr[nIndex] = dVal; // set the average for the current hour
+			nContribAndSource[0] = oTemp.getContribId();
+			nContribAndSource[1] = oTemp.getSourceId();
+			oData = oOV.getData(nObstype, lStartQuery, lEndQuery,
+			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
+			if (oData.m_bHasData || !oData.isEmpty())
+				break;
 		}
-	}
-	
-	
-	/**
-	 * Fills the data array by querying ObsView with the given parameters by
-	 * taking the mode of all the matching Obs. This function is used for obstypes
-	 * that are enumerated values like pavement state
-	 * @param oOv ObsView instance
-	 * @param nObstype query ObsView for this obstype id
-	 * @param lStart start time of query in milliseconds since Epoch
-	 * @param lEnd end time of query in milliseconds since Epoch
-	 * @param lRef reference time of query in millisecond since Epoch
-	 * @param nArr data array to fill. Each element is an hour apart
-	 * @param oWay segment METRo is currently being ran on
-	 * @param bUseId flag indicating if oWay's id should be included in the
-	 * query to ObsView. false for areal observations/forecasts, true for
-	 * roadway observations/forecasts
-	 */
-	private void fillArray(TileObsView oOv, int nObstype, long lStart, long lEnd, long lRef, int[] nArr, OsmWay oWay, boolean bUseId)
-	{
-		ObsList oData = oOv.getData(nObstype, lStart, lEnd, oWay.m_nMidLat, oWay.m_nMidLat + 1, oWay.m_nMidLon, oWay.m_nMidLon + 1, lRef, bUseId ? oWay.m_oId : Id.NULLID);
-		Introsort.usort(oData, Obs.g_oCompObsByTime);
-		ArrayList<Obs> oMatches = new ArrayList();
-		Comparator<int[]> oComp = (int[] o1, int[] o2) -> o1[0] - o2[0];
-		for (int nIndex = 0; nIndex < nArr.length; nIndex++) // for each hour of the scenario
+		
+		if (oData != null && !oData.isEmpty())
 		{
-			long lHourStart = lStart + nIndex * 3600000;
-			long lHourEnd = lHourStart + 3600000;
-			oMatches.clear();
-			for (Obs oObs : oData) // check if any Obs match the temporal extents
+			if (bAverage)
 			{
-				if (oObs.m_lObsTime1 < lHourEnd && oObs.m_lObsTime2 >= lHourStart)
-					oMatches.add(oObs);
-			}
-			
-			ArrayList<int[]> nCounts = new ArrayList();
-			int[] nSearch = new int[1];
-			int nVal = Integer.MIN_VALUE;
-			int nSize = oMatches.size();
-			if (nSize > 0) // calculate the mode of all the matches, if any
-			{
-				for (Obs oObs : oMatches)
+				double dTotal = 0.0;
+				int nCount = 0;
+
+				for (Obs oObs : oData)
 				{
-					nSearch[0] = (int)oObs.m_dValue;
-					int nSearchIndex = Collections.binarySearch(nCounts, nSearch, oComp);
-					if (nSearchIndex < 0)
+					if (oObs.spatialMatch(nQueryGeo) && Double.isFinite(oObs.m_dValue))
 					{
-						nSearchIndex = ~nSearchIndex;
-						nCounts.add(nSearchIndex, new int[]{nSearch[0], 0});
-					}
-					++nCounts.get(nSearchIndex)[1];
-				}
-				
-				int nMode = Integer.MIN_VALUE;
-				for (int[] nVals : nCounts)
-				{
-					if (nVals[1] >= nMode)
-					{
-						nMode = nVals[1];
-						if (nVals[0] > nVal)
-							nVal = nVals[0];
-					}
-				}
-			}
-			
-			nArr[nIndex] = nVal; // set the mode for the current hour
-		}
-	}
-	
-	
-	/**
-	 * Fills the precip rate and type array by querying ObsView with the given 
-	 * parameters and averaging the rate and if no type observations are found
-	 * inferring the type using the temperature array
-	 * 
-	 * @param oOv ObsView instance
-	 * @param lStart start time of query in milliseconds since Epoch
-	 * @param lEnd end time of query in milliseconds since Epoch
-	 * @param lRef reference time of query in millisecond since Epoch
-	 * @param dRates precip rate array to be filled
-	 * @param nTypes precip type array to be filled
-	 * @param dTemps array containing the air temperature for each hour. Used to
-	 * infer the precip type when it is unknown
-	 * @param oWay segment METRo is currently being ran on
-	 */
-	public void fillPrecip(TileObsView oOv, long lStart, long lEnd, long lRef, double[] dRates, int[] nTypes, double[] dTemps, OsmWay oWay)
-	{
-		// get precip rate and type for the time range
-		ObsList oRtePc = oOv.getData(ObsType.RTEPC, lStart, lEnd, oWay.m_nMidLat, oWay.m_nMidLat, oWay.m_nMidLon, oWay.m_nMidLon, lRef);
-		ObsList oType = oOv.getData(ObsType.TYPPC, lStart, lEnd, oWay.m_nMidLat, oWay.m_nMidLat, oWay.m_nMidLon, oWay.m_nMidLon, lRef);
-		Introsort.usort(oRtePc, Obs.g_oCompObsByTime);
-		ArrayList<double[]> oMatchBySource = new ArrayList();
-		Comparator<double[]> oComp = (double[] o1, double[] o2) -> Double.compare(o1[1], o2[1]);
-		double[] dSearch = new double[2];
-		Units oUnits = Units.getInstance();
-		for (int nIndex = 0; nIndex < dRates.length; nIndex++) // for each hour of the scenario
-		{
-			long lHourStart = lStart + nIndex * 3600000;
-			long lHourEnd = lHourStart + 3600000;
-			oMatchBySource.clear();
-			for (Obs oObs : oRtePc)
-			{
-				if (oObs.m_lObsTime1 < lHourEnd && oObs.m_lObsTime2 >= lHourStart) // collect precip rate matches by contrib id
-				{
-					dSearch[1] = oObs.m_nContribId;
-					int nSearchIndex = Collections.binarySearch(oMatchBySource, dSearch, oComp);
-					if (nSearchIndex < 0)
-					{
-						nSearchIndex = ~nSearchIndex;
-						double[] dTemp = imrcp.system.Arrays.newDoubleArray(4);
-						dTemp = imrcp.system.Arrays.add(dTemp, oObs.m_nContribId);
-						oMatchBySource.add(nSearchIndex, dTemp);
-					}
-					double[] dArr = oMatchBySource.get(nSearchIndex);
-					dArr = imrcp.system.Arrays.add(dArr, oObs.m_dValue);
-				}
-			}
-			
-			for (int nContrib : PREFERENCE) // start with the more preferred contributors
-			{
-				dSearch[1] = nContrib;
-				int nSearchIndex = Collections.binarySearch(oMatchBySource, dSearch, oComp);
-				if (nSearchIndex < 0) // if there are not any matches try the next contributor
-					continue;
-				
-				// average the rate
-				double[] dValues = oMatchBySource.get(nSearchIndex);
-				int nTotal = 0;
-				double dRate = 0.0;
-				Iterator<double[]> oIt = imrcp.system.Arrays.iterator(dValues, new double[1], 2, 1);
-				while (oIt.hasNext())
-				{
-					double dVal = oIt.next()[0];
-					if (Double.isFinite(dVal) && dVal >= 0.0)
-					{
-						dRate += dVal;
-						++nTotal;
-					}
-				}
-				
-				dRates[nIndex] = dRate / nTotal;
-				if (dRate == 0.0) // if no precip rate, set type to none
-					nTypes[nIndex] = 0;
-				else
-				{
-					for (Obs oObs : oType)
-					{
-						if (oObs.m_lObsTime1 < lHourEnd && oObs.m_lObsTime2 >= lHourStart && oObs.m_nContribId == nContrib) // find precip type matches for temporal extents and contrib id
-						{
-							int nPrecipType = (int)oObs.m_dValue;
-							if (nPrecipType == ObsType.lookup(ObsType.TYPPC, "none"))
-								nTypes[nIndex] = 0; //none
-							else if (nPrecipType == ObsType.lookup(ObsType.TYPPC, "snow"))
-								nTypes[nIndex] = 2;  //snow
-							else
-								nTypes[nIndex] = 1;  //rain
-							
-							break;
-						}
+						dTotal += oObs.m_dValue;
+						++nCount;
 					}
 				}
 
-				if (nTypes[nIndex] == Integer.MIN_VALUE) // if a type wasn't found, infer the type by temp
-				{
-					if (dTemps[nIndex] > -2) // if temp > -2C then precip type is rain
-						nTypes[nIndex] = 1;
-					else // if temp <= -2C then precip type is snow
-						nTypes[nIndex] = 2;
-				}
-				break; // don't execute the block for lower preference contributors
+				if (nCount > 0)
+					dArr[nIndex] = dTotal / nCount;
 			}
-		}		
+			else
+			{
+				dArr[nIndex] = oData.get(0).m_dValue;
+			}
+		}
+	}
+	
+	private void getData(TileObsView oOV, int nObstype, int[] nBb, long lStartQuery, long lEndQuery, long lRef, int nIndex, int[] nArr)
+	{
+		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
+		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
+		int[] nContribAndSource = new int[2];
+		ObsList oData = null;
+		for (ResourceRecord oTemp : oRRs)
+		{
+			nContribAndSource[0] = oTemp.getContribId();
+			nContribAndSource[1] = oTemp.getSourceId();
+			oData = oOV.getData(nObstype, lStartQuery, lEndQuery,
+			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
+			if (oData.m_bHasData || !oData.isEmpty())
+				break;
+		}
+		
+		if (oData != null && !oData.isEmpty())
+		{
+			nArr[nIndex] = (int)oData.get(0).m_dValue;
+		}
 	}
 	
 	
@@ -585,8 +403,6 @@ public class MetroProcess
 		Arrays.fill(m_dPressure, Double.NaN);
 		Arrays.fill(m_nPrecipType, Integer.MIN_VALUE);
 		Arrays.fill(m_dPrecipRate, Double.NaN);
-		Arrays.fill(m_dKrigedTpvt, Double.NaN);
-		Arrays.fill(m_dKrigedSubSurf, Double.NaN);
 		Arrays.fill(m_dRainRes, Double.NaN);
 		Arrays.fill(m_dSnowRes, Double.NaN);
 	}
