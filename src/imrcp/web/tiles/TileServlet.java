@@ -5,6 +5,7 @@
  */
 package imrcp.web.tiles;
 
+import imrcp.collect.NHC;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.geosrv.Network;
@@ -22,7 +23,10 @@ import imrcp.system.JSONUtil;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Units;
+import imrcp.web.ClientConfig;
 import imrcp.web.SecureBaseBlock;
+import static imrcp.web.SecureBaseBlock.getTrustingConnection;
+import imrcp.web.ServerConfig;
 import imrcp.web.Session;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,6 +39,14 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import javax.net.ssl.HttpsURLConnection;
 import org.json.JSONObject;
 import vector_tile.VectorTile;
 
@@ -84,7 +96,7 @@ public class TileServlet extends SecureBaseBlock
 	 * data.
 	 */
 	protected static final int RNM = Integer.valueOf("rnm", 36);
-
+	protected static final int RNP = Integer.valueOf("rnp", 36);
 	
 	/**
 	 * The first zoom level arterial roadway segments are included in the vector
@@ -115,6 +127,8 @@ public class TileServlet extends SecureBaseBlock
 	protected HashMap<Integer, Integer> m_oLayerMultipliers = new HashMap();
 	
 	protected int[] m_nSkipNetworkFilter;
+	
+	
 	
 	
 	/**
@@ -175,32 +189,59 @@ public class TileServlet extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doMvt(HttpServletRequest oRequest, HttpServletResponse oResponse, Session oSession)
+	public int doMvt(HttpServletRequest oRequest, HttpServletResponse oResponse, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
-		String[] sUriParts = oRequest.getRequestURI().split("/");
+		String sUri = oRequest.getRequestURI();
+		String[] sUriParts = sUri.split("/");
 		
 		int nRequestType;
 		if (isObsType(sUriParts[sUriParts.length - 5])) // depending on the request it can be an observation type, or a range of values
 			nRequestType = Integer.valueOf(sUriParts[sUriParts.length - 5], 36);
 		else
 			nRequestType = Integer.valueOf(sUriParts[sUriParts.length - 6], 36);
+		if (oClient != null)
+		{
+			boolean bAllowed = false;
+			for (int nObsIndex = 0; nObsIndex < oClient.m_nObsTypes.length; nObsIndex++)
+			{
+				if (nRequestType == oClient.m_nObsTypes[nObsIndex])
+				{
+					bAllowed = true;
+					break;
+				}
+			}
+			if (!bAllowed)
+				return HttpServletResponse.SC_UNAUTHORIZED;
+		}
 		int nGeoType = Integer.valueOf(sUriParts[sUriParts.length - 4]);
 		int nZ = Integer.parseInt(sUriParts[sUriParts.length - 3]);
 		int nX = Integer.parseInt(sUriParts[sUriParts.length - 2]);
 		int nY = Integer.parseInt(sUriParts[sUriParts.length - 1]);
 		long lTimestamp = 0L;
 		long lRefTime = 0L;
+		StringBuilder sTimeCookies = new StringBuilder();
 		for (Cookie oCookie : oRequest.getCookies())
 		{
 			if (oCookie.getName().compareTo("rtime") == 0)
+			{
 				lRefTime = Long.parseLong(oCookie.getValue());
+				sTimeCookies.append(oCookie.getName()).append("=").append(oCookie.getValue()).append(";");
+			}
 			if (oCookie.getName().compareTo("ttime") == 0)
+			{
 				lTimestamp = Long.parseLong(oCookie.getValue());
+				sTimeCookies.append(oCookie.getName()).append("=").append(oCookie.getValue()).append(";");
+			}
 		}
+		sTimeCookies.setLength(sTimeCookies.length() - 1);
 		
 		if (nGeoType == Obs.POLYGON)
-			doArea(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, oResponse);
+		{
+			if (nRequestType == RNP && nZ >= 6)
+				return HttpServletResponse.SC_OK;
+			doArea(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, oResponse, oSession, sUri, sTimeCookies);
+		}
 		else
 		{
 			int nZoomFilter = m_oObsTypeZoom.containsKey(nRequestType) ? m_oObsTypeZoom.get(nRequestType) : m_nMinZoom;
@@ -208,11 +249,11 @@ public class TileServlet extends SecureBaseBlock
 			{
 				if (nGeoType == Obs.POINT)
 				{
-					doPoint(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, sUriParts[sUriParts.length - 4], oResponse, oSession);
+					doPoint(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, sUriParts[sUriParts.length - 5], oResponse, oSession, sUri, sTimeCookies);
 				}
 				else if (nGeoType == Obs.LINESTRING)
 				{
-					doLinestring(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, oResponse, oSession);
+					doLinestring(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, oResponse, oSession, sUri, sTimeCookies);
 				}
 			}
 		}
@@ -234,7 +275,7 @@ public class TileServlet extends SecureBaseBlock
 	 * request
 	 * @throws IOException
 	 */
-	protected void doLinestring(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, HttpServletResponse oResponse, Session oSession)
+	protected void doLinestring(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, HttpServletResponse oResponse, Session oSession, String sRequest, StringBuilder sTimeCookies)
 	   throws IOException
 	{
 		double[] dBounds = new double[4];
@@ -247,294 +288,296 @@ public class TileServlet extends SecureBaseBlock
 		int nLat2 = GeoUtil.toIntDeg(dLonLatBounds[3]);
 		int nLon2 = GeoUtil.toIntDeg(dLonLatBounds[2]);
 		
-		Directory oDir = Directory.getInstance();
-		ArrayList<Network> oNetworks = new ArrayList(4);
-		for (String sNetwork : oSession.m_oProfile.m_sNetworks) // determine which networks to process based off of user permissions
+		ArrayList<Network> oNetworks;
+		if (oSession != null) // not a forwarded request
 		{
-			Network oNetwork = WAYS.getNetwork(sNetwork);
-			if (oNetwork == null)
-				continue;
-			int[] nBb = oNetwork.getBoundingBox();
-			if (GeoUtil.boundingBoxesIntersect(nBb[0], nBb[1], nBb[2], nBb[3], nLon1, nLat1, nLon2, nLat2))
-				oNetworks.add(oNetwork);
+			oNetworks = new ArrayList();
+			for (String sNetwork : oSession.m_oProfile.m_sNetworks) // determine which networks to process based off of user permissions
+			{
+				Network oNetwork = WAYS.getNetwork(sNetwork);
+				if (oNetwork == null)
+					continue;
+				int[] nBb = oNetwork.getBoundingBox();
+				if (GeoUtil.boundingBoxesIntersect(nBb[0], nBb[1], nBb[2], nBb[3], nLon1, nLat1, nLon2, nLat2))
+					oNetworks.add(oNetwork);
+			}
 		}
-		
-		if (oNetworks.isEmpty())
-			return;
-		
-		double dDeltaLon = (dLonLatBounds[2] - dLonLatBounds[0]) * 0.1;
-		double dDeltaLat = (dLonLatBounds[3] - dLonLatBounds[1]) * 0.1;
-		double[] dLineClippingBounds = new double[]{dLonLatBounds[0] - dDeltaLon, dLonLatBounds[1] - dDeltaLat, dLonLatBounds[2] + dDeltaLon, dLonLatBounds[3] + dDeltaLat};
-		int[] nLineClippingBounds = new int[]{GeoUtil.toIntDeg(dLineClippingBounds[0]), GeoUtil.toIntDeg(dLineClippingBounds[1]), GeoUtil.toIntDeg(dLineClippingBounds[2]), GeoUtil.toIntDeg(dLineClippingBounds[3])};
+		else
+		{
+			oNetworks = WAYS.getNetworks();
+		}
 		
 		ArrayList<OsmWay> oWays = new ArrayList();
-		if (nRequestType != ObsType.TIMERT)
+		if (!oNetworks.isEmpty())
+		{
 			WAYS.getWays(oWays, 0, nLon1, nLat1, nLon2, nLat2); // get the roadway segments that intersect the tile
-		else // TIMERT is no longer implemented
-			return;
-		
-		int nWayIndex = oWays.size();
-		
-		while (nWayIndex-- > 0)
-		{
-			OsmWay oWay = oWays.get(nWayIndex);
-			boolean bInclude = false;
-			for (Network oNetwork : oNetworks) // only include roadway segments that are in the Networks the user has permission to use
-			{
-				if (oNetwork.wayInside(oWay))
-				{
-					bInclude = true;
-					break;
-				}
-			}
-			if (!bInclude)
-				oWays.remove(nWayIndex);
-		}
-		if (oWays.isEmpty())
-			return;
-		// compute the bounding box of all the roadway segments to use for the data query
-		int nDataQueryLat1 = Integer.MAX_VALUE;
-		int nDataQueryLat2 = Integer.MIN_VALUE;
-		int nDataQueryLon1 = Integer.MAX_VALUE;
-		int nDataQueryLon2 = Integer.MIN_VALUE;
-		for (OsmWay oWay : oWays)
-		{
-			if (oWay.m_nMaxLon > nDataQueryLon2)
-				nDataQueryLon2 = oWay.m_nMaxLon;
-			if (oWay.m_nMinLon < nDataQueryLon1)
-				nDataQueryLon1 = oWay.m_nMinLon;
-			if (oWay.m_nMinLat < nDataQueryLat1)
-				nDataQueryLat1 = oWay.m_nMinLat;
-			if (oWay.m_nMaxLat > nDataQueryLat2)
-				nDataQueryLat2 = oWay.m_nMaxLat;
-		}
-		ObsList oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000,
-		   nDataQueryLat1, nDataQueryLat2, nDataQueryLon1, nDataQueryLon2, lRefTime);
-		if (oData.isEmpty() && nRequestType != RNM)
-			return;
-		
-		ArrayList<Obs> oObsList = new ArrayList();
-		
-		ResourceRecord oRR = null;
-		int nSnapTol = 0;
-		if (!oData.isEmpty())
-		{
-			Introsort.usort(oData, Obs.g_oCompObsByContrib);
-			oRR = Directory.getResource(oData.get(0).m_nContribId, nRequestType);
-			nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
-		}
-		for (Obs oObs : oData)
-		{
-			for (Network oNetwork : oNetworks)
-			{
-				if (oNetwork.obsInside(oObs)) // only include Obs that are in the Networks the user has permission to use
-				{
-					if (oObs.m_nContribId != oRR.getContribId())
-					{
-						oRR = Directory.getResource(oObs.m_nContribId, nRequestType);
-						nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
-					}
-					if (oObs.m_yGeoType == Obs.POINT || oObs.m_yGeoType == Obs.LINESTRING)
-					{
-						Iterator<int[]> oIt = Arrays.iterator(oObs.m_oGeoArray, new int[2], oObs.m_yGeoType == Obs.POINT ? 1 : 5, 2);
-						boolean bAdded = false;
-						while (oIt.hasNext())
-						{
-							int[] nPt = oIt.next();
-							OsmWay oSnap = WAYS.getWay(nSnapTol, nPt[0], nPt[1]);
-							if (oSnap == null || !oNetwork.includeId(oSnap.m_oId))
-								continue;
-							
-							oObs.m_oObjId = oSnap.m_oId;
-							int nIndex = Collections.binarySearch(oObsList, oObs, Obs.g_oCompObsByObjId); // linestring obs are associated with a roadway segment Id so sort obs by object id
-							Obs oCurrentObs = nIndex >= 0 ? oObsList.get(nIndex) : null;
-							
-							byte yNewPref = oRR.getPreference();
-							byte yCurPref = oCurrentObs == null ? Byte.MAX_VALUE : Directory.getResource(oCurrentObs.m_nContribId, nRequestType).getPreference();
-							if (oCurrentObs == null || yNewPref < yCurPref || (yNewPref == yCurPref && oObs.m_lObsTime1 >= oCurrentObs.m_lObsTime1)) // only keep the most preferred and most recent obs for each object id
-							{
-								if (nIndex < 0)
-									oObsList.add(~nIndex, oObs);
-								else
-									oObsList.set(nIndex, oObs);
 
-								bAdded = true;
-							}
+			int nWayIndex = oWays.size();
+			while (nWayIndex-- > 0)
+			{
+				OsmWay oWay = oWays.get(nWayIndex);
+				boolean bInclude = false;
+				for (Network oNetwork : oNetworks) // only include roadway segments that are in the Networks the user has permission to use
+				{
+					if (oNetwork.wayInside(oWay))
+					{
+						bInclude = true;
+						break;
+					}
+				}
+				if (!bInclude)
+					oWays.remove(nWayIndex);
+			}
+		}
+		VectorTile.Tile.Builder oTileBuilder = VectorTile.Tile.newBuilder();
+		if (!oWays.isEmpty())	
+		{
+			double dDeltaLon = (dLonLatBounds[2] - dLonLatBounds[0]) * 0.1;
+			double dDeltaLat = (dLonLatBounds[3] - dLonLatBounds[1]) * 0.1;
+			double[] dLineClippingBounds = new double[]{dLonLatBounds[0] - dDeltaLon, dLonLatBounds[1] - dDeltaLat, dLonLatBounds[2] + dDeltaLon, dLonLatBounds[3] + dDeltaLat};
+			int[] nLineClippingBounds = new int[]{GeoUtil.toIntDeg(dLineClippingBounds[0]), GeoUtil.toIntDeg(dLineClippingBounds[1]), GeoUtil.toIntDeg(dLineClippingBounds[2]), GeoUtil.toIntDeg(dLineClippingBounds[3])};
+			// compute the bounding box of all the roadway segments to use for the data query
+			int nDataQueryLat1 = Integer.MAX_VALUE;
+			int nDataQueryLat2 = Integer.MIN_VALUE;
+			int nDataQueryLon1 = Integer.MAX_VALUE;
+			int nDataQueryLon2 = Integer.MIN_VALUE;
+			for (OsmWay oWay : oWays)
+			{
+				if (oWay.m_nMaxLon > nDataQueryLon2)
+					nDataQueryLon2 = oWay.m_nMaxLon;
+				if (oWay.m_nMinLon < nDataQueryLon1)
+					nDataQueryLon1 = oWay.m_nMinLon;
+				if (oWay.m_nMinLat < nDataQueryLat1)
+					nDataQueryLat1 = oWay.m_nMinLat;
+				if (oWay.m_nMaxLat > nDataQueryLat2)
+					nDataQueryLat2 = oWay.m_nMaxLat;
+			}
+			ObsList oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000,
+			   nDataQueryLat1, nDataQueryLat2, nDataQueryLon1, nDataQueryLon2, lRefTime);
+			ArrayList<Obs> oObsList = new ArrayList();
+
+			ResourceRecord oRR = null;
+			int nSnapTol = 0;
+			if (!oData.isEmpty())
+			{
+				Introsort.usort(oData, Obs.g_oCompObsByContrib);
+				oRR = Directory.getResource(oData.get(0).m_nContribId, nRequestType);
+				nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
+			}
+			for (Obs oObs : oData)
+			{
+				for (Network oNetwork : oNetworks)
+				{
+					if (oNetwork.obsInside(oObs)) // only include Obs that are in the Networks the user has permission to use
+					{
+						if (oObs.m_nContribId != oRR.getContribId())
+						{
+							oRR = Directory.getResource(oObs.m_nContribId, nRequestType);
+							nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
 						}
-						
-						if (bAdded)
-							break;
+						if (oObs.m_yGeoType == Obs.POINT || oObs.m_yGeoType == Obs.LINESTRING)
+						{
+							Iterator<int[]> oIt = Arrays.iterator(oObs.m_oGeoArray, new int[2], oObs.m_yGeoType == Obs.POINT ? 1 : 5, 2);
+							boolean bAdded = false;
+							while (oIt.hasNext())
+							{
+								int[] nPt = oIt.next();
+								OsmWay oSnap = WAYS.getWay(nSnapTol, nPt[0], nPt[1]);
+								if (oSnap == null || !oNetwork.includeWay(oSnap))
+									continue;
+
+								oObs.m_oObjId = oSnap.m_oId;
+								int nIndex = Collections.binarySearch(oObsList, oObs, Obs.g_oCompObsByObjId); // linestring obs are associated with a roadway segment Id so sort obs by object id
+								Obs oCurrentObs = nIndex >= 0 ? oObsList.get(nIndex) : null;
+
+								byte yNewPref = oRR.getPreference();
+								byte yCurPref = oCurrentObs == null ? Byte.MAX_VALUE : Directory.getResource(oCurrentObs.m_nContribId, nRequestType).getPreference();
+								if (oCurrentObs == null || yNewPref < yCurPref || (yNewPref == yCurPref && oObs.m_lObsTime1 >= oCurrentObs.m_lObsTime1)) // only keep the most preferred and most recent obs for each object id
+								{
+									if (nIndex < 0)
+										oObsList.add(~nIndex, oObs);
+									else
+										oObsList.set(nIndex, oObs);
+
+									bAdded = true;
+								}
+							}
+
+							if (bAdded)
+								break;
+						}
 					}
 				}
 			}
-		}
-		
-		if (oObsList.isEmpty() && nRequestType != RNM)
-			return;
-		
-		RangeRules oRules = ObsType.getRangeRules(nRequestType, ObsType.getUnits(nRequestType));
-		Units oUnits = Units.getInstance();
-		ArrayList<double[]> oLines = new ArrayList();
-		double dX1, dX2, dY1, dY2;
-		Obs oSearchObs = new Obs();
-		int nIdCount = 0;
-		for (OsmWay oWay : oWays) // for each way that intersects the tile and that the user has permission to use
-		{
-			String sHighway = oWay.get("highway"); // to be considered a highway the classification (highway tag) must be motorway or trunk
-			boolean bHighway;
-			if (sHighway == null)
-				bHighway = false;
-			else
-				bHighway = sHighway.compareTo("motorway") == 0 || sHighway.compareTo("trunk") == 0;
-			if (!bHighway && nZ < m_nMinArterialZoom) // only display arterials are the configured zoom levels
-				continue;
-			oSearchObs.m_oObjId = oWay.m_oId;
-			double dVal;
-			int nIndex = Collections.binarySearch(oObsList, oSearchObs, Obs.g_oCompObsByObjId); // check if there is an obs associated with the way
-			if (nIndex < 0)
-				dVal = Double.NaN;
-			else
+
+			ArrayList<double[]> oLines = new ArrayList();
+			if (!oObsList.isEmpty() || nRequestType == RNM)
 			{
-				Obs oObs = oObsList.get(nIndex);
-				dVal = oRules.groupValue(oUnits.convert(ObsType.getUnits(oObs.m_nObsTypeId, true), oRules.m_sUnits, oObs.m_dValue));
-				if (oRules.shouldDelete(dVal))
-					continue;
-			}
-			
-			if (nRequestType == RNM) // don't skip any roads for Road Network Model
-				dVal = 0.0;
-			
-			if (Double.isNaN(dVal) || dVal == Integer.MIN_VALUE) // the roadway segment does not have a valid obs or value
-				continue;
-			
-			WayIterator oIt = oWay.iterator();
-			boolean bNotDone;
-			if (oIt.hasNext()) // iterate through the points of the roadway segment to find its intersection with the map tile
-			{
-				int[] nLine = oIt.next();
-				boolean bPrevInside = GeoUtil.isInside(nLine[0], nLine[1], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0);
-				double[] dLine = new double[66];
-				dLine[0] = 5; // insertion point
-				dLine[1] = dVal; // group value
-				dLine[2] = oWay.m_oId.getLowBytes(); // id in Mapbox can only be an 8-byte number
-				dLine[3] = bHighway ? 0.0 : 1.0; // highway flag, values are indices for m_sValues
-				dLine[4] = oWay.m_bBridge ? 2.0 : 3.0; // bridge flag, values are indices for m_sValues
-				if (bPrevInside) // first point is inside so include it in final linestring
-					dLine = addPoint(dLine, GeoUtil.fromIntDeg(nLine[0]), GeoUtil.fromIntDeg(nLine[1]));
-				
-				do
+
+				RangeRules oRules = ObsType.getRangeRules(nRequestType, ObsType.getUnits(nRequestType));
+				Units oUnits = Units.getInstance();
+				double dX1, dX2, dY1, dY2;
+				Obs oSearchObs = new Obs();
+				for (OsmWay oWay : oWays) // for each way that intersects the tile and that the user has permission to use
 				{
-					bNotDone = false;
-					if (bPrevInside) // previous point was inside 
+					String sHighway = oWay.get("highway"); // to be considered a highway the classification (highway tag) must be motorway or trunk
+					boolean bHighway;
+					if (sHighway == null)
+						bHighway = false;
+					else
+						bHighway = sHighway.compareTo("motorway") == 0 || sHighway.compareTo("trunk") == 0;
+					if (!bHighway && nZ < m_nMinArterialZoom) // only display arterials are the configured zoom levels
+						continue;
+					oSearchObs.m_oObjId = oWay.m_oId;
+					double dVal;
+					int nIndex = Collections.binarySearch(oObsList, oSearchObs, Obs.g_oCompObsByObjId); // check if there is an obs associated with the way
+					if (nIndex < 0)
+						dVal = Double.NaN;
+					else
 					{
-						if (GeoUtil.isInside(nLine[2], nLine[3], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0)) // current point is inside
-							dLine = addPoint(dLine, GeoUtil.fromIntDeg(nLine[2]), GeoUtil.fromIntDeg(nLine[3])); // so add the current point
-						else // current point is ouside
+						Obs oObs = oObsList.get(nIndex);
+						dVal = oRules.groupValue(oUnits.convert(ObsType.getUnits(oObs.m_nObsTypeId, true), oRules.m_sUnits, oObs.m_dValue));
+						if (oRules.shouldDelete(dVal))
+							continue;
+					}
+
+					if (nRequestType == RNM) // don't skip any roads for Road Network Model
+						dVal = 0.0;
+
+					if (Double.isNaN(dVal) || dVal == Integer.MIN_VALUE) // the roadway segment does not have a valid obs or value
+						continue;
+
+					WayIterator oIt = oWay.iterator();
+					boolean bNotDone;
+					if (oIt.hasNext()) // iterate through the points of the roadway segment to find its intersection with the map tile
+					{
+						int[] nLine = oIt.next();
+						boolean bPrevInside = GeoUtil.isInside(nLine[0], nLine[1], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0);
+						double[] dLine = new double[66];
+						dLine[0] = 5; // insertion point
+						dLine[1] = dVal; // group value
+						dLine[2] = oWay.m_oId.getLowBytes(); // id in Mapbox can only be an 8-byte number
+						dLine[3] = bHighway ? 0.0 : 1.0; // highway flag, values are indices for m_sValues
+						dLine[4] = oWay.m_bBridge ? 2.0 : 3.0; // bridge flag, values are indices for m_sValues
+						if (bPrevInside) // first point is inside so include it in final linestring
+							dLine = addPoint(dLine, GeoUtil.fromIntDeg(nLine[0]), GeoUtil.fromIntDeg(nLine[1]));
+
+						do
 						{
-							dX1 = GeoUtil.fromIntDeg(nLine[0]);
-							dY1 = GeoUtil.fromIntDeg(nLine[1]);
-							dX2 = GeoUtil.fromIntDeg(nLine[2]); // so need to calculate the intersection with the tile
-							dY2 = GeoUtil.fromIntDeg(nLine[3]);
-							dLine = addIntersection(dLine, dX1, dY1, dX2, dY2, dLineClippingBounds); // add intersection points
-							bPrevInside = false;
-							double[] dFinished = new double[(int)dLine[0] - 1]; // now that the line is outside finish the current line
+							bNotDone = false;
+							if (bPrevInside) // previous point was inside 
+							{
+								if (GeoUtil.isInside(nLine[2], nLine[3], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0)) // current point is inside
+									dLine = addPoint(dLine, GeoUtil.fromIntDeg(nLine[2]), GeoUtil.fromIntDeg(nLine[3])); // so add the current point
+								else // current point is ouside
+								{
+									dX1 = GeoUtil.fromIntDeg(nLine[0]);
+									dY1 = GeoUtil.fromIntDeg(nLine[1]);
+									dX2 = GeoUtil.fromIntDeg(nLine[2]); // so need to calculate the intersection with the tile
+									dY2 = GeoUtil.fromIntDeg(nLine[3]);
+									dLine = addIntersection(dLine, dX1, dY1, dX2, dY2, dLineClippingBounds); // add intersection points
+									bPrevInside = false;
+									double[] dFinished = new double[(int)dLine[0] - 1]; // now that the line is outside finish the current line
+									System.arraycopy(dLine, 1, dFinished, 0, dFinished.length);
+									oLines.add(dFinished);
+									dLine[0] = 5; // reset point buffer
+								}
+							}
+							else // previous point was outside
+							{
+								if (GeoUtil.isInside(nLine[2], nLine[3], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0)) // current point is inside
+								{
+									dX1 = GeoUtil.fromIntDeg(nLine[0]);
+									dY1 = GeoUtil.fromIntDeg(nLine[1]);
+									dX2 = GeoUtil.fromIntDeg(nLine[2]); // so need to calculate the intersection with the tile
+									dY2 = GeoUtil.fromIntDeg(nLine[3]);
+									dLine = addIntersection(dLine, dX1, dY1, dX2, dY2, dLineClippingBounds); // add the intersection
+									bPrevInside = true;
+									dLine = addPoint(dLine, dX2, dY2); // and the next points
+								}
+								else // previous point and current point are outside, so check if the line segment intersects the tile
+								{
+									dX1 = GeoUtil.fromIntDeg(nLine[0]);
+									dY1 = GeoUtil.fromIntDeg(nLine[1]);
+									dX2 = GeoUtil.fromIntDeg(nLine[2]);
+									dY2 = GeoUtil.fromIntDeg(nLine[3]);
+									double[] dPoint = new double[2];
+									GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[0], dLineClippingBounds[1], dLineClippingBounds[0], dLineClippingBounds[3], dPoint); // check left edge
+									if (!Double.isNaN(dPoint[0]))
+										dLine = addPoint(dLine, dPoint[0], dPoint[1]);
+
+									GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[0], dLineClippingBounds[3], dLineClippingBounds[2], dLineClippingBounds[3], dPoint); // check top edge
+									if (!Double.isNaN(dPoint[0]))
+										dLine = addPoint(dLine, dPoint[0], dPoint[1]);
+
+									GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[2], dLineClippingBounds[3], dLineClippingBounds[2], dLineClippingBounds[1], dPoint); // check right edge
+									if (!Double.isNaN(dPoint[0]))
+										dLine = addPoint(dLine, dPoint[0], dPoint[1]);
+
+									GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[2], dLineClippingBounds[1], dLineClippingBounds[0], dLineClippingBounds[1], dPoint); // check bot edge
+									if (!Double.isNaN(dPoint[0]))
+										dLine = addPoint(dLine, dPoint[0], dPoint[1]);
+								}
+							}
+
+							if (oIt.hasNext())
+							{
+								nLine = oIt.next();
+								bNotDone = true;
+							}
+						} while (bNotDone);
+
+						if (dLine[0] > 5)
+						{
+							double[] dFinished = new double[(int)dLine[0] - 1];
 							System.arraycopy(dLine, 1, dFinished, 0, dFinished.length);
 							oLines.add(dFinished);
-							dLine[0] = 5; // reset point buffer
 						}
 					}
-					else // previous point was outside
+				}
+			}
+			Collections.sort(oLines, LINECOMP);
+			
+			VectorTile.Tile.Layer.Builder oLayerBuilder = VectorTile.Tile.Layer.newBuilder();
+			VectorTile.Tile.Feature.Builder oFeatureBuilder = VectorTile.Tile.Feature.newBuilder();
+			VectorTile.Tile.Value.Builder oValueBuilder = VectorTile.Tile.Value.newBuilder();
+
+			int nExtent = Mercator.getExtent(nZ);
+			double dPrevVal;
+			int[] nCur = new int[2]; // reusable arrays for feature methods
+			int[] nPoints = new int[65];
+			int nIndex = oLines.size();
+			while (nIndex-- > 0) // layer write order doesn't matter
+			{
+				double[] dLine = oLines.get(nIndex);
+				dPrevVal = dLine[0];
+				TileUtil.addLinestring(oFeatureBuilder, nCur, dBounds, nExtent, dLine, nPoints);
+				oLayerBuilder.addFeatures(oFeatureBuilder.build());
+				oFeatureBuilder.clear();
+				nCur[0] = nCur[1] = 0;
+				if (nIndex == 0 || oLines.get(nIndex - 1)[0] != dPrevVal)
+				{ // write layer at end of list or when group value will change
+					oLayerBuilder.setVersion(2);
+					oLayerBuilder.setName(String.format("2_%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal));
+					oLayerBuilder.setExtent(nExtent);
+					for (int i = 0; i < m_sKeys.length; i++)
+						oLayerBuilder.addKeys(m_sKeys[i]);
+
+					for (int i = 0; i < m_sValues.length; i++)
 					{
-						if (GeoUtil.isInside(nLine[2], nLine[3], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0)) // current point is inside
-						{
-							dX1 = GeoUtil.fromIntDeg(nLine[0]);
-							dY1 = GeoUtil.fromIntDeg(nLine[1]);
-							dX2 = GeoUtil.fromIntDeg(nLine[2]); // so need to calculate the intersection with the tile
-							dY2 = GeoUtil.fromIntDeg(nLine[3]);
-							dLine = addIntersection(dLine, dX1, dY1, dX2, dY2, dLineClippingBounds); // add the intersection
-							bPrevInside = true;
-							dLine = addPoint(dLine, dX2, dY2); // and the next points
-						}
-						else // previous point and current point are outside, so check if the line segment intersects the tile
-						{
-							dX1 = GeoUtil.fromIntDeg(nLine[0]);
-							dY1 = GeoUtil.fromIntDeg(nLine[1]);
-							dX2 = GeoUtil.fromIntDeg(nLine[2]);
-							dY2 = GeoUtil.fromIntDeg(nLine[3]);
-							double[] dPoint = new double[2];
-							GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[0], dLineClippingBounds[1], dLineClippingBounds[0], dLineClippingBounds[3], dPoint); // check left edge
-							if (!Double.isNaN(dPoint[0]))
-								dLine = addPoint(dLine, dPoint[0], dPoint[1]);
-
-							GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[0], dLineClippingBounds[3], dLineClippingBounds[2], dLineClippingBounds[3], dPoint); // check top edge
-							if (!Double.isNaN(dPoint[0]))
-								dLine = addPoint(dLine, dPoint[0], dPoint[1]);
-
-							GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[2], dLineClippingBounds[3], dLineClippingBounds[2], dLineClippingBounds[1], dPoint); // check right edge
-							if (!Double.isNaN(dPoint[0]))
-								dLine = addPoint(dLine, dPoint[0], dPoint[1]);
-
-							GeoUtil.getIntersection(dX1, dY1, dX2, dY2, dLineClippingBounds[2], dLineClippingBounds[1], dLineClippingBounds[0], dLineClippingBounds[1], dPoint); // check bot edge
-							if (!Double.isNaN(dPoint[0]))
-								dLine = addPoint(dLine, dPoint[0], dPoint[1]);
-						}
+						oValueBuilder.setStringValue(m_sValues[i]);
+						oLayerBuilder.addValues(oValueBuilder.build());
+						oValueBuilder.clear();
 					}
-					
-					if (oIt.hasNext())
-					{
-						nLine = oIt.next();
-						bNotDone = true;
-					}
-				} while (bNotDone);
-				
-				if (dLine[0] > 5)
-				{
-					double[] dFinished = new double[(int)dLine[0] - 1];
-					System.arraycopy(dLine, 1, dFinished, 0, dFinished.length);
-					oLines.add(dFinished);
+					oTileBuilder.addLayers(oLayerBuilder.build());
+					oLayerBuilder.clear();
 				}
 			}
 		}
-		Collections.sort(oLines, LINECOMP);
-		VectorTile.Tile.Builder oTileBuilder = VectorTile.Tile.newBuilder();
-		VectorTile.Tile.Layer.Builder oLayerBuilder = VectorTile.Tile.Layer.newBuilder();
-		VectorTile.Tile.Feature.Builder oFeatureBuilder = VectorTile.Tile.Feature.newBuilder();
-		VectorTile.Tile.Value.Builder oValueBuilder = VectorTile.Tile.Value.newBuilder();
-		
-		int nExtent = Mercator.getExtent(nZ);
-		double dPrevVal;
-		int[] nCur = new int[2]; // reusable arrays for feature methods
-		int[] nPoints = new int[65];
-		int nIndex = oLines.size();
-		while (nIndex-- > 0) // layer write order doesn't matter
-		{
-			double[] dLine = oLines.get(nIndex);
-			dPrevVal = dLine[0];
-			TileUtil.addLinestring(oFeatureBuilder, nCur, dBounds, nExtent, dLine, nPoints);
-			oLayerBuilder.addFeatures(oFeatureBuilder.build());
-			oFeatureBuilder.clear();
-			nCur[0] = nCur[1] = 0;
-			if (nIndex == 0 || oLines.get(nIndex - 1)[0] != dPrevVal)
-			{ // write layer at end of list or when group value will change
-				oLayerBuilder.setVersion(2);
-				oLayerBuilder.setName(String.format("%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal));
-				oLayerBuilder.setExtent(nExtent);
-				for (int i = 0; i < m_sKeys.length; i++)
-					oLayerBuilder.addKeys(m_sKeys[i]);
-				
-				for (int i = 0; i < m_sValues.length; i++)
-				{
-					oValueBuilder.setStringValue(m_sValues[i]);
-					oLayerBuilder.addValues(oValueBuilder.build());
-					oValueBuilder.clear();
-				}
-				oTileBuilder.addLayers(oLayerBuilder.build());
-				oLayerBuilder.clear();
-			}
-		}
 
+		if (oSession != null) // do not forward request if this is already a forwarded request
+			forwardRequest(sRequest, nRequestType, Obs.LINESTRING, nLon1, nLat1, nLon2, nLat2, oTileBuilder, sTimeCookies);
 		oResponse.setContentType("application/x-protobuf");
-//		oResponse.setHeader("Last-Modified", m_sLastModified);
 		if (oTileBuilder.getLayersCount() > 0)
 			oTileBuilder.build().writeTo(oResponse.getOutputStream());
 	}
@@ -554,7 +597,7 @@ public class TileServlet extends SecureBaseBlock
 	 * @param oSession object that contains information about the user that made the
 	 * @throws IOException
 	 */
-	protected void doPoint(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, String sRangeString, HttpServletResponse oResponse, Session oSession)
+	protected void doPoint(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, String sRangeString, HttpServletResponse oResponse, Session oSession, String sRequest, StringBuilder sTimeCookies)
 	   throws IOException
 	{
 		double[] dBounds = new double[4];
@@ -573,158 +616,252 @@ public class TileServlet extends SecureBaseBlock
 		int[] nCur = new int[2]; // reusable arrays for feature methods
 		int nExtent = Mercator.getExtent(nZ);
 		int nIdCount = 0;
-		Network[] oNetworks = new Network[oSession.m_oProfile.m_sNetworks.length];
-		for (int nIndex = 0; nIndex < oNetworks.length; nIndex++) // get the Networks the user has permission to use
-			oNetworks[nIndex] = WAYS.getNetwork(oSession.m_oProfile.m_sNetworks[nIndex]);
-		ObsList oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000, // query the stores for data
-			 nLat1, nLat2, nLon1, nLon2, lRefTime);
-		ArrayList<Obs> oObsList = new ArrayList();
-		for (Obs oObs : oData)
+		ArrayList<Network> oNetworks;
+		if (oSession != null) // not a forwarded request
 		{
-			if (oObs.m_yGeoType != Obs.POINT)
-				continue;
-			if (java.util.Arrays.binarySearch(m_nSkipNetworkFilter, oObs.m_nObsTypeId) >= 0)
+			oNetworks = new ArrayList();
+			for (String sNetwork : oSession.m_oProfile.m_sNetworks) // determine which networks to process based off of user permissions
 			{
-				oObsList.add(oObs);
-				continue;
-			}
-			for (Network oNetwork : oNetworks)
-			{
+				Network oNetwork = WAYS.getNetwork(sNetwork);
 				if (oNetwork == null)
 					continue;
-				if (oNetwork.obsInside(oObs)) // only include obs that are inside the Networks the user has permission to use
+				int[] nBb = oNetwork.getBoundingBox();
+				if (GeoUtil.boundingBoxesIntersect(nBb[0], nBb[1], nBb[2], nBb[3], nLon1, nLat1, nLon2, nLat2))
+					oNetworks.add(oNetwork);
+			}
+		}
+		else
+		{
+			oNetworks = WAYS.getNetworks();
+		}
+		
+		ArrayList<Obs> oObsList = new ArrayList();
+		if (!oNetworks.isEmpty())
+		{
+			ObsList oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000, // query the stores for data
+				 nLat1, nLat2, nLon1, nLon2, lRefTime);
+
+			for (Obs oObs : oData)
+			{
+				if (oObs.m_yGeoType != Obs.POINT)
+					continue;
+				if (java.util.Arrays.binarySearch(m_nSkipNetworkFilter, oObs.m_nObsTypeId) >= 0)
 				{
 					oObsList.add(oObs);
+					continue;
+				}
+				for (Network oNetwork : oNetworks)
+				{
+					if (oNetwork.obsInside(oObs)) // only include obs that are inside the Networks the user has permission to use
+					{
+						oObsList.add(oObs);
+						break;
+					}
+				}
+			}
+		}
+
+		if (!oObsList.isEmpty())
+		{
+			if (nRequestType == ObsType.TRSCAT)
+			{
+				HashMap<String, String> oBestStorms = NHC.getCurrentStorms(lTimestamp, lTimestamp + 60000, lRefTime);
+				ObsList oTempList = new ObsList(oObsList.size());
+				for (Obs oObs : oObsList)
+				{
+					if (oBestStorms.get(oObs.m_sStrings[0]).compareTo(oObs.m_sStrings[1]) == 0)
+						oTempList.add(oObs);
+				}
+				oObsList = oTempList;
+			}
+			if (nRequestType != ObsType.VARIES) // event requests have specific ranges of values that are valid
+			{
+				ArrayList<Double> oAlertValues = new ArrayList();
+				if (nRequestType == ObsType.EVT)
+				{
+					String[] sRanges = sRangeString.split(","); // range strings are comma separated
+					for (String sRange : sRanges)
+					{
+						String[] sEndPoints = sRange.split(":"); // each comma separated range is colon separated. ,min:max, or a single value
+						int nStart = Integer.parseInt(sEndPoints[0]);
+						int nEnd;
+						if (sEndPoints.length == 1)
+							nEnd = nStart;
+						else
+							nEnd = Integer.parseInt(sEndPoints[1]);
+						for (int i = nStart; i <= nEnd; i++) // add all the values in the range to the list
+							oAlertValues.add((double)i);
+					}
+				}
+				Collections.sort(oObsList, Obs.g_oCompObsByValue);
+
+				double dPrevVal;	
+				int nObsIndex = oObsList.size();
+				while (nObsIndex-- > 0)
+				{
+					Obs oObs = oObsList.get(nObsIndex);
+					if (nRequestType == ObsType.EVT && Collections.binarySearch(oAlertValues, oObs.m_dValue) < 0) // should handle skipping NaN values, invalid alert types, and cap alerts
+						continue;
+
+					double dLon = GeoUtil.fromIntDeg(oObs.m_oGeoArray[1]);
+					double dLat = GeoUtil.fromIntDeg(oObs.m_oGeoArray[2]);
+
+					dPrevVal = oObs.m_dValue;
+					TileUtil.addPointToFeature(oFeatureBuilder, nCur, dBounds, nExtent, dLon, dLat);
+					oFeatureBuilder.setId(nIdCount++);
+					oFeatureBuilder.setType(VectorTile.Tile.GeomType.POINT);
+					oLayerBuilder.addFeatures(oFeatureBuilder.build());
+					oFeatureBuilder.clear();
+					nCur[0] = nCur[1] = 0;
+					if (nObsIndex == 0 || oObsList.get(nObsIndex - 1).m_dValue != dPrevVal)
+					{ // write layer at end of list or when group value will change
+						oLayerBuilder.setVersion(2);
+						oLayerBuilder.setName(String.format("1_%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal));
+						oLayerBuilder.setExtent(nExtent);
+						oTileBuilder.addLayers(oLayerBuilder.build());
+						oLayerBuilder.clear();
+					}
+				}
+			}
+			else // other observation types correspond to ESS or CV data
+			{
+				Introsort.usort(oObsList, Obs.g_oCompObsByContribLocation); // sort obs by contributor and location to get a set of sensor locations
+				VectorTile.Tile.Layer.Builder oCV = VectorTile.Tile.Layer.newBuilder(); // CV is a separate layer
+				VectorTile.Tile.Value.Builder oValueBuilder = VectorTile.Tile.Value.newBuilder();
+				oCV.addKeys("onlyspeed");
+				oValueBuilder.setBoolValue(false);
+				oCV.addValues(oValueBuilder);
+				oValueBuilder.setBoolValue(true);
+				oCV.addValues(oValueBuilder);
+
+				int nObsIndex = oObsList.size();
+				double dPrevLon = Double.MAX_VALUE;
+				double dPrevLat = Double.MAX_VALUE;
+				boolean bOnlySpeed = true;
+				while (nObsIndex-- > 0)
+				{
+					Obs oObs = oObsList.get(nObsIndex);
+	//				if (!Id.isSensor(oObs.m_oObjId)) // only include obs associated to a sensor
+	//					continue;
+					double dLon = GeoUtil.fromIntDeg(oObs.m_oGeoArray[1]);
+					double dLat = GeoUtil.fromIntDeg(oObs.m_oGeoArray[2]);
+
+					if (oObs.m_nObsTypeId != ObsType.SPDLNK)
+					{
+						bOnlySpeed = false;
+					}
+
+
+					if (dLon != dPrevLon || dLat != dPrevLat) // create a new point in the layer when the location is different
+					{
+						TileUtil.addPointToFeature(oFeatureBuilder, nCur, dBounds, nExtent, dLon, dLat);
+						oFeatureBuilder.setType(VectorTile.Tile.GeomType.POINT);
+						oFeatureBuilder.setId(oObs.m_oObjId.getLowBytes());
+
+						if (oObs.isMobile()) // mobile/CV data
+						{
+							oFeatureBuilder.addTags(0);
+							oFeatureBuilder.addTags(bOnlySpeed ? 1 : 0);
+							oCV.addFeatures(oFeatureBuilder.build()); // so add to the correct layer
+						}
+						else
+							oLayerBuilder.addFeatures(oFeatureBuilder.build());
+						oFeatureBuilder.clear();
+						nCur[0] = nCur[1] = 0;
+						bOnlySpeed = true;
+					}
+
+
+					if ((nObsIndex == 0 || oObsList.get(nObsIndex - 1).m_nContribId != oObs.m_nContribId) && oLayerBuilder.getFeaturesCount() > 0) // write the layer to the tile if it is the last Obs or a different contributor than the previous obs
+					{
+						// write layer at end of list or when group value will change
+						oLayerBuilder.setVersion(2);
+						oLayerBuilder.setName(Integer.toString(oObs.m_nContribId, 36).toUpperCase());
+						oLayerBuilder.setExtent(nExtent);
+						oTileBuilder.addLayers(oLayerBuilder.build());
+						oLayerBuilder.clear();
+					}
+				}
+
+				if (oCV.getFeaturesCount() > 0) // add the CV layer to the tile only if it has features in it
+				{
+					oCV.setVersion(2);
+					oCV.setName("CV");
+					oCV.setExtent(nExtent);
+					oTileBuilder.addLayers(oCV.build());
+					oCV.clear();
+				}
+			}
+		}
+		
+		if (oSession != null) // do not forward request if this is already a forwarded request
+			forwardRequest(sRequest, nRequestType, Obs.POINT, nLon1, nLat1, nLon2, nLat2, oTileBuilder, sTimeCookies);
+		oResponse.setContentType("application/x-protobuf");
+
+		if (oTileBuilder.getLayersCount() > 0)
+			oTileBuilder.build().writeTo(oResponse.getOutputStream());
+	}
+	
+	
+	private void forwardRequest(String sRequest, int nRequestType, int nGeoRequestType, int nLon1, int nLat1, int nLon2, int nLat2, VectorTile.Tile.Builder oTileBuilder, StringBuilder sTimeCookies)
+	{
+		int[] nBoundingPolygon = GeoUtil.getBoundingPolygon(nLon1, nLat1, nLon2, nLat2);
+		for (int nIndex = 0; nIndex < SERVERS.size(); nIndex++)
+		{
+			ServerConfig oConfig = SERVERS.get(nIndex);
+			if (oConfig.m_nObsType != nRequestType)
+				continue;
+			ArrayList<int[]> oGeos = oConfig.m_oNetworkGeometries;
+			for (int nGeoIndex = 0; nGeoIndex < oGeos.size(); nGeoIndex++)
+			{
+				if (nGeoRequestType == Obs.POLYGON || GeoUtil.isInsideRingAndHoles(oGeos.get(nGeoIndex), Obs.POLYGON, nBoundingPolygon))
+				{
+					try
+					{
+						HttpsURLConnection oConn = getTrustingConnection(String.format("https://%s%s?uuid=%s", oConfig.m_oHost.getHostName(), sRequest, URLEncoder.encode(oConfig.m_sUUID, StandardCharsets.UTF_8)));
+						oConn.setRequestProperty("Cookie", sTimeCookies.toString());
+						oConn.setConnectTimeout(500);
+						oConn.setReadTimeout(3000);
+						try (BufferedInputStream oIn = new BufferedInputStream(oConn.getInputStream()))
+						{
+							if (oConn.getResponseCode() != HttpServletResponse.SC_OK || oConn.getContentLengthLong() == 0)
+								break;
+
+							int nLimit = oTileBuilder.getLayersCount();
+							
+							VectorTile.Tile oTile = VectorTile.Tile.parseFrom(oIn);
+							int nLayers = oTile.getLayersCount();
+							for (int nLayerIndex = 0; nLayerIndex < nLayers; nLayerIndex++)
+							{
+								VectorTile.Tile.Layer oLayer = oTile.getLayers(nLayerIndex);
+								int nExistingIndex = -1;
+								VectorTile.Tile.Layer.Builder oLayerBuilder = null;
+								for (int nExistingLayer = 0; nExistingLayer < nLimit; nExistingLayer++)
+								{
+									VectorTile.Tile.Layer oExisting = oTileBuilder.getLayers(nExistingLayer);
+									if (oLayer.getName().compareTo(oExisting.getName()) == 0)
+									{
+										nExistingIndex = nExistingLayer;
+										oLayerBuilder = VectorTile.Tile.Layer.newBuilder(oExisting);
+										oLayerBuilder.addAllFeatures(oLayer.getFeaturesList());
+										break;
+									}
+								}
+								if (nExistingIndex >= 0)
+									oTileBuilder.setLayers(nLayerIndex, oLayerBuilder.build());
+								else
+									oTileBuilder.addLayers(oLayer);
+							}
+						}
+					}
+					catch (Exception oEx)
+					{
+						m_oLogger.error(oEx, oEx);
+					}
 					break;
 				}
 			}
 		}
-
-		if (oObsList.isEmpty())
-			return;
-		
-		if (nRequestType != ObsType.VARIES) // event requests have specific ranges of values that are valid
-		{
-			ArrayList<Double> oAlertValues = new ArrayList();
-			if (nRequestType == ObsType.EVT)
-			{
-				String[] sRanges = sRangeString.split(","); // range strings are comma separated
-				for (String sRange : sRanges)
-				{
-					String[] sEndPoints = sRange.split(":"); // each comma separated range is colon separated. ,min:max, or a single value
-					int nStart = Integer.parseInt(sEndPoints[0]);
-					int nEnd;
-					if (sEndPoints.length == 1)
-						nEnd = nStart;
-					else
-						nEnd = Integer.parseInt(sEndPoints[1]);
-					for (int i = nStart; i <= nEnd; i++) // add all the values in the range to the list
-						oAlertValues.add((double)i);
-				}
-			}
-			Collections.sort(oObsList, Obs.g_oCompObsByValue);
-			
-			double dPrevVal;	
-			int nObsIndex = oObsList.size();
-			while (nObsIndex-- > 0)
-			{
-				Obs oObs = oObsList.get(nObsIndex);
-				if (nRequestType == ObsType.EVT && Collections.binarySearch(oAlertValues, oObs.m_dValue) < 0) // should handle skipping NaN values, invalid alert types, and cap alerts
-					continue;
-				
-				double dLon = GeoUtil.fromIntDeg(oObs.m_oGeoArray[1]);
-				double dLat = GeoUtil.fromIntDeg(oObs.m_oGeoArray[2]);
-
-				dPrevVal = oObs.m_dValue;
-				TileUtil.addPointToFeature(oFeatureBuilder, nCur, dBounds, nExtent, dLon, dLat);
-				oFeatureBuilder.setId(nIdCount++);
-				oFeatureBuilder.setType(VectorTile.Tile.GeomType.POINT);
-				oLayerBuilder.addFeatures(oFeatureBuilder.build());
-				oFeatureBuilder.clear();
-				nCur[0] = nCur[1] = 0;
-				if (nObsIndex == 0 || oObsList.get(nObsIndex - 1).m_dValue != dPrevVal)
-				{ // write layer at end of list or when group value will change
-					oLayerBuilder.setVersion(2);
-					oLayerBuilder.setName(String.format("%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal));
-					oLayerBuilder.setExtent(nExtent);
-					oTileBuilder.addLayers(oLayerBuilder.build());
-					oLayerBuilder.clear();
-				}
-			}
-		}
-		else // other observation types correspond to ESS or CV data
-		{
-			Introsort.usort(oObsList, Obs.g_oCompObsByContribLocation); // sort obs by contributor and location to get a set of sensor locations
-			VectorTile.Tile.Layer.Builder oCV = VectorTile.Tile.Layer.newBuilder(); // CV is a separate layer
-			VectorTile.Tile.Value.Builder oValueBuilder = VectorTile.Tile.Value.newBuilder();
-			oCV.addKeys("onlyspeed");
-			oValueBuilder.setBoolValue(false);
-			oCV.addValues(oValueBuilder);
-			oValueBuilder.setBoolValue(true);
-			oCV.addValues(oValueBuilder);
-			
-			int nObsIndex = oObsList.size();
-			double dPrevLon = Double.MAX_VALUE;
-			double dPrevLat = Double.MAX_VALUE;
-			boolean bOnlySpeed = true;
-			while (nObsIndex-- > 0)
-			{
-				Obs oObs = oObsList.get(nObsIndex);
-//				if (!Id.isSensor(oObs.m_oObjId)) // only include obs associated to a sensor
-//					continue;
-				double dLon = GeoUtil.fromIntDeg(oObs.m_oGeoArray[1]);
-				double dLat = GeoUtil.fromIntDeg(oObs.m_oGeoArray[2]);
-
-				if (oObs.m_nObsTypeId != ObsType.SPDLNK)
-				{
-					bOnlySpeed = false;
-				}
-
-				
-				if (dLon != dPrevLon || dLat != dPrevLat) // create a new point in the layer when the location is different
-				{
-					TileUtil.addPointToFeature(oFeatureBuilder, nCur, dBounds, nExtent, dLon, dLat);
-					oFeatureBuilder.setType(VectorTile.Tile.GeomType.POINT);
-					oFeatureBuilder.setId(oObs.m_oObjId.getLowBytes());
-					
-					if (oObs.isMobile()) // mobile/CV data
-					{
-						oFeatureBuilder.addTags(0);
-						oFeatureBuilder.addTags(bOnlySpeed ? 1 : 0);
-						oCV.addFeatures(oFeatureBuilder.build()); // so add to the correct layer
-					}
-					else
-						oLayerBuilder.addFeatures(oFeatureBuilder.build());
-					oFeatureBuilder.clear();
-					nCur[0] = nCur[1] = 0;
-					bOnlySpeed = true;
-				}
-				
-	
-				if ((nObsIndex == 0 || oObsList.get(nObsIndex - 1).m_nContribId != oObs.m_nContribId) && oLayerBuilder.getFeaturesCount() > 0) // write the layer to the tile if it is the last Obs or a different contributor than the previous obs
-				{
-					// write layer at end of list or when group value will change
-					oLayerBuilder.setVersion(2);
-					oLayerBuilder.setName(Integer.toString(oObs.m_nContribId, 36).toUpperCase());
-					oLayerBuilder.setExtent(nExtent);
-					oTileBuilder.addLayers(oLayerBuilder.build());
-					oLayerBuilder.clear();
-				}
-			}
-			
-			if (oCV.getFeaturesCount() > 0) // add the CV layer to the tile only if it has features in it
-			{
-				oCV.setVersion(2);
-				oCV.setName("CV");
-				oCV.setExtent(nExtent);
-				oTileBuilder.addLayers(oCV.build());
-				oCV.clear();
-			}
-		}
-		oResponse.setContentType("application/x-protobuf");
-//		oResponse.setHeader("Last-Modified", m_sLastModified);
-		if (oTileBuilder.getLayersCount() > 0)
-			oTileBuilder.build().writeTo(oResponse.getOutputStream());
 	}
 	
 	
@@ -740,7 +877,7 @@ public class TileServlet extends SecureBaseBlock
 	 * @param oResponse object that contains the response the servlet sends to the client
 	 * @throws IOException
 	 */
-	protected void doArea(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, HttpServletResponse oResponse)
+	protected void doArea(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, HttpServletResponse oResponse, Session oSession, String sRequest, StringBuilder sTimeCookies)
 	   throws IOException
 	{
 		StringBuilder sDebug = null;
@@ -768,26 +905,55 @@ public class TileServlet extends SecureBaseBlock
 		int nLon2 = GeoUtil.toIntDeg(dLonLatBounds[2]);
 		
 		ObsList oData = new ObsList(1);
-
-		for (ResourceRecord oTemp : oRRs)
+		String sUnits = "";
+		if (nRequestType != RNP)
 		{
-			nContribAndSource[0] = oTemp.getContribId();
-			nContribAndSource[1] = oTemp.getSourceId();
-			oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000,
-			 nLat1, nLat2, nLon1, nLon2, lRefTime, nContribAndSource);
-			if (oData.m_bHasData || !oData.isEmpty())
+			sUnits = ObsType.getUnits(nRequestType);
+			for (ResourceRecord oTemp : oRRs)
 			{
-				oRR = oTemp;
-				break;
+				nContribAndSource[0] = oTemp.getContribId();
+				nContribAndSource[1] = oTemp.getSourceId();
+				oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000,
+				 nLat1, nLat2, nLon1, nLon2, lRefTime, nContribAndSource);
+				if (oData.m_bHasData || !oData.isEmpty())
+				{
+					oRR = oTemp;
+					break;
+				}
 			}
 		}
-		if (oData.isEmpty())
-			return;
+		else
+		{
+			ArrayList<int[]> oPolygons = new ArrayList();
+			for (Network oNetwork : WAYS.getNetworks())
+				oPolygons.add(oNetwork.getGeometry());
+			ServerConfig oPrev = new ServerConfig("", null, 0);
+			for (int nIndex = 0; nIndex < SERVERS.size(); nIndex++)
+			{
+				ServerConfig oConfig = SERVERS.get(nIndex);
+				if (oConfig.m_sUUID.compareTo(oPrev.m_sUUID) != 0)
+				{
+					oPolygons.addAll(oConfig.m_oNetworkGeometries);
+				}
+				oPrev = oConfig;
+			}
+
+			for (int[] nPoly : oPolygons)
+			{
+				if (GeoUtil.boundingBoxesIntersect(nLon1, nLat1, nLon2, nLat2, nPoly[3], nPoly[4], nPoly[5], nPoly[6]))
+				{
+					Obs oObs = new Obs();
+					oObs.m_dValue = 1;
+					oObs.m_yGeoType = Obs.POLYGON;
+					oObs.m_oGeoArray = nPoly;
+					oData.add(oObs);
+				}
+			}
+		}
 		
 		ObsList oObsList = new ObsList();
-		RangeRules oRules = ObsType.getRangeRules(nRequestType, ObsType.getUnits(nRequestType));
+		RangeRules oRules = ObsType.getRangeRules(nRequestType, sUnits);
 		Units oUnits = Units.getInstance();
-		int[] nPt = new int[2];
 		
 		for (Obs oObs : oData)
 		{
@@ -799,7 +965,26 @@ public class TileServlet extends SecureBaseBlock
 			
 			oObs.m_dValue = dVal;
 			oObsList.add(oObs);
-			
+		}
+		if (oRR != null && oRR.getContribId() == Integer.valueOf("nhc", 36))
+		{
+			Comparator<Obs> oNhcComp = (Obs o1, Obs o2) -> // compare nhc obs by storm number and reference time in reverse order
+			{
+				int nReturn = (o1.m_sStrings[0]).compareTo(o2.m_sStrings[0]);
+				if (nReturn == 0)
+					nReturn = Long.compare(o2.m_lTimeRecv, o1.m_lTimeRecv);
+				return nReturn;
+			};
+			Introsort.usort(oObsList, oNhcComp);
+			HashMap<String, String> oBestStorms = NHC.getCurrentStorms(lTimestamp, lTimestamp + 60000, lRefTime);
+			ObsList oTempList = new ObsList(oObsList.size());
+			for (Obs oObs : oObsList)
+			{
+				if (oBestStorms.get(oObs.m_sStrings[0]).compareTo(oObs.m_sStrings[1]) == 0)
+					oTempList.add(oObs);
+			}
+			oObsList = oTempList;
+
 		}
 		Introsort.usort(oObsList, Obs.g_oCompObsByValue);
 		
@@ -807,12 +992,9 @@ public class TileServlet extends SecureBaseBlock
 		VectorTile.Tile.Layer.Builder oLayerBuilder = VectorTile.Tile.Layer.newBuilder();
 		VectorTile.Tile.Feature.Builder oFeatureBuilder = VectorTile.Tile.Feature.newBuilder();
 		
-		VectorTile.Tile.Feature.Builder oLineBuilder = VectorTile.Tile.Feature.newBuilder();
-		
 		int nExtent = Mercator.getExtent(nZ);
 		double dPrevVal;
 		int[] nCur = new int[2]; // reusable arrays for feature methods
-		int[] nLineCur = new int[2];
 		int[] nPoints = new int[65];
 		int nIndex = oObsList.size();
 		
@@ -855,7 +1037,6 @@ public class TileServlet extends SecureBaseBlock
 								{
 									int[] oPoly = GeoUtil.popResult(lClipRef[0]);
 									TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oPoly, nPoints);
-//									TileUtil.addPolyOutline(oLineBuilder, nLineCur, dBounds, nExtent, oPoly, nPoints);
 								}
 								catch (Exception oEx)
 								{
@@ -870,35 +1051,29 @@ public class TileServlet extends SecureBaseBlock
 					}
 					else
 					{
-//						TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
 						TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
-//						TileUtil.addPolyOutline(oLineBuilder, nLineCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
 					}
 				}
 				else
 				{
 					TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
-//					TileUtil.addPolyOutline(oLineBuilder, nLineCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
 				}
 
 				if (nIndex == 0 || oObsList.get(nIndex - 1).m_dValue != dPrevVal)
 				{ // write layer at end of list or when group value will change
 					oFeatureBuilder.setType(VectorTile.Tile.GeomType.POLYGON);
-//					oLineBuilder.setType(VectorTile.Tile.GeomType.LINESTRING);
 					oLayerBuilder.clear();
 					oLayerBuilder.setVersion(2);
 					int nMultiplier = 1;
 					if (m_oLayerMultipliers.containsKey(nRequestType))
 						nMultiplier = m_oLayerMultipliers.get(nRequestType);
-					oLayerBuilder.setName(String.format("%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal * nMultiplier));
+					oLayerBuilder.setName(String.format("3_%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal * nMultiplier));
 					oLayerBuilder.setExtent(nExtent);
 					oLayerBuilder.addFeatures(oFeatureBuilder.build());
-//					oLayerBuilder.addFeatures(oLineBuilder.build());
 					oTileBuilder.addLayers(oLayerBuilder.build());
 					oFeatureBuilder.clear();
 					oLayerBuilder.clear();
 					nCur[0] = nCur[1] = 0;
-//					nLineCur[0] = nLineCur[1] = 0;
 				}
 			}
 		}
@@ -967,8 +1142,9 @@ public class TileServlet extends SecureBaseBlock
 //			}
 //		}
 
+		if (oSession != null && nRequestType != RNP) // do not forward request if this is already a forwarded request
+			forwardRequest(sRequest, nRequestType, Obs.POLYGON, nLon1, nLat1, nLon2, nLat2, oTileBuilder, sTimeCookies);
 		oResponse.setContentType("application/x-protobuf");
-//		oResponse.setHeader("Last-Modified", m_sLastModified);
 		if (oTileBuilder.getLayersCount() > 0)
 			oTileBuilder.build().writeTo(oResponse.getOutputStream());
 	}
@@ -1054,5 +1230,24 @@ public class TileServlet extends SecureBaseBlock
 		dPoints[nIndex++] = dY;
 		dPoints[0] = nIndex; // track insertion point in array
 		return dPoints;
+	}
+	
+	
+	public int doNetworkGeo(HttpServletRequest oRequest, HttpServletResponse oResponse, Session oSession, ClientConfig oClient)
+	   throws ServletException, IOException
+	{
+		try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(oResponse.getOutputStream())))
+		{
+			for (Network oNetwork : WAYS.getNetworks())
+			{
+				if (!oNetwork.m_bExternalPublish)
+					continue;
+				
+				int[] nGeo = oNetwork.getGeometry();
+				for (int nIndex = 0; nIndex < nGeo[0]; nIndex++)
+					oOut.writeInt(nGeo[nIndex]);
+			}
+		}
+		return HttpServletResponse.SC_OK;
 	}
 }
