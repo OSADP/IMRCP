@@ -15,13 +15,17 @@
  */
 package imrcp.web.layers;
 
+import imrcp.geosrv.GeoUtil;
 import imrcp.store.Obs;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
+import imrcp.web.ClientConfig;
 import imrcp.web.LatLngBounds;
 import imrcp.web.ObsChartRequest;
 import imrcp.web.ObsRequest;
 import imrcp.web.SecureBaseBlock;
+import static imrcp.web.SecureBaseBlock.getTrustingConnection;
+import imrcp.web.ServerConfig;
 import imrcp.web.Session;
 import java.io.IOException;
 import java.text.DecimalFormat;
@@ -30,11 +34,19 @@ import java.util.regex.Pattern;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import javax.net.ssl.HttpsURLConnection;
 import org.apache.http.HttpStatus;
 import org.codehaus.jackson.JsonEncoding;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
+import org.json.JSONArray;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /**
  * Base class used for handling different requests based on the IMRCP Map UI's 
@@ -101,7 +113,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doPlatformObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doPlatformObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		try
@@ -133,10 +145,11 @@ public abstract class LayerServlet extends SecureBaseBlock
 			oObsRequest.setRequestTimestampRef(lRequestTimeRef);
 			oObsRequest.setRequestTimestampStart(lRequestTimeStart);
 			oObsRequest.setRequestTimestampEnd(lRequestTimeStart + 60000);
+			oObsRequest.setRequest(sRequestUri);
 			String sSourceId = oReq.getParameter("src");
 			oObsRequest.setSourceId(sSourceId == null ? Integer.valueOf("null", 36) : Integer.valueOf(sSourceId, 36));
 
-			processObsRequest(oRes, oObsRequest); // process the request
+			processObsRequest(oRes, oObsRequest, oSess, oClient); // process the request
 			return HttpServletResponse.SC_OK; // OK if no Exception are thrown
 		}
 		catch (Exception oEx)
@@ -159,7 +172,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doChartObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doChartObs(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		String sRequestUri = oReq.getRequestURI();
@@ -214,12 +227,11 @@ public abstract class LayerServlet extends SecureBaseBlock
 	 * @param oObsRequest object that contains the query parameters for the request
 	 * @throws Exception
 	 */
-	protected void processObsRequest(HttpServletResponse oResp, ObsRequest oObsRequest) throws Exception
+	protected void processObsRequest(HttpServletResponse oResp, ObsRequest oObsRequest, Session oSession, ClientConfig oClient) throws Exception
 	{
-
 		try (JsonGenerator oOutputGenerator = m_oJsonFactory.createJsonGenerator(oResp.getOutputStream(), JsonEncoding.UTF8))
 		{
-			buildObsResponseContent(oOutputGenerator, oObsRequest);
+			buildObsResponseContent(oOutputGenerator, oObsRequest, oSession, oClient);
 		}
 	}
 
@@ -300,7 +312,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 	 * @param oObsRequest object that contains the query parameters for the request
 	 * @throws Exception
 	 */
-	protected abstract void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest) throws Exception;
+	protected abstract void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest, Session oSession, ClientConfig oClient) throws Exception;
 
 	
 	/**
@@ -324,7 +336,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 	 * "{@literal <br>}" 
 	 * @param nStep Number of characters to skip before inserting sInsert into
 	 * sDetail
-	 * @return sDetail with sInsert added approxiamatemly every nStep characters
+	 * @return sDetail with sInsert added approximately every nStep characters
 	 */
 	protected String formatDetailString(String sDetail, String sInsert, int nStep)
 	{
@@ -345,5 +357,62 @@ public abstract class LayerServlet extends SecureBaseBlock
 		}
 
 		return sReturn.toString();
+	}
+	
+	
+	protected void forwardRequest(JsonGenerator oOutputGenerator, ObsRequest oObsRequest)
+	{
+		LatLngBounds oBounds = oObsRequest.getRequestBounds();
+		ServerConfig oPrev = new ServerConfig("", null, 0);
+		for (int nIndex = 0; nIndex < SERVERS.size(); nIndex++)
+		{
+			ServerConfig oConfig = SERVERS.get(nIndex);
+			if (oConfig.m_sUUID.compareTo(oPrev.m_sUUID) != 0)
+			{
+				ArrayList<int[]> oGeos = oConfig.m_oNetworkGeometries;
+				for (int nGeoIndex = 0; nGeoIndex < oGeos.size(); nGeoIndex++)
+				{
+					if (GeoUtil.isInsideRingAndHoles(oGeos.get(nGeoIndex), Obs.POLYGON, GeoUtil.getBoundingPolygon(oBounds.getWest(), oBounds.getSouth(), oBounds.getEast(), oBounds.getNorth())))
+					{
+						try
+						{
+							HttpsURLConnection oConn = getTrustingConnection(String.format("https://%s%s?uuid=%s", oConfig.m_oHost.getHostName(), oObsRequest.getRequest(), URLEncoder.encode(oConfig.m_sUUID, StandardCharsets.UTF_8)));
+							oConn.setConnectTimeout(500);
+							oConn.setReadTimeout(3000);
+							try (BufferedReader oIn = new BufferedReader(new InputStreamReader(oConn.getInputStream(), StandardCharsets.UTF_8)))
+							{
+								if (oConn.getResponseCode() != HttpServletResponse.SC_OK || oConn.getContentLengthLong() == 0)
+									break;
+								
+								JSONObject oRes = new JSONObject(new JSONTokener(oIn));
+								JSONArray oObsList = oRes.getJSONArray("obs");
+								for (int nObsIndex = 0; nObsIndex < oObsList.length(); nObsIndex++)
+								{
+									JSONObject oObs = oObsList.getJSONObject(nObsIndex);
+									oOutputGenerator.writeStartObject();
+									oOutputGenerator.writeStringField("mv", oObs.getString("mv"));
+									oOutputGenerator.writeStringField("ev", oObs.getString("ev"));
+									oOutputGenerator.writeStringField("mu", oObs.getString("mu"));
+									oOutputGenerator.writeStringField("eu", oObs.getString("eu"));
+									oOutputGenerator.writeNumberField("oi", oObs.getInt("oi"));
+									oOutputGenerator.writeStringField("od", oObs.getString("od"));
+									oOutputGenerator.writeNumberField("ts1", oObs.getLong("ts1"));
+									oOutputGenerator.writeNumberField("ts2", oObs.getLong("ts2"));
+									oOutputGenerator.writeStringField("src", oObs.getString("src"));
+									if (oObs.has("url"))
+										oOutputGenerator.writeStringField("url", oObs.getString("url"));
+									oOutputGenerator.writeEndObject();
+								}
+							}
+						}
+						catch (Exception oEx)
+						{
+							m_oLogger.error(oEx, oEx);
+						}
+					}
+				}
+			}
+			oPrev = oConfig;
+		}
 	}
 }

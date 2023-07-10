@@ -8,9 +8,11 @@ import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
+import imrcp.web.ClientConfig;
 import imrcp.web.LatLngBounds;
 import imrcp.web.ObsChartRequest;
 import imrcp.web.ObsRequest;
+import imrcp.web.Session;
 import java.text.DecimalFormat;
 import java.util.Collections;
 import org.codehaus.jackson.JsonGenerator;
@@ -27,7 +29,7 @@ public class PointsLayerServlet extends LayerServlet
 	 * Map UI when a Points Layer object is clicked.
 	 */
 	@Override
-	protected void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest) throws Exception
+	protected void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest, Session oSession, ClientConfig oClient) throws Exception
 	{
 		oOutputGenerator.writeStartObject();
 		LatLngBounds currentRequestBounds = oObsRequest.getRequestBounds();
@@ -58,8 +60,10 @@ public class PointsLayerServlet extends LayerServlet
 			}
 		}
 		
-		sDetail.setLength(sDetail.length() - "<br>".length());
-
+		if (sDetail.length() > "<br>".length())
+			sDetail.setLength(sDetail.length() - "<br>".length());
+		if (oSession != null)
+			forwardRequest(oOutputGenerator, oObsRequest);
 		oOutputGenerator.writeEndArray();
 
 		oOutputGenerator.writeStringField("sdet", sDetail.toString());

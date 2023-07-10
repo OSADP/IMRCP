@@ -19,18 +19,21 @@ import imrcp.geosrv.GeoUtil;
 import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.store.TileObsView;
+import imrcp.system.Arrays;
 import imrcp.system.Directory;
 import imrcp.system.JSONUtil;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
+import imrcp.web.ClientConfig;
 import imrcp.web.LatLngBounds;
 import imrcp.web.ObsChartRequest;
 import imrcp.web.ObsInfo;
 import imrcp.web.ObsRequest;
+import imrcp.web.Session;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.TreeMap;
 import org.codehaus.jackson.JsonGenerator;
 import org.json.JSONObject;
@@ -54,12 +57,11 @@ public class AreaLayerServlet extends LayerServlet
 	{
 		super.reset(oBlockConfig);
 		String[] sObsTypes = JSONUtil.getStringArray(oBlockConfig, "areaobs");
-		AREA_OBSTYPES = new int[sObsTypes.length];
+		AREA_OBSTYPES = imrcp.system.Arrays.newIntArray(sObsTypes.length);
 		for (int nIndex = 0; nIndex < sObsTypes.length; nIndex++)
 		{
-			AREA_OBSTYPES[nIndex] = Integer.valueOf(sObsTypes[nIndex], 36);
+			AREA_OBSTYPES = Arrays.add(AREA_OBSTYPES, Integer.valueOf(sObsTypes[nIndex], 36));
 		}
-		Arrays.sort(AREA_OBSTYPES);
 	}
 
 
@@ -68,14 +70,41 @@ public class AreaLayerServlet extends LayerServlet
 	 * Map UI when an Area Layer object is clicked.
 	 */
 	@Override
-	protected void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest) throws Exception
+	protected void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest, Session oSession, ClientConfig oClient) throws Exception
 	{
+		int[] nObsToQuery = Arrays.newIntArray();
+		if (oClient != null)
+		{
+			for (int nObsIndex = 0; nObsIndex < oClient.m_nObsTypes.length; nObsIndex++)
+			{
+				int nClientObs = oClient.m_nObsTypes[nObsIndex];
+				for (int nInner = 0; nInner < AREA_OBSTYPES.length; nInner++)
+				{
+					int nAreaObs = AREA_OBSTYPES[nInner];
+					if (nClientObs == nAreaObs)
+					{
+						nObsToQuery = Arrays.add(nObsToQuery, nClientObs);
+						break;
+					}
+				}
+			}
+			
+			if (nObsToQuery[0] == 1)
+				return;
+		}
+		else
+		{
+			nObsToQuery = AREA_OBSTYPES;
+		}
+			
 		LatLngBounds oRequestBounds = oObsRequest.getRequestBounds();
 		ArrayList<Obs> oObsList = new ArrayList<>();
 		StringBuilder sDetail = new StringBuilder();
 		boolean bAddCapDetail = false;
-		for (int nObstype : AREA_OBSTYPES) // for each observation type, use ObsView to query the data stores
+		Iterator<int[]> oIt = Arrays.iterator(nObsToQuery, new int[1], 1, 1);
+		while(oIt.hasNext()) // for each observation type, use ObsView to query the data stores
 		{
+			int nObstype = oIt.next()[0];
 			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
 			ObsList oData = ((TileObsView)Directory.getInstance().lookup("ObsView")).getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef());
 			for (Obs oNewObs : oData)
@@ -102,7 +131,10 @@ public class AreaLayerServlet extends LayerServlet
 		{
 			serializeObsRecord(oOutputGenerator, oNumberFormatter, oObs);
 		}
-
+		
+		if (oSession != null)
+			forwardRequest(oOutputGenerator, oObsRequest);
+		
 		oOutputGenerator.writeEndArray();
 
 		if (nElevation != Short.MIN_VALUE && nElevation != Integer.MIN_VALUE) // write elevation field if the Obs has a valid elevation
