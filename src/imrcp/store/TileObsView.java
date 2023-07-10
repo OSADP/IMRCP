@@ -214,17 +214,17 @@ public class TileObsView extends BaseBlock
 				long lSearchStart = (lRefTime + nMaxFcst) / 86400000 * 86400000; // floor search times to the nearest day since directories are by day
 				long lSearchEnd = (lRefTime - nMaxFcst) / 86400000 * 86400000;
 				ArrayList<String> oSearchedDirs = new ArrayList();
-				int nPathIndex = search(oBestFiles, lSearchStart, lSearchEnd, lStartTime, lEndTime, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
+				int nPathIndex = search(oBestFiles, lSearchStart, lSearchEnd, lObsTime, lNextInterval, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
 				if (nPathIndex < oBestFiles.length)
 				{
 					lSearchStart = (lObsTime + nMaxFcst) / 86400000 * 86400000;
 					lSearchEnd = (lObsTime - nMaxFcst) / 86400000 * 86400000;
-					nPathIndex = search(oBestFiles, lSearchStart, lSearchEnd, lStartTime, lEndTime, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
+					nPathIndex = search(oBestFiles, lSearchStart, lSearchEnd, lObsTime, lNextInterval, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
 					if (nPathIndex < oBestFiles.length)
 					{
 						lSearchStart = (lNextInterval + nMaxFcst) / 86400000 * 86400000;
 						lSearchEnd = (lNextInterval - nMaxFcst) / 86400000 * 86400000;
-						search(oBestFiles, lSearchStart, lSearchEnd, lStartTime, lEndTime, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
+						search(oBestFiles, lSearchStart, lSearchEnd, lObsTime, lNextInterval, lRefTime, sObsType, oFf, oRR, oSearchedDirs);
 					}
 				}
 

@@ -267,6 +267,20 @@ public class Obs
 		this(nObsTypeId, nContribId, oObjId, lObsTime1, lObsTime2, lTimeRecv, oGeo, yGeoType, dValue, sStrings);
 		m_lClearedTime = lClearedTime;
 	}
+
+	public Obs(Obs oObs)
+	{
+		m_nObsTypeId = oObs.m_nObsTypeId;
+		m_nContribId = oObs.m_nContribId;
+		m_oObjId = oObs.m_oObjId;
+		m_lObsTime1 = oObs.m_lObsTime1;
+		m_lObsTime2 = oObs.m_lObsTime2;
+		m_lTimeRecv = oObs.m_lTimeRecv;
+		m_oGeoArray = oObs.m_oGeoArray;
+		m_yGeoType = oObs.m_yGeoType;
+		m_dValue = oObs.m_dValue;
+		m_sStrings = oObs.m_sStrings;
+	}
 	
 	
 	public boolean matches(int nObsType, long lStartTime, long lEndTime, long lRefTime, int nStartLat, int nEndLat, int nStartLon, int nEndLon)
