@@ -1,6 +1,6 @@
 import {pointToPaddedBounds} from './map-util.js';
 
-//let g_sMapboxAccessToken = '<mapbox access token>';
+let g_sMapboxAccessToken = '<mapbox access token>';
 let g_sMapboxStyle = 'mapbox://styles/mapbox/light-v9';
 let g_sGeojson;
 let g_oMap;

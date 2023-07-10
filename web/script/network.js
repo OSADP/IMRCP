@@ -1,11 +1,17 @@
 import {buildNetworkDialog, buildRoadLegendDialog, buildCancelDialog, buildNetworkLegendDialog, buildInstructionDialog, buildDetectorDialog,
-		buildDetectorEditDialog, buildDetectorStatusDialog, buildUploadConfirmDialog, buildNetworkMetadataDialog, buildReprocessDialog, buildNetworkSelectDialog} from './dialogs.js';
+		buildDetectorEditDialog, buildDetectorStatusDialog, buildUploadConfirmDialog, buildNetworkMetadataDialog, buildReprocessDialog,
+		buildDeleteConfirmDialog, buildPublishConfirmDialog, buildEditPublishConfirmDialog, buildOverwritePublishConfirmDialog, buildNetworkSelectDialog} from './dialogs.js';
 	
 import {switchToDetector, leaveDetectors, checkDetectorFile, uploadFile} from './detectors.js';
 
 import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly} from './map-util.js';
 import {getNetworksAjax, MapControlIcons, initCommonMap} from './map-common.js';
 
+let ASSEMBLING = 0b1;
+let WORKINPROGRESS = 0b10;
+let PUBLISHING = 0b100;
+let PUBLISHED = 0b1000;
+let ERROR = 0b10000;
 let g_oMap;
 let g_nHoverId;
 let g_oNetworkHover = {};
@@ -21,7 +27,6 @@ let g_oWays = {};
 let g_bLoadingHash = false;
 let g_oDialogs = {};
 let g_oSpotlight = [];
-let g_nPollInterval;
 let g_oMerge = [];
 let g_nSplitWay;
 let g_nSplitNode;
@@ -32,6 +37,9 @@ let g_sCurPointHoverLayer;
 let g_sCurPointHoverSource;
 let g_oPopup;
 let g_oReprocess;
+let g_oDelete;
+let g_sSatelliteUrl = 'mapbox/satellite-tiles.json';
+//let g_sSatelliteUrl = 'mapbox://mapbox.satellite';
 let g_oInstructions = 
 {
 	'select' : ['Left-click a polygon to view/edit network. The label is displayed in the popup. If there are overlapping polygons, left-click to get a list of possible networks to select from.', 'Network Overview'],
@@ -54,7 +62,7 @@ async function initialize()
 	$(document).prop('title', 'IMRCP Network Creation - ' + sessionStorage.uname);
 	g_oMap = initCommonMap('mapid', -98.585522, 39.8333333, 4, 4, 24);
 	let oMainControl = new MapControlIcons([{t:'Create Network', i:'drawpoly'}, {t:'Delete Network', i:'delete'}, {t:'Reprocess Network', i:'reload'}, {t:'Toggle Network Legend', i:'toggle'}], 'main-control');
-	let oEditControl = new MapControlIcons([{t:'Add/Remove Road', i:'add'}, {t:'Merge Roads', i:'merge'}, {t:'Split Road', i:'split'}, {t:'Edit Traffic Detectors', i:'detector'}, {t:'Save Changes', i:'save'}, {t:'Export OSM Network', i:'download'}, {t:'Finalize Network', i:'check'}, {t:'Toggle Road Legend', i:'toggle'}, {t:'Go Back', i:'cancel'}], 'edit-control');
+	let oEditControl = new MapControlIcons([{t:'Add/Remove Road', i:'add'}, {t:'Save Changes', i:'save'}, {t:'Publish Network', i:'check'}, {t:'Toggle Road Legend', i:'toggle'}, {t:'Go Back', i:'cancel'}], 'edit-control');
 	let oTileControl = new MapControlIcons([{t:'Toggle Satellite Background', i:'satellite'}, {t:'Toggle Instructions', i:'instruction'}, {t:'Toggle Metadata', i:'metadata'}]);
 	let oDetectorControl = new MapControlIcons([{t:'Upload File', i:'file'}, {t:'Edit Detectors', i:'edit'}, {t:'Toggle Detector Legend', i:'toggle'}, {t:'Back To Network Edit', i:'cancel'}], 'detector-control');
 
@@ -79,16 +87,12 @@ async function initialize()
 	$("button[title|='Reprocess Network']").click(startReprocessNetwork);
 	$("button[title|='Save Changes']").click(saveChanges);
 	$("button[title|='Add/Remove Road']").click(startAddRemove);
-	$("button[title|='Split Road']").click(startSplit);
-	$("button[title|='Merge Roads']").click(startMerge);
 	$("button[title|='Go Back']").click(confirmCancel);
-	$("button[title|='Edit Traffic Detectors']").click(switchToDetector);
 	$("button[title|='Back To Network Edit']").click(leaveDetectors);
 	$("button[title|='Toggle Satellite Background']").click(toggleSatellite);
 	$("button[title|='Toggle Metadata']").click({'dialog': 'networkmetadata'}, toggleDialog).hide();
 	$("button[title|='Upload File']").click(checkDetectorFile);
-	$("button[title|='Export OSM Network']").click(exportOsm);
-	$("button[title|='Finalize Network']").click(finalizeNetwork);
+	$("button[title|='Publish Network']").click(publishNetwork);
 	$('#detectorFile').on('change', uploadFile);
 	
 	g_oMap.on('load', async function() {
@@ -103,6 +107,10 @@ async function initialize()
 		buildUploadConfirmDialog();
 		buildNetworkMetadataDialog();
 		buildReprocessDialog();
+		buildDeleteConfirmDialog();
+		buildPublishConfirmDialog();
+		buildEditPublishConfirmDialog();
+		buildOverwritePublishConfirmDialog();
 		buildNetworkSelectDialog();
 		instructions(g_oInstructions['select']);
 		startSelectNetwork();
@@ -119,7 +127,7 @@ function toggleSatellite()
 		if (g_oMap.getLayer('geo-lines') !== undefined)
 			sBefore = 'geo-lines';
 
-		g_oMap.addSource('mapbox://mapbox.satellite', {'url': 'mapbox://mapbox.satellite', 'type': 'raster', 'tileSize': 256});
+		g_oMap.addSource('mapbox://mapbox.satellite', {'url': g_sSatelliteUrl, 'type': 'raster', 'tileSize': 256});
 		if (g_oMap.getLayer(sBefore) !== undefined)
 			g_oMap.addLayer(g_oLayers['satellite'], sBefore);
 		else
@@ -147,8 +155,8 @@ function toggleDialog(oEvent)
 
 function startSelectNetwork(bLoaded)
 {
+	g_oClickedNetworks = undefined
 	g_oMap.flyTo({center: [-98.585522, 39.8333333], zoom: 4});
-	clearInterval(g_nPollInterval);
 	g_oMap.off('click', clickNetwork);
 	g_oMap.off('mousemove', mousemoveNetworkPolygons);
 	/*
@@ -188,20 +196,24 @@ function networksSuccess(data, textStatus, jqXHR)
 	let oGeoJson = {};
 	oGeoJson.type = 'FeatureCollection';
 	oGeoJson.features = [];
-	let bLoading = false;
 	for (let value of data.values())
 	{
+		let nStatus = value.properties.status;
+		let nDisplayStatus = 4;
+		if (isStatus(nStatus, ASSEMBLING))
+			nDisplayStatus = 0;
+		else if (isStatus(nStatus, WORKINPROGRESS))
+			nDisplayStatus = 1;
+		else if (isStatus(nStatus, PUBLISHING))
+			nDisplayStatus = 2;
+		else if (isStatus(nStatus, PUBLISHED))
+			nDisplayStatus = 3;
+
+		value.properties.displaystatus = nDisplayStatus;
 		oGeoJson.features.push(value);
-		if (value.properties.loaded === 1)
-			bLoading = true;
+		
 	}
-	
-	if (bLoading)
-	{
-		clearInterval(g_nPollInterval);
-		g_nPollInterval = setInterval(startSelectNetwork, 30000);
-	}
-	
+		
 	if (oGeoJson.features.length === 0)
 	{
 		$('#instructions-error').html('No networks have been created. Create one by using the "Create Network" button');
@@ -317,21 +329,38 @@ function loadNetwork(nId)
 	if (oFeature === null)
 		return;
 	
-	if (oFeature.properties.loaded === 1)
+	g_oClickedNetworks = oFeature;
+	if (isStatus(oFeature.properties.status, ASSEMBLING))
 	{
-		$('#instructions-error').html('Network generation still processing.');
+		$('#instructions-error').html('Network still assembling.');
 		return;
 	}
-	else if (oFeature.properties.loaded === 2)
+	else if (isStatus(oFeature.properties.status, PUBLISHING))
 	{
-		$('#instructions-error').html('Error occured while generating network.');
+		$('#instructions-error').html('Network publishing still in progress');
 		return;
 	}
-	g_oClickedNetworks = undefined;
+	else if (isStatus(oFeature.properties.status, PUBLISHED))
+	{
+		$(g_oDialogs['editpublishconfirm']).dialog('open');
+		return;
+	}
+	else if (isStatus(oFeature.properties.status, ERROR))
+	{
+		$('#instructions-error').html('Error occured while assembling or publishing network.');
+		return;
+	}
+	
+	confirmLoadNetwork();
+}
+
+
+function confirmLoadNetwork()
+{
+	let oFeature = g_oClickedNetworks;
 	$('#networkselectlist').empty();
 	$(g_oDialogs['networkselect']).dialog('close');
-	clearInterval(g_nPollInterval);
-	g_nPollInterval = undefined;
+
 	instructions(g_oInstructions['edit']);
 	$.ajax(
 	{
@@ -340,7 +369,7 @@ function loadNetwork(nId)
 		'method': 'POST',
 		'networkid': oFeature.properties.networkid,
 		'networklabel': oFeature.properties.label,
-		'data': {'token': sessionStorage.token, 'networkid': oFeature.properties.networkid}
+		'data': {'token': sessionStorage.token, 'networkid': oFeature.properties.networkid, 'published': 'false'}
 	}).done(selectSuccess).fail(function() 
 	{
 		$('#instructions-error').html('Failed to retrieve network.');
@@ -351,15 +380,11 @@ function loadNetwork(nId)
 	g_oMap.getCanvas().style.cursor = g_sCursor;
 	g_oMap.off('click', clickNetwork);
 	g_oMap.off('mousemove', mousemoveNetworkPolygons);
-	/*
-	g_oMap.off('mouseenter', 'network-polygons', mouseenterNetworkPolygons);
-	g_oMap.off('mouseleave', 'network-polygons', mouseleaveNetworkPolygons);
-	*/
 	let oSrc = g_oMap.getSource('network-polygons');
 	let oData = oSrc._data;
 	for (let nIndex = 0; nIndex < oData.features.length; nIndex++)
 	{
-		if (nIndex === nId)
+		if (nIndex === oFeature.id)
 		{
 			g_oCurBounds = getPolygonBoundingBox(oFeature);
 			g_oMap.fitBounds(g_oCurBounds, {'padding': 50});
@@ -370,7 +395,7 @@ function loadNetwork(nId)
 	}
 	
 	
-	g_oMap.setFeatureState({'id': nId, 'source': 'network-polygons'}, {'hidden': false});
+	g_oMap.setFeatureState({'id': oFeature.id, 'source': 'network-polygons'}, {'hidden': false});
 }
 
 
@@ -439,17 +464,11 @@ function selectSuccess(data, textStatus, jqXHR)
 	oMetadata.html(sOutput);
 	oMetadata.dialog('open');
 	$("button[title|='Toggle Metadata']").show();
-	
-	
-	
 	$(g_oDialogs['networklegend']).dialog('close');
 	$(g_oDialogs['roadlegend']).dialog('open');
 	document.activeElement.blur();
 	g_sCurNetwork = this.networkid;
-	
-	clearInterval(g_nPollInterval);
-	g_nPollInterval = undefined;
-	
+		
 	g_nEdits = 0;
 	g_nEditMode = 0;
 	$('#main-control').hide();
@@ -523,6 +542,7 @@ function mousemoveNetworkPolygons(oEvent)
 		g_oMap.getCanvas().style.cursor = g_sCursor;
 	}
 }
+
 /*
 function mouseenterNetworkPolygons(oEvent)
 {
@@ -582,7 +602,6 @@ function mouseleaveNetworkPolygons(oEvent)
 function startDeleteNetwork()
 {
 	g_oMap.off('click', clickNetwork);
-	g_oMap.on('mousemove', mousemoveNetworkPolygons);
 	/*
 	g_oMap.off('mouseenter', 'network-polygons', mouseenterNetworkPolygons);
 	g_oMap.off('mouseleave', 'network-polygons', mouseleaveNetworkPolygons);
@@ -594,11 +613,60 @@ function startDeleteNetwork()
 	instructions(g_oInstructions['delete']);
 }
 
+function mouseenterNetworkPolygonsReprocess(oEvent)
+{
+	let nHover = g_nHoverId;
+	let nFeatureId = getFeatureId(oEvent);
+		
+	if (nHover >= 0)
+		g_oMap.setFeatureState({source: 'network-polygons', id: nHover}, {'hover': false});
+	if (nFeatureId >= 0)
+	{
+		g_nHoverId = nFeatureId;
+		g_oMap.setFeatureState({source: 'network-polygons', id: nFeatureId}, {'hover': true});
+	}
+	g_oMap.on('mousemove', 'network-polygons', mousemoveNetworkPolygonsReprocess);
+}
+
+function mousemoveNetworkPolygonsReprocess(oEvent)
+{
+	let nHover = g_nHoverId;
+	if (oEvent.features.length > 0)
+		g_oMap.getCanvas().style.cursor = 'pointer';
+	
+	let nFeatureId = getFeatureId(oEvent);
+	
+	if (nFeatureId != nHover)
+	{
+		if (nHover >= 0)
+			g_oMap.setFeatureState({source: 'network-polygons', id: nHover}, {'hover': false});
+		if (nFeatureId >= 0)
+		{
+			g_nHoverId = nFeatureId;
+			g_oMap.setFeatureState({source: 'network-polygons', id: nFeatureId}, {'hover': true});
+		}
+	}
+}
+
+
+function mouseleaveNetworkPolygonsReprocess(oEvent)
+{
+	let nHover = g_nHoverId;
+	oEvent.target.getCanvas().style.cursor = g_sCursor;
+	if (nHover >= 0)
+		oEvent.target.setFeatureState({source: 'network-polygons', id: nHover}, {'hover': false});
+	
+	g_nHoverId = undefined;
+	oEvent.target.off('mousemove', 'network-polygons', mousemoveNetworkPolygonsReprocess);
+}
+
 
 function startReprocessNetwork()
 {
 	g_oMap.off('click', clickNetwork);
 	g_oMap.on('click', 'network-polygons', reprocessNetwork);
+	g_oMap.on('mouseenter', 'network-polygons', mouseenterNetworkPolygonsReprocess);
+	g_oMap.on('mouseleave', 'network-polygons', mouseleaveNetworkPolygonsReprocess);
 	$(document).on('keyup', turnOffReprocess);
 	instructions(g_oInstructions['reprocess']);
 }
@@ -618,10 +686,13 @@ function cancelReprocess()
 	$(g_oDialogs['reprocess']).dialog('close');
 	$(g_oDialogs['network']).dialog('close');
 	g_oMap.off('click', 'network-polygons', reprocessNetwork);
+	g_oMap.off('mouseenter', 'network-polygons', mouseenterNetworkPolygonsReprocess);
+	g_oMap.off('mouseleave', 'network-polygons', mouseleaveNetworkPolygonsReprocess);
+	g_oMap.off('mousemove', 'network-polygons', mousemoveNetworkPolygonsReprocess);
 	$(document).off('keyup', turnOffReprocess);
 	instructions(g_oInstructions['select'], 'Exited reprocess mode');
 	g_oReprocess = undefined;
-	startSelectNetwork(true);
+	switchToMain();
 }
 
 
@@ -668,7 +739,7 @@ function reprocessNetwork(oEvent)
 function turnOffDelete(oEvent)
 {
 	let nHover = g_nHoverId;
-	if (oEvent.which == 27) // esc
+	if (oEvent === undefined || oEvent.which == 27) // esc
 	{
 		g_oMap.off('click', 'network-polygons', deleteNetwork);
 		g_oMap.off('mouseenter', 'network-polygons', mouseenterNetworkPolygonsDel);
@@ -685,35 +756,20 @@ function turnOffDelete(oEvent)
 }
 
 
-function deleteNetwork(oEvent)
+function confirmDeleteNetwork()
 {
-	let nHover = g_nHoverId;
-	let oFeatures = oEvent.features
-	if (oFeatures.length === 0)
-		return;
-	
-	let oFeature = null;
-	for (let nIndex = 0; nIndex < oFeatures.length; nIndex++)
-	{
-		if (oFeatures[nIndex].id == nHover)
-			oFeature = oFeatures[nIndex];
-	}
-	
-	if (oFeature == null)
-		return;
-	
 	$.ajax(
 	{
 		'url': 'api/generatenetwork/delete',
 		'method': 'POST',
-		'networkid': oFeature.properties.networkid,
-		'data': {'token': sessionStorage.token, 'networkid': oFeature.properties.networkid}
+		'networkid': g_oDelete.properties.networkid,
+		'data': {'token': sessionStorage.token, 'networkid': g_oDelete.properties.networkid}
 	}).done(function() 
 	{
 		g_sCursor = '';
 		g_oMap.getCanvas().style.cursor = g_sCursor;
 		instructions(g_oInstructions['select'], 'Delete Success');;
-		startSelectNetwork();
+		switchToMain();
 	}).fail(function() 
 	{
 		$('#instructions-error').html('Failed to delete network.');
@@ -728,6 +784,28 @@ function deleteNetwork(oEvent)
 	g_oMap.off('mouseleave', 'network-polygons', mouseleaveNetworkPolygonsDel);
 	$(document).off('keyup', turnOffDelete);
 	g_nHoverId = undefined;
+}
+
+
+function deleteNetwork(oEvent)
+{
+	let nHover = g_nHoverId;
+	let oFeatures = oEvent.features;
+	if (oFeatures.length === 0)
+		return;
+	
+	let oFeature = null;
+	for (let nIndex = 0; nIndex < oFeatures.length; nIndex++)
+	{
+		if (oFeatures[nIndex].id == nHover)
+			oFeature = oFeatures[nIndex];
+	}
+	
+	if (oFeature == null)
+		return;
+	
+	g_oDelete = oFeature;
+	$(g_oDialogs['deleteconfirm']).dialog('open');
 }
 
 
@@ -781,11 +859,14 @@ function mouseleaveNetworkPolygonsDel(oEvent)
 
 function startCreateNetwork()
 {
-	clearInterval(g_nPollInterval);
-	g_nPollInterval = undefined;
-	
 	g_oMap.off('click', clickNetwork);
 	g_oMap.off('mousemove', mousemoveNetworkPolygons);
+	let oSrc = g_oMap.getSource('network-polygons');
+	let oData = oSrc._data;
+	for (let nIndex = 0; nIndex < oData.features.length; nIndex++)
+	{
+		g_oMap.setFeatureState({'id': nIndex, 'source': 'network-polygons'}, {'hidden': true});
+	}
 	/*
 	g_oMap.off('mouseenter', 'network-polygons', mouseenterNetworkPolygons);
 	g_oMap.off('mouseleave', 'network-polygons', mouseleaveNetworkPolygons);
@@ -910,7 +991,7 @@ function addPointCreateNetwork(oEvent)
 function finishCreateNetwork(oGeometry)
 {
 	let sData = '';
-	for (let nIndex = 0; nIndex < oGeometry.coordinates.length; nIndex++)
+	for (let nIndex = 0; nIndex < oGeometry.coordinates.length - 1; nIndex++)
 	{
 		let aCoord = oGeometry.coordinates[nIndex];
 		sData += aCoord[0].toFixed(7) + ',' + aCoord[1].toFixed(7) + ',';
@@ -981,14 +1062,35 @@ function doneExportOsm(data)
 }
 
 
-function finalizeNetwork()
+function publishNetwork()
+{
+	if (isStatus(g_oClickedNetworks.properties.status, PUBLISHED))
+		$('#publishreplace').show();
+	else
+		$('#publishreplace').hide();
+	$(g_oDialogs['publishconfirm']).dialog('open');
+	document.activeElement.blur();
+}
+
+
+function confirmPublishNetwork()
 {
 	$.ajax(
 	{
-		'url': 'api/generatenetwork/finalize',
+		'url': 'api/generatenetwork/publish',
 		'method': 'POST',
-		'data': {'networkid': g_sCurNetwork, 'token': sessionStorage.token}
-	}).done(function() {alert('Finalize process queued');});
+		'data': {'networkid': g_sCurNetwork, 'token': sessionStorage.token, 'trafficmodel': $('#chkTrafficModel').is(':checked'), 'externalpublish': $('#chkExternalSharing').is(':checked'), 'roadwxmodel': $('#chkRoadWeatherModel').is(':checked') }
+	}).done(function() 
+	{
+		g_sCursor = '';
+		g_oMap.getCanvas().style.cursor = g_sCursor;
+		instructions(g_oInstructions['select'], 'Network successfully queue to publish');;
+		switchToMain();
+	}).fail(function() 
+	{
+		$('#instructions-error').html('Failed to queue network to publish.');
+		g_oMap.getCanvas().style.cursor = g_sCursor;
+	});
 }
 
 
@@ -1037,14 +1139,17 @@ function turnOffAddRemove()
 	g_oMap.off('mousemove', spotlight);
 	g_oMap.off('click', 'geo-lines', toggleInclude);
 	let oLineSrc = g_oMap.getSource('geo-lines');
-	let oData = oLineSrc._data;
-	while (g_oSpotlight.length > 0)
+	if (oLineSrc !== undefined)
 	{
-		let nId = g_oSpotlight.pop();
-		if (!oData.features[nId].properties.include)
-			oData.features[nId].properties.hidden = true;
+		let oData = oLineSrc._data;
+		while (g_oSpotlight.length > 0)
+		{
+			let nId = g_oSpotlight.pop();
+			if (!oData.features[nId].properties.include)
+				oData.features[nId].properties.hidden = true;
+		}
+		oLineSrc.setData(oData);
 	}
-	oLineSrc.setData(oData);
 	$(document).off('keyup', keyupExitAddRemove);
 }
 
@@ -1394,7 +1499,7 @@ function saveChanges()
 				'dataType': 'json',
 				'method': 'POST',
 				'networkid': g_sCurNetwork,
-				'data': {'token': sessionStorage.token, 'networkid': g_sCurNetwork}
+				'data': {'token': sessionStorage.token, 'networkid': g_sCurNetwork, 'published': 'false'}
 			}).done(selectSuccess).fail(function() 
 			{
 				instructions(g_oInstructions['select'], '', 'Failed to retrieve network')
@@ -1668,7 +1773,7 @@ function hashLonLat(dLon, dLat)
 
 function getBucket(nVal)
 {
-	return Math.floor(Math.floor(nVal, BUCKET_SPACING) / BUCKET_SPACING)
+	return Math.floor(Math.floor(nVal, BUCKET_SPACING) / BUCKET_SPACING);
 }
 
 function getFeatureId(oEvent)
@@ -1723,6 +1828,10 @@ function setCursor(sCursor)
 	g_sCursor = sCursor;
 }
 
+function isStatus(nStatus, nStatusToCheck)
+{
+	return (nStatus & nStatusToCheck) === nStatusToCheck;
+}
 
 
 
@@ -1730,4 +1839,5 @@ $(document).on('initPage', initialize);
 
 export {g_oMap, g_sCurNetwork, g_oCurBounds, g_oDialogs, g_sCursor, g_oInstructions, instructions, unHighlightPoint,
 		hoverHighlightPoint, hoverHighlight, unHighlight, updateHighlight, updateHighlightPoint, submitNetwork, cancelNetwork, toggleDialog,
-		turnOffAddRemove, turnOffMerge, turnOffSplit, startSelectNetwork, setCursor, cancelReprocess, confirmReprocess, closeNetworkSelect};
+		turnOffAddRemove, turnOffMerge, turnOffSplit, startSelectNetwork, setCursor, cancelReprocess, confirmReprocess, closeNetworkSelect,
+		confirmDeleteNetwork, confirmPublishNetwork, confirmLoadNetwork, turnOffDelete};

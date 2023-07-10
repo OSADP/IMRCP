@@ -137,7 +137,7 @@ function loadANetwork(oEvent)
 			'dataType': 'json',
 			'method': 'POST',
 			'networkid': oNetwork.properties.networkid,
-			'data': {'token': sessionStorage.token, 'networkid': oNetwork.properties.networkid}
+			'data': {'token': sessionStorage.token, 'networkid': oNetwork.properties.networkid, 'published': 'true'}
 		}).done(geoSuccess).fail(function() 
 		{
 			$('#pageoverlay').html(`<p class="centered-element">Failed to retrieve network: "${oNetwork.properties.label}"<br>Try again later.</p>`);

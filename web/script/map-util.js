@@ -6,7 +6,7 @@ const featureInSources = sources => feature => sources.has(feature.source);
 
 let g_oLayers = 
 {
-	'network-polygons': {'id': 'network-polygons', 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hidden'], false], 0.0, ['boolean', ['feature-state', 'hover'], false], 1.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
+	'network-polygons': {'id': 'network-polygons', 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hidden'], false], 0.0, ['boolean', ['feature-state', 'hover'], false], 1.0, 0.6], 'fill-color': ['match', ['get', 'displaystatus'], 0, '#808080', 1, '#006400', 2, '#9370db', 3, '#90ee90', 4, '#ff3333', '#ff3333']}},
 	'network-polygons-map': {'id': 'network-polygons-map', 'minzoom':0, 'maxzoom':6, 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 0, ['boolean', ['feature-state', 'hover'], false], 1.0, ['boolean', ['get', 'hidden'], false], 0.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
 	'network-polygons-report': {'id': 'network-polygons-report', 'minzoom':0, 'maxzoom':10, 'type': 'fill', 'source': 'network-polygons', 'paint':{'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 1.0, 0.6], 'fill-color': ['match', ['get', 'loaded'], 0, '#90ee90', 2, '#ff3333', 1, '#808080', '#ff3333']}},
 	'network-polygons-del': {'id': 'network-polygons-del', 'type': 'fill', 'source': 'network-polygons', 'paint': {'fill-opacity': ['case', ['boolean', ['feature-state', 'delete'], false], 1.0, 0], 'fill-pattern': 'delete'}},
@@ -491,6 +491,7 @@ function finishDrawPoly()
 	let oOutlineSource = oMap.getSource('poly-outline');
 	let oOutlineData = oOutlineSource._data;
 	oOutlineData.geometry.coordinates.splice(-1, 1);
+	oOutlineData.geometry.coordinates.push(oOutlineData.geometry.coordinates[0]);
 	oBoundsData.geometry.coordinates[0].splice(-2, 1);
 	oOutlineSource.setData(oOutlineData);
 	oBoundsSource.setData(oBoundsData);

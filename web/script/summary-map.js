@@ -258,22 +258,22 @@ async function initialize()
 		
 		let oAllNetworks = await pNetworks;
 		let oProfile = await pProfile;
-		let oNetworks = {'type': 'geojson', 'maxzoom': 9, 'data': {'type': 'FeatureCollection', 'features': []}};
-		
-		for (let oNetwork of oAllNetworks.values())
-		{
-			for (let oProfileNetwork of oProfile.networks.values())
-			{
-				if (oProfileNetwork.id === oNetwork.properties.networkid)
-				{
-					let oFeature = {'type': 'Feature', 'properties': oNetwork.properties, 'geometry': {'type': 'LineString', 'coordinates': oNetwork.geometry.coordinates[0]}};
-					oNetworks.data.features.push(oFeature);
-				}
-			}
-		}
-		
-		map.addSource('network-outlines', oNetworks);
-		map.addLayer(g_oLayers['network-outlines']);
+//		let oNetworks = {'type': 'geojson', 'maxzoom': 9, 'data': {'type': 'FeatureCollection', 'features': []}};
+//		
+//		for (let oNetwork of oAllNetworks.values())
+//		{
+//			for (let oProfileNetwork of oProfile.networks.values())
+//			{
+//				if (oProfileNetwork.id === oNetwork.properties.networkid)
+//				{
+//					let oFeature = {'type': 'Feature', 'properties': oNetwork.properties, 'geometry': {'type': 'LineString', 'coordinates': oNetwork.geometry.coordinates[0]}};
+//					oNetworks.data.features.push(oFeature);
+//				}
+//			}
+//		}
+//		
+//		map.addSource('network-outlines', oNetworks);
+//		map.addLayer(g_oLayers['network-outlines']);
 	});
 
 	const refreshMyMap = () => refreshMap(map, sources);

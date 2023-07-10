@@ -1,5 +1,5 @@
-import {g_oMap, g_oDialogs, g_oInstructions, instructions, submitNetwork, cancelNetwork, toggleDialog, turnOffAddRemove,
-	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess, closeNetworkSelect} from './network.js';
+import {g_oMap, g_oDialogs, g_oInstructions, instructions, submitNetwork, cancelNetwork, toggleDialog, turnOffAddRemove, turnOffDelete,
+	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess, closeNetworkSelect, confirmDeleteNetwork, confirmPublishNetwork, confirmLoadNetwork} from './network.js';
 import {toggleDetectorEdit, nextDetector, saveDetector, revertDetector, exitDetectorEdit, detChange, startDetector, selectFile} from './detectors.js';
 import {g_oLayers, removeSource} from './map-util.js';
 
@@ -144,8 +144,8 @@ function buildNetworkLegendDialog()
 	$("button[title|='Toggle Network Legend']").click({'dialog': 'networklegend'}, toggleDialog);
 	g_oDialogs['networklegend'] = '#dlgNetworkLegend';
 	
-	oDialog.dialog({autoOpen: false, position: {my: "right bottom", at: "right-8 bottom-8", of: "#mapid"}, resizable: false, width: 190, draggable: false});
-	let oTypes = {'Available': 'rgba(144, 238, 144, 0.6)', 'Processing': 'rgba(128, 128, 128, 0.6)', 'Error': 'rgba(255, 51, 51, 0.6)'};
+	oDialog.dialog({autoOpen: false, position: {my: "right bottom", at: "right-8 bottom-8", of: "#mapid"}, resizable: false, width: 220, draggable: false});
+	let oTypes = {'Assembling': 'rgba(128, 128, 128, 0.6)', 'Work In Progress': 'rgba(0, 100 ,0 , 0.6)', 'Publishing': 'rgba(147, 112, 219, 0.6)', 'Published': 'rgba(144, 238, 144, 0.6)', 'Error': 'rgba(255, 51, 51, 0.6)'};
 	
 	let sHtml = "<ul class='road-legend'>";
 	for (let [sType, sColor] of Object.entries(oTypes))
@@ -222,7 +222,7 @@ function buildDetectorEditDialog()
 //	sHtml += '<tr><td>In Service</td><td><input checked type="checkbox" id="det-insvc" name="insvc"></td></tr>';
 	sHtml += '<tr><td></td><td id="det-status"></td></tr>';
 	
-	sHtml += '</table></form>'
+	sHtml += '</table></form>';
 	
 	
 	oDialog.html(sHtml);
@@ -250,7 +250,7 @@ function buildDetectorStatusDialog()
 	sHtml += '<tr><td># of One-To-One Mappings</td><td id="status-onetoone"></td></tr>';
 	sHtml += '<tr><td># of One-To-Many Mappings</td><td id="status-onetomany"></td></tr>';
 	sHtml += '<tr><td># of No Mappings</td><td id="status-nomapping"></td></tr>';
-	sHtml += '</table>'
+	sHtml += '</table>';
 	oDialog.html(sHtml);
 }
 
@@ -260,7 +260,7 @@ function buildUploadConfirmDialog()
 	let oDialog = $('#dlgUploadConfirm');
 	g_oDialogs['uploadconfirm'] = '#dlgUploadConfirm';
 	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, width: 400, draggable: false,
-				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close')}},
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close');}},
 						  {text: 'Upload', click: function(){$(this).dialog('close'); selectFile();}}]});
 	
 	
@@ -281,12 +281,68 @@ function buildReprocessDialog()
 	g_oDialogs['reprocess'] = '#dlgReprocess';
 	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, width: 400, draggable: false, model: true,
 				buttons: [{text: 'Cancel', click: cancelReprocess},
-						  {text: 'Continue', click: confirmReprocess}
+						  {text: 'Reprocess', click: confirmReprocess}
 						]});
 	
-	oDialog.html('Reprocessing a network will cause all manual changes to be lost.');
+	oDialog.html('Reprocessing a network allows you to choose different road classifications but will cause all manual changes to be lost. Would you like to reprocess this network?');
 	oDialog.parent().find('button[title|="Close"]').on('click', cancelReprocess);
 }
+
+
+function buildDeleteConfirmDialog()
+{
+	let oDialog = $('#dlgDeleteConfirm');
+	g_oDialogs['deleteconfirm'] = '#dlgDeleteConfirm';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, modal: true, width: 400, draggable: false,
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close'); turnOffDelete();}},
+						  {text: 'Delete', click: function(){$(this).dialog('close'); confirmDeleteNetwork();}}]});
+	
+	
+	oDialog.html('Deleting a network is permanent. Do you want to delete this network?');
+}
+
+
+function buildPublishConfirmDialog() 
+{
+	let oDialog = $('#dlgPublishConfirm');
+	g_oDialogs['publishconfirm'] = '#dlgPublishConfirm';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, modal:true, width: 400, draggable: false,
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close');}},
+						  {text: 'Publish', click: function(){$(this).dialog('close'); confirmPublishNetwork();}}]});
+	
+	let sHtml = '<strong id="publishreplace">WARNING: You are about to replace an existing published road network. This is not recommended.<br><br></strong>';
+	sHtml += 'Choose which features to enable for this road network:<br><br>';
+	sHtml += '<input type="checkbox" checked id="chkTrafficModel">&nbsp;<label for="chkTrafficModel">Enable Traffic Model</label><br>';
+	sHtml += '<input type="checkbox" checked id="chkRoadWeatherModel">&nbsp;<label for="chkRoadWeatherModel">Enable Road Weather Model</label><br>';
+	sHtml += '<input type="checkbox" id="chkExternalSharing">&nbsp;<label for="chkExternalSharing">Enable External Sharing of Network</label><br><br>';
+	sHtml += 'Changes to the road network model after it is published are not recommended. Do you want to publish this network?';
+	oDialog.html(sHtml);
+}
+
+
+function buildEditPublishConfirmDialog()
+{
+	let oDialog = $('#dlgEditPublishConfirm');
+	g_oDialogs['editpublishconfirm'] = '#dlgEditPublishConfirm';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, modal:true, width: 400, draggable: false,
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close');}},
+						  {text: 'Continue', click: function(){$(this).dialog('close'); confirmLoadNetwork();}}]});
+
+	oDialog.html('You are about to edit a published road network model. This is not recommended. Do you want to continue?');
+}
+
+
+function buildOverwritePublishConfirmDialog()
+{
+	let oDialog = $('#dlgOverwritePublishConfirm');
+	g_oDialogs['overwritepublishconfirm'] = '#dlgOverwritePublishConfirm';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, modal:true, width: 400, draggable: false,
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close');}},
+						  {text: 'Overwrite', click: function(){$(this).dialog('close'); confirmPublishNetwork();}}]});
+
+	oDialog.html('You are about to overwrite a published network. This is not recommended or fully supported. Do you want to continue?');
+}
+
 
 function buildNetworkSelectDialog()
 {
@@ -314,4 +370,8 @@ export {buildNetworkDialog,
 		buildUploadConfirmDialog,
 		buildNetworkMetadataDialog,
 		buildReprocessDialog,
+		buildDeleteConfirmDialog,
+		buildPublishConfirmDialog,
+		buildEditPublishConfirmDialog,
+		buildOverwritePublishConfirmDialog,
 		buildNetworkSelectDialog};

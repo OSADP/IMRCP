@@ -195,6 +195,7 @@ function loadANetwork(oEvent)
 			g_oMap.removeLayer('network-polygons-report');
 		if (g_oMap.getLayer('geo-lines-scenario') === undefined)
 			g_oMap.addLayer(g_oLayers['geo-lines-scenario']);
+		finishedStyling();
 		startScenario();
 	}
 	else
@@ -206,7 +207,7 @@ function loadANetwork(oEvent)
 			'dataType': 'json',
 			'method': 'POST',
 			'networkid': oNetwork.properties.networkid,
-			'data': {'token': sessionStorage.token, 'networkid': oNetwork.properties.networkid}
+			'data': {'token': sessionStorage.token, 'networkid': oNetwork.properties.networkid, 'published': 'true'}
 		}).done(geoSuccess).fail(function() 
 		{
 			$('#pageoverlay').html(`<p class="centered-element">Failed to retrieve network: "${oNetwork.properties.label}"<br>Try again later.</p>`);
@@ -531,7 +532,7 @@ function setModelOptions()
 		sOptions = '<option value="select">Select forecast model...</option>';
 		for (let sOpt of aOptions.values())
 			sOptions += `<option value="${sOpt}">${sOpt}</option>`;
-		sOptions += '<option value="both">Both</option>';
+		sOptions += '<option value="Both">Both</option>';
 		$('#btnNewGroup').addClass('ui-button-disabled ui-state-disabled');
 	}
 	let oModels = $('#modelstorun');
@@ -1351,7 +1352,10 @@ function buildRun()
 
 function runScenario()
 {
-	let oData = {'token': sessionStorage.token, 'starttime': $('#dtpicker').datetimepicker('getValue').valueOf(), 'name': $('#scenarioRun').val(), 'template': $('#scenarioName').val()};
+	let oScenario = {'name': $('#scenarioName').val()};
+	let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
+	oScenario = g_oScenarios[nIndex];
+	let oData = {'token': sessionStorage.token, 'starttime': $('#dtpicker').datetimepicker('getValue').valueOf(), 'name': $('#scenarioRun').val(), 'template': oScenario.name, 'user': oScenario.user};
 
 	$.ajax(
 	{
@@ -1388,13 +1392,14 @@ function saveScenario(bOverwrite)
 			oScenario.trafficmodel = false;
 			oScenario.roadwxmodel = true;
 		}
-			let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
+		
+		let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
 		let bIsShared = false;
 		let sUser;
-			if (nIndex >= 0)
-			{
-		sUser = g_oScenarios[nIndex].user;
-		bIsShared = g_oScenarios[nIndex].isshared;
+		if (nIndex >= 0)
+		{
+			sUser = g_oScenarios[nIndex].user;
+			bIsShared = g_oScenarios[nIndex].isshared;
 		}
 		if (!bOverwrite)
 		{
