@@ -13,12 +13,9 @@ import imrcp.system.Id;
 import imrcp.system.Introsort;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import qh.Point;
-import qh.QuickHullAlgorithm;
 
 /**
  * This class represents the roadway networks used by the system. They are 
@@ -27,6 +24,11 @@ import qh.QuickHullAlgorithm;
  */
 public class Network implements Comparable<Network>
 {
+	public static final int ASSEMBLING = 0b1;
+	public static final int WORKINPROGRESS = 0b10;
+	public static final int PUBLISHING = 0b100;
+	public static final int PUBLISHED = 0b1000;
+	public static final int ERROR = 0b10000;
 	/**
 	 * Bounding polygon of the network
 	 */
@@ -45,13 +47,7 @@ public class Network implements Comparable<Network>
 	 * 1 - in the process of loading segments
 	 * 2 - an error occurred when loading segments
 	 */
-	public int m_nLoaded;
-
-	
-	/**
-	 * Flag indicting if the network has been finalized or not
-	 */
-	public boolean m_bFinalized;
+	public int m_nStatus;
 
 	
 	/**
@@ -81,7 +77,7 @@ public class Network implements Comparable<Network>
 	/**
 	 * List of the roadway segment Ids included in the network
 	 */
-	public ArrayList<Id> m_oSegmentIds;
+	public ArrayList<OsmWay> m_oNetworkWays;
 
 	
 	/**
@@ -92,6 +88,7 @@ public class Network implements Comparable<Network>
 	
 	public boolean m_bCanRunTraffic;
 	public boolean m_bCanRunRoadWeather;
+	public boolean m_bExternalPublish = true;
 	
 	
 	/**
@@ -117,11 +114,10 @@ public class Network implements Comparable<Network>
 	Network(String sId, String sLabel, String[] sOptions, int[] nGeo)
 	{
 		m_sFilter = m_sStates = new String[0]; // these will get set later
-		m_oSegmentIds = new ArrayList();
+		m_oNetworkWays = new ArrayList();
 		m_sNetworkId = sId;
 		m_sLabel = sLabel;
-		m_bFinalized = false;
-		m_nLoaded = 1; // network is still processing
+		m_nStatus = ASSEMBLING; // network is still processing
 		m_sOptions = sOptions;
 		m_nGeometry = nGeo;
 	}
@@ -132,18 +128,16 @@ public class Network implements Comparable<Network>
 	 * file and the list of Ways and Nodes contained in the Network
 	 * @param oFeature JSON representation of the Network
 	 * @param oWays a list of the roadway segments in the Network
-	 * @param oNodes a list of the nodes that make up all of the roadway segments
-	 * int the Network
 	 */
-	public Network(JSONObject oFeature, ArrayList<OsmWay> oWays, ArrayList<OsmNode> oNodes)
+	public Network(JSONObject oFeature, ArrayList<OsmWay> oWays, WayNetworks oWayNetworks)
 	{
 		JSONObject oProps = oFeature.getJSONObject("properties");
 		m_sLabel = oProps.getString("label");
-		m_nLoaded = oProps.getInt("loaded");
-		m_bFinalized = oProps.getBoolean("finalized");
+		m_nStatus = oProps.getInt("status");
 		m_sNetworkId = oProps.getString("networkid");
 		m_bCanRunTraffic = oProps.optBoolean("canruntraffic", true);
 		m_bCanRunRoadWeather = oProps.optBoolean("canrunroadwx", true);
+		m_bExternalPublish = oProps.optBoolean("publish", true);
 		
 		JSONArray oFilter = oProps.optJSONArray("filter");
 		if (oFilter != null)
@@ -175,72 +169,37 @@ public class Network implements Comparable<Network>
 		else
 			m_sStates = new String[0];
 		
-		m_oSegmentIds = new ArrayList(oWays.size());
+		m_oNetworkWays = new ArrayList(oWays.size());
 		for (OsmWay oWay : oWays)
-			m_oSegmentIds.add(oWay.m_oId);
-		
-		Introsort.usort(m_oSegmentIds, Id.COMPARATOR);
-		
-		if (oNodes == null) // the nodes are not defined so get the geometry from the coordinates array
 		{
-			JSONArray oCoords = oFeature.getJSONObject("geometry").getJSONArray("coordinates").getJSONArray(0);
-			int[] nGeoWBb = Arrays.newIntArray(oCoords.length() + 6);
-			nGeoWBb = Arrays.add(nGeoWBb, 1); // 1 outer ring
-			nGeoWBb = Arrays.add(nGeoWBb, oCoords.length());
-			nGeoWBb = Arrays.add(nGeoWBb, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
-			for (int nIndex = 0; nIndex < oCoords.length(); nIndex++)
-			{
-				JSONArray oPt = oCoords.getJSONArray(nIndex);
-				int nLon = GeoUtil.toIntDeg(oPt.getDouble(0));
-				int nLat = GeoUtil.toIntDeg(oPt.getDouble(1));
-				
-				nGeoWBb = Arrays.addAndUpdate(nGeoWBb, nLon, nLat, 3);
-			}
-			if (nGeoWBb[7] == nGeoWBb[nGeoWBb[0] - 2] && nGeoWBb[8] == nGeoWBb[nGeoWBb[0] - 1]) // ensure the polygon is open
-			{
-				nGeoWBb[0] -= 2;
-				--nGeoWBb[2]; // decrease point count
-			}
-			m_nGeometry = nGeoWBb;
+			OsmWay oSystemWay = oWayNetworks.getWayById(oWay.m_oId);
+			if (oSystemWay != null)
+				m_oNetworkWays.add(oSystemWay);
 		}
-		else // use the nodes to calculate the convex hull
+		
+		Introsort.usort(m_oNetworkWays, OsmWay.WAYBYTEID);
+		
+		JSONArray oCoords = oFeature.getJSONObject("geometry").getJSONArray("coordinates").getJSONArray(0);
+		int[] nGeoWBb = Arrays.newIntArray(oCoords.length() + 6);
+		nGeoWBb = Arrays.add(nGeoWBb, 1); // 1 outer ring
+		nGeoWBb = Arrays.add(nGeoWBb, oCoords.length());
+		nGeoWBb = Arrays.add(nGeoWBb, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+		for (int nIndex = 0; nIndex < oCoords.length(); nIndex++)
 		{
-			ArrayList<Point> oPoints = new ArrayList();
-			for (OsmNode oNode : oNodes)
-				oPoints.add(new Point(oNode.m_nLon, oNode.m_nLat));
-			QuickHullAlgorithm oQh = new QuickHullAlgorithm(oPoints);
+			JSONArray oPt = oCoords.getJSONArray(nIndex);
+			int nLon = GeoUtil.toIntDeg(oPt.getDouble(0));
+			int nLat = GeoUtil.toIntDeg(oPt.getDouble(1));
 
-			Comparator<Point> oComp = (Point o1, Point o2) -> 
-			{
-				int nRet = Double.compare(o1.getX(), o2.getX());
-				if (nRet == 0)
-					nRet = Double.compare(o1.getY(), o1.getY());
-				
-				return nRet;
-			};
-			ArrayList<Point> oHull = oQh.getHullPoints();
-			if (oComp.compare(oHull.get(0), oHull.get(oHull.size() - 1)) != 0)
-				oHull.add(oHull.get(0));
-			int[] nGeoWBb = Arrays.newIntArray(oHull.size() + 6);
-			nGeoWBb = Arrays.add(nGeoWBb, 1); // 1 outer ring
-			nGeoWBb = Arrays.add(nGeoWBb, oHull.size());
-			nGeoWBb = Arrays.add(nGeoWBb, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
-			for (Point oPt : oHull)
-			{
-				int nLon = (int)oPt.getX();
-				int nLat = (int)oPt.getY();
-
-				nGeoWBb = Arrays.addAndUpdate(nGeoWBb, nLon, nLat, 3);
-			}
-			
-			if (nGeoWBb[7] == nGeoWBb[nGeoWBb[0] - 2] && nGeoWBb[8] == nGeoWBb[nGeoWBb[0] - 1]) // ensure the polygon is open
-			{
-				nGeoWBb[0] -= 2;
-				--nGeoWBb[2]; // decrease point count
-			}
-			
-			m_nGeometry = nGeoWBb;
+			nGeoWBb = Arrays.addAndUpdate(nGeoWBb, nLon, nLat, 3);
 		}
+		if (nGeoWBb[7] == nGeoWBb[nGeoWBb[0] - 2] && nGeoWBb[8] == nGeoWBb[nGeoWBb[0] - 1]) // ensure the polygon is open
+		{
+			nGeoWBb[0] -= 2;
+			--nGeoWBb[2]; // decrease point count
+		}
+		if (!GeoUtil.isClockwise(nGeoWBb, 2))
+			GeoUtil.reverseRing(nGeoWBb, 2);
+		m_nGeometry = nGeoWBb;
 	}
 	
 	
@@ -254,16 +213,16 @@ public class Network implements Comparable<Network>
 		JSONObject oFeature = new JSONObject(); // Feature object
 		oFeature.put("type", "Feature");
 		JSONObject oProps = new JSONObject(); // properties object
-		oProps.put("loaded", m_nLoaded);
+		oProps.put("status", m_nStatus);
 		oProps.put("networkid", m_sNetworkId);
 		oProps.put("label", m_sLabel);
-		oProps.put("segments", m_oSegmentIds.size());
-		oProps.put("filter", m_sFilter);
-		oProps.put("options", m_sOptions);
-		oProps.put("states", m_sStates);
-		oProps.put("finalized", m_bFinalized);
+		oProps.put("segments", m_oNetworkWays.size());
+		oProps.put("filter", new JSONArray(m_sFilter));
+		oProps.put("options", new JSONArray(m_sOptions));
+		oProps.put("states", new JSONArray(m_sStates));
 		oProps.put("canruntraffic", m_bCanRunTraffic);
 		oProps.put("canrunroadwx", m_bCanRunRoadWeather);
+		oProps.put("publish", m_bExternalPublish);
 		oFeature.put("properties", oProps);
 		
 		JSONObject oGeo = new JSONObject(); // geometry object
@@ -275,9 +234,9 @@ public class Network implements Comparable<Network>
 		while (oIt.hasNext())
 		{
 			int[] nPt = oIt.next();
-			oRing.put(new double[]{GeoUtil.fromIntDeg(nPt[0]), GeoUtil.fromIntDeg(nPt[1])});
+			oRing.put(new JSONArray(new double[]{GeoUtil.fromIntDeg(nPt[0]), GeoUtil.fromIntDeg(nPt[1])}));
 		}
-		oRing.put(new double[]{GeoUtil.fromIntDeg(m_nGeometry[7]), GeoUtil.fromIntDeg(m_nGeometry[8])});
+		oRing.put(new JSONArray(new double[]{GeoUtil.fromIntDeg(m_nGeometry[7]), GeoUtil.fromIntDeg(m_nGeometry[8])}));
 		oCoords.put(oRing);
 		oGeo.put("coordinates", oCoords);
 		
@@ -359,12 +318,12 @@ public class Network implements Comparable<Network>
 	 * Determines if the given roadway segment is a part of and inside the
 	 * Network.
 	 * @param oWay roadway segment to test
-	 * @return true if the OsmWay's Id is in {@link #m_oSegmentIds} and at least
+	 * @return true if the OsmWay's Id is in {@link #m_oNetworkWays} and at least
 	 * one of its Nodes is inside the Network polygon, otherwise false
 	 */
 	public boolean wayInside(OsmWay oWay)
 	{
-		if (Collections.binarySearch(m_oSegmentIds, oWay.m_oId, Id.COMPARATOR) >= 0)
+		if (Collections.binarySearch(m_oNetworkWays, oWay, OsmWay.WAYBYTEID) >= 0)
 		{
 			int[] nGeo = Arrays.newIntArray(oWay.m_oNodes.size() + 4);
 			nGeo = Arrays.add(nGeo, oWay.m_nMinLon, oWay.m_nMinLat);
@@ -384,17 +343,30 @@ public class Network implements Comparable<Network>
 	 * 
 	 * @param oId Id to test
 	 * @return true if the Id does not represent a roadway segment or if the Id
-	 * represents a roadway segment and is in {@link #m_oSegmentIds}, otherwise
+	 * represents a roadway segment and is in {@link #m_oNetworkWays}, otherwise
 	 * false
 	 */
-	public boolean includeId(Id oId)
+	public boolean includeWay(OsmWay oWay)
 	{
-		if (Id.isSegment(oId))
-		{
-			return Collections.binarySearch(m_oSegmentIds, oId, Id.COMPARATOR) >= 0;
-		}
-		
-		return true;
+		return Collections.binarySearch(m_oNetworkWays, oWay, OsmWay.WAYBYTEID) >= 0;
+	}
+	
+	
+	public boolean isStatus(int nStatusToCheck)
+	{
+		return (m_nStatus & nStatusToCheck) == nStatusToCheck;
+	}
+	
+	
+	public void addStatus(int nStatusToAdd)
+	{
+		m_nStatus = m_nStatus | nStatusToAdd;
+	}
+	
+	
+	public void removeStatus(int nStatusToRemove)
+	{
+		m_nStatus = m_nStatus & ~nStatusToRemove;
 	}
 	
 	

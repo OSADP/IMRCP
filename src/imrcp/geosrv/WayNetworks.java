@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -49,29 +50,25 @@ import org.json.JSONTokener;
  */
 public class WayNetworks extends BaseBlock
 {
+	public static final String NETWORKFF = "networks/%s/%s.bin";
+	
 	/**
 	 * Contains HashBuckets which spatial index roadway segments on a grid whose
 	 * size is based on {@link HashBucket#BUCKET_SPACING}
 	 */
-	private final ArrayList<HashBucket> m_oHashes = new ArrayList();
+	private ArrayList<HashBucket> m_oHashes = new ArrayList();
 
 	
 	/**
 	 * Contains OsmWays sorted by Id
 	 */
-	private final ArrayList<OsmWay> m_oWaysById = new ArrayList();
+	private ArrayList<OsmWay> m_oWaysById = new ArrayList();
 
 	
 	/**
 	 * Format string used to generate geometry files for the different networks
 	 */
 	private String m_sGeoFileFormat;
-
-	
-	/**
-	 * Zoom level used for spatial indexing roadway segments by map tiles
-	 */
-	private final int m_nZoom = 9;
 
 	
 	/**
@@ -109,13 +106,10 @@ public class WayNetworks extends BaseBlock
 	public void reset(JSONObject oBlockConfig)
 	{
 		super.reset(oBlockConfig);
-		m_sGeoFileFormat = oBlockConfig.optString("geolines", "");
-		if (m_sGeoFileFormat.startsWith("/"))
-			m_sGeoFileFormat = m_sGeoFileFormat.substring(1);
 		m_sNetworkFile = oBlockConfig.optString("networkfile", "");
 		if (m_sNetworkFile.startsWith("/"))
 			m_sNetworkFile = m_sNetworkFile.substring(1);
-		m_sGeoFileFormat = m_sDataPath + m_sGeoFileFormat;
+		m_sGeoFileFormat = m_sDataPath + NETWORKFF;
 		m_sNetworkFile = m_sDataPath + m_sNetworkFile;
 		String[] sTzs = JSONUtil.getStringArray(oBlockConfig, "tzs");
 		for (int nIndex = 0; nIndex < sTzs.length;)
@@ -155,30 +149,31 @@ public class WayNetworks extends BaseBlock
 			try (BufferedReader oIn = Files.newBufferedReader(oNetworkFile, StandardCharsets.UTF_8))
 			{
 				JSONArray oFeatures = new JSONArray(new JSONTokener(oIn));
-				ArrayList<OsmWay> oEmptyWays = new ArrayList(1); // reference that can be used for Networks that are not finalized
 				for (int nIndex = 0; nIndex < oFeatures.length(); nIndex++)
-				{
-					JSONObject oFeature = oFeatures.getJSONObject(nIndex);
-					if (oFeature.getJSONObject("properties").optBoolean("finalized", false)) // set if the Network is finalized
-						loadNetwork(oFeature, false);
-					else	
-					{
-						Network oNetwork = new Network(oFeature, oEmptyWays, null);
-						synchronized (m_oNetworks)
-						{
-							int nSearch = Collections.binarySearch(m_oNetworks, oNetwork);
-							if (nSearch < 0) // add networks once
-								m_oNetworks.add(~nSearch, oNetwork);
-							else
-								m_oNetworks.set(nSearch, oNetwork);
-						}
-					}
-										
-				}
-
+					loadNetwork(oFeatures.getJSONObject(nIndex));										
 			}
 		}
 		
+		return true;
+	}
+	
+	
+	@Override
+	public boolean stop()
+		throws Exception
+	{
+		synchronized (m_oNetworks)
+		{
+			for (Network oNetwork : m_oNetworks)
+			{
+				if (oNetwork.isStatus(Network.PUBLISHING))
+				{
+					oNetwork.removeStatus(Network.PUBLISHING);
+					oNetwork.addStatus(Network.WORKINPROGRESS);
+				}
+			}
+		}
+		writeNetworkFile();
 		return true;
 	}
 	
@@ -194,22 +189,22 @@ public class WayNetworks extends BaseBlock
 	 * new Network has been loaded into memory
 	 * @throws IOException
 	 */
-	private void loadNetwork(JSONObject oNetworkFeature, boolean bNotify)
+	private synchronized void loadNetwork(JSONObject oNetworkFeature)
 		throws IOException
 	{
 		String sId = oNetworkFeature.getJSONObject("properties").getString("networkid");
-		String sGeoFile = String.format(m_sGeoFileFormat, sId);
-		ArrayList<OsmNode> oNodes = new ArrayList();
 		ArrayList<OsmWay> oWays = new ArrayList();
-		StringPool oPool = new StringPool();
-		Mercator oM = new Mercator();
-		int[] nTile = new int[2];
-		new OsmBinParser().parseFile(sGeoFile, oNodes, oWays, oPool); // read the OSM binary file
-		if (oNetworkFeature.getJSONObject("properties").getBoolean("finalized"))
+		if ((oNetworkFeature.getJSONObject("properties").getInt("status") & Network.PUBLISHED) == Network.PUBLISHED)
 		{
+			String sGeoFile = String.format(m_sGeoFileFormat, sId, "published");
+			ArrayList<OsmNode> oNodes = new ArrayList();
+			
+			StringPool oPool = new StringPool();
+			new OsmBinParser().parseFile(sGeoFile, oNodes, oWays, oPool); // read the OSM binary file
+
 			synchronized (m_oMetadata)
 			{
-				Path oSpdLimitFile = Paths.get(sGeoFile.replace("geo.bin", "spdlimit.bin"));
+				Path oSpdLimitFile = Paths.get(String.format(m_sGeoFileFormat, sId, "spdlimit"));
 				if (Files.exists(oSpdLimitFile))
 				{
 					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oSpdLimitFile))) // read speed limit file
@@ -217,14 +212,14 @@ public class WayNetworks extends BaseBlock
 						while (oIn.available() > 0)
 						{
 							WayMetadata oMetadata = new WayMetadata(new Id(oIn));
-							oMetadata.m_nSpdLimit = oIn.readByte();
+							oMetadata.m_nSpdLimit = oIn.readUnsignedByte();
 							m_oMetadata.add(oMetadata);
 						}
 					}
 				}
 
 				Introsort.usort(m_oMetadata, (WayMetadata o1, WayMetadata o2) -> Id.COMPARATOR.compare(o1.m_oId, o2.m_oId));
-				Path oLanesFile = Paths.get(sGeoFile.replace("geo.bin", "lanes.bin"));
+				Path oLanesFile = Paths.get(String.format(m_sGeoFileFormat, sId, "lanes"));
 				if (Files.exists(oLanesFile))
 				{
 					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oLanesFile))) // read lanes file
@@ -241,8 +236,8 @@ public class WayNetworks extends BaseBlock
 						}
 					}
 				}
-				
-				Path oElevFile = Paths.get(sGeoFile.replace("geo.bin", "msl_elev.bin"));
+
+				Path oElevFile = Paths.get(String.format(m_sGeoFileFormat, sId, "msl_elev"));
 				if (Files.exists(oElevFile)) // read mean sea level elevation file
 				{
 					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oElevFile)))
@@ -266,7 +261,7 @@ public class WayNetworks extends BaseBlock
 						}
 					}
 				}
-				oElevFile = Paths.get(sGeoFile.replace("geo.bin", "ground_elev.bin")); // read ground elevation file
+				oElevFile = Paths.get(String.format(m_sGeoFileFormat, sId, "ground_elev")); // read ground elevation file
 				if (Files.exists(oElevFile))
 				{
 					try (DataInputStream oIn = new DataInputStream(Files.newInputStream(oElevFile)))
@@ -294,6 +289,7 @@ public class WayNetworks extends BaseBlock
 			ArrayList<HashBucket> oHashes = new ArrayList();
 			for (OsmWay oWay : oWays)
 			{
+				oWay.m_bInUse = true;
 				oHashes.clear();
 				int nLimit = oWay.m_oNodes.size() - 1;
 				for (int nNodeIndex = 0; nNodeIndex < nLimit;) // for each node determine which hash grid and map tile the roadway segment intersects
@@ -303,12 +299,15 @@ public class WayNetworks extends BaseBlock
 					getHashes(oHashes, o1.m_nLon, o1.m_nLat, o2.m_nLon, o2.m_nLat, 0, 0, true);
 				}
 
-				
+
 				for (HashBucket oHash : oHashes)
 				{
-					int nWayIndex = Collections.binarySearch(oHash, oWay, OsmWay.WAYBYTEID);
-					if (nWayIndex < 0)
-						oHash.add(~nWayIndex, oWay);
+					synchronized (oHash)
+					{
+						int nWayIndex = Collections.binarySearch(oHash, oWay, OsmWay.WAYBYTEID);
+						if (nWayIndex < 0)
+							oHash.add(~nWayIndex, oWay);
+					}
 				}
 
 				synchronized (m_oWaysById)
@@ -319,8 +318,9 @@ public class WayNetworks extends BaseBlock
 				}
 			}
 		}
+		m_oLogger.debug("Total ways: " + m_oWaysById.size());
 		
-		Network oNetwork = new Network(oNetworkFeature, oWays, oNodes);
+		Network oNetwork = new Network(oNetworkFeature, oWays, this);
 		synchronized (m_oNetworks)
 		{
 			int nSearch = Collections.binarySearch(m_oNetworks, oNetwork);
@@ -329,9 +329,6 @@ public class WayNetworks extends BaseBlock
 			else
 				m_oNetworks.set(nSearch, oNetwork);
 		}
-		
-		if (bNotify)
-			notify("new ways");
 	}
 	
 	
@@ -352,7 +349,7 @@ public class WayNetworks extends BaseBlock
 	 * @param nLatTol tolerance to add to/subtract from latitudes
 	 * @param bAdd flag indicating if new buckets should be added to {@link #m_oHashes}
 	 */
-	private synchronized void getHashes(ArrayList<HashBucket> oHashes, int nXmin, int nYmin,
+	private void getHashes(ArrayList<HashBucket> oHashes, int nXmin, int nYmin,
 	   int nXmax, int nYmax, int nTol, int nLatTol, boolean bAdd)
 	{
 		if (nXmin > nXmax) // re-order longitude as needed
@@ -383,22 +380,25 @@ public class WayNetworks extends BaseBlock
 		int nYend = HashBucket.getBucket(nYmax);
 
 		HashBucket oHash; // <= comparison used to always have at least one bucket
-		for (int nY = nYbeg; nY <= nYend; nY++)
+		synchronized (m_oHashes)
 		{
-			for (int nX = nXbeg; nX <= nXend; nX++)
+			for (int nY = nYbeg; nY <= nYend; nY++)
 			{
-				oSearch.m_nHash = HashBucket.hashBucketVals(nX, nY);
-				int nCellIndex = Collections.binarySearch(m_oHashes, oSearch);
-				if (bAdd && nCellIndex < 0) // existing bucket cell not found
+				for (int nX = nXbeg; nX <= nXend; nX++)
 				{
-					oHash = new HashBucket();
-					oHash.m_nHash = oSearch.m_nHash;
-					nCellIndex = ~nCellIndex;
-					m_oHashes.add(nCellIndex, oHash); // add bucket cell to cache
-				}
+					oSearch.m_nHash = HashBucket.hashBucketVals(nX, nY);
+					int nCellIndex = Collections.binarySearch(m_oHashes, oSearch);
+					if (bAdd && nCellIndex < 0) // existing bucket cell not found
+					{
+						oHash = new HashBucket();
+						oHash.m_nHash = oSearch.m_nHash;
+						nCellIndex = ~nCellIndex;
+						m_oHashes.add(nCellIndex, oHash); // add bucket cell to cache
+					}
 
-				if (nCellIndex >= 0)
-					oHashes.add(m_oHashes.get(nCellIndex));
+					if (nCellIndex >= 0)
+						oHashes.add(m_oHashes.get(nCellIndex));
+				}
 			}
 		}
 	}
@@ -486,6 +486,8 @@ public class WayNetworks extends BaseBlock
 		{
 			for (OsmWay oWay : oBucket)
 			{
+				if (!oWay.m_bInUse)
+					continue;
 				int nIndex = Collections.binarySearch(oWays, oWay, OsmWay.WAYBYTEID);
 				if (nIndex < 0) // include each segment only once
 					oWays.add(~nIndex, oWay);
@@ -584,7 +586,11 @@ public class WayNetworks extends BaseBlock
 		{
 			int nIndex = Collections.binarySearch(m_oWaysById, oSearch, OsmWay.WAYBYTEID);
 			if (nIndex >= 0)
-				return m_oWaysById.get(nIndex);
+			{
+				OsmWay oReturn = m_oWaysById.get(nIndex);
+				if (oReturn.m_bInUse)
+					return oReturn;
+			}
 		}
 		return null;
 	}
@@ -626,30 +632,122 @@ public class WayNetworks extends BaseBlock
 	{
 		Network oSearch = new Network();
 		oSearch.m_sNetworkId = sId;
+		Network oRemove = null;
 		synchronized (m_oNetworks)
 		{
 			int nIndex = Collections.binarySearch(m_oNetworks, oSearch);
 			if (nIndex >= 0) // find the Network in memory
 			{
-				m_oNetworks.remove(nIndex); // remove it from memory
-				writeNetworkFile(); // rewrite the Network JSON file
-				Path oDir = Paths.get(String.format(m_sGeoFileFormat, sId)).getParent();
-				if (Files.exists(oDir)) // delete all of the files and directory associated with the Network.
-				{
-					List<Path> oPaths = Files.walk(oDir, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).collect(Collectors.toList());
-					for (Path oPath : oPaths)
-					{
-						if (Files.exists(oPath))
-							Files.delete(oPath);
-					}
-				}
-				return true;
+				oRemove = m_oNetworks.remove(nIndex); // remove it from memory
 			}
 		}
-		
-		return false;
+		writeNetworkFile(); // rewrite the Network JSON file
+		if (oRemove == null)
+			return false;
+		if (oRemove.isStatus(Network.PUBLISHED))
+			updateWays(oRemove);
+		Path oDir = Paths.get(String.format(m_sGeoFileFormat, sId, "unpublished")).getParent();
+		if (Files.exists(oDir)) // delete all of the files and directory associated with the Network.
+		{
+			List<Path> oPaths = Files.walk(oDir, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+			for (Path oPath : oPaths)
+			{
+				if (Files.exists(oPath))
+					Files.delete(oPath);
+			}
+		}
+		return true;
 	}
 	
+	
+	public synchronized void updateWays(Network oNetwork)
+	{
+		for (OsmWay oWay : oNetwork.m_oNetworkWays)
+		{
+			oWay.m_bInUse = false;
+		}
+		m_oLogger.debug("Flagged to remove: " + oNetwork.m_oNetworkWays.size());
+		ArrayList<HashBucket> oNewBuckets = new ArrayList(m_oHashes.size());
+		for (int nHashIndex = 0; nHashIndex < m_oHashes.size(); nHashIndex++)
+		{
+			HashBucket oHash = m_oHashes.get(nHashIndex);
+			HashBucket oNew = new HashBucket(oHash.m_nHash);
+
+			for (int nWayIndex = 0; nWayIndex< oHash.size(); nWayIndex++)
+			{
+				OsmWay oWay = oHash.get(nWayIndex);
+				if (oWay.m_bInUse)
+					oNew.add(oWay);
+				else
+					oWay.removeRefs();
+			}
+			oNew.m_oNodes = OsmUtil.removeZeroRefs(oHash.m_oNodes);
+			oNewBuckets.add(oNew);
+		}
+		
+		ArrayList<OsmWay> oNewWaysById = new ArrayList(m_oWaysById.size());
+		ArrayList<WayMetadata> oNewMetadata = new ArrayList(m_oMetadata.size());
+		for (int nWayIndex = 0; nWayIndex < m_oWaysById.size(); nWayIndex++)
+		{
+			OsmWay oWay = m_oWaysById.get(nWayIndex);
+			if (oWay.m_bInUse)
+			{
+				oNewWaysById.add(oWay);
+				WayMetadata oMetadata = getMetadata(oWay.m_oId);
+				if (oMetadata.m_oId.compareTo(Id.NULLID) != 0)
+					oNewMetadata.add(oMetadata);
+			}
+		}
+		int nIndex = Collections.binarySearch(oNewMetadata, DEFAULTMETADATA);
+		if (nIndex < 0)
+			oNewMetadata.add(~nIndex, DEFAULTMETADATA);
+		
+		ArrayList<HashBucket> oTempHashes;
+		synchronized (m_oHashes)
+		{
+			oTempHashes = m_oHashes;
+			m_oHashes = oNewBuckets;
+		}
+		ArrayList<OsmWay> oTempWays;
+		synchronized (m_oWaysById)
+		{
+			oTempWays = m_oWaysById;
+			m_oWaysById = oNewWaysById;
+		}
+		m_oLogger.debug("Total ways after update: " + m_oWaysById.size());
+		ArrayList<WayMetadata> oTempMetadata;
+		synchronized (m_oMetadata)
+		{
+			oTempMetadata = m_oMetadata;
+			m_oMetadata = oNewMetadata;
+		}
+		
+		for (nIndex = 0; nIndex < oTempHashes.size(); nIndex++)
+		{
+			HashBucket oHash = oTempHashes.get(nIndex);
+			oHash.clear();
+			oHash.m_oNodes.clear();
+			oHash.m_oNodes = null;
+		}
+		oTempHashes.clear();
+		oTempHashes = null;
+		
+		for (nIndex = 0; nIndex < oTempWays.size(); nIndex++)
+		{
+			OsmWay oWay = oTempWays.get(nIndex);
+			if (!oWay.m_bInUse)
+			{
+				oWay.clear();
+				oWay.m_oNodes.clear();
+				oWay.m_oNodes = null;
+			}
+		}
+		oTempWays.clear();
+		oTempWays = null;
+		
+		oTempMetadata.clear();
+		oTempMetadata = null;
+	}
 	
 	/**
 	 * Resets the Network with the given Id to have its roadway segments be
@@ -673,8 +771,8 @@ public class WayNetworks extends BaseBlock
 			{
 				Network oNetwork = m_oNetworks.get(nIndex);
 				oNetwork.m_sLabel = sLabel; // update the label
-				oNetwork.m_nLoaded = 1; // set its loaded status to Processing
-				oNetwork.m_bFinalized = false; // it is no longer finalized
+				oNetwork.removeStatus(Network.WORKINPROGRESS);
+				oNetwork.addStatus(Network.ASSEMBLING);
 				writeNetworkFile(); // rewrite the Network JSON file to save the changes
 				return true;
 			}
@@ -686,37 +784,65 @@ public class WayNetworks extends BaseBlock
 	
 	/**
 	 * Calls {@link Scheduling#execute(java.lang.Runnable)} to schedule the 
-	 * Network with the given Id to be finalized which calls {@link OsmUtil#finalizeNetwork(java.lang.String, java.lang.String, java.lang.String[], java.lang.String[], java.lang.String[], java.lang.String)}
+	 * Network with the given Id to be published which calls {@link OsmUtil#publishNetwork(java.lang.String, java.lang.String, java.lang.String[], java.lang.String[], java.lang.String[], java.lang.String)}
 	 * and then rewrites the Network JSON file to save the changes.
-	 * @param sId Base64 encoded 16 byte Network Id of the Network to finalize
+	 * @param sId Base64 encoded 16 byte Network Id of the Network to publish
 	 * @param sStateShps Path to the shapefile that contains the geometric 
 	 * definitions of the states in the USA.
 	 * @param sOsmDir Path to the directory that contains the Open Street Map
 	 * files
 	 */
-	public void finalizeNetwork(String sId, String sStateShps, String sOsmDir)
+	public void publishNetwork(String sId, String sStateShps, String sOsmDir, boolean bTrafficModel, boolean bRoadWxModel, boolean bExternalPublish)
 	{
 		Network oNetwork = getNetwork(sId);
-		if (oNetwork == null) // if a Network with the id isn't found do nothing
+		if (oNetwork.isStatus(Network.PUBLISHING)) //  publishing in progress
+		{
 			return;
+		}
+		if (oNetwork == null) // if a Network with the id isn't found do nothing
+		{
+			m_oLogger.error(sId + " does not exist");
+			return;
+		}
+		oNetwork.removeStatus(Network.WORKINPROGRESS);
+		oNetwork.addStatus(Network.PUBLISHING);
+		try
+		{
+			writeNetworkFile();
+		}
+		catch (Exception oEx)
+		{
+			m_oLogger.error(oEx, oEx);
+		}
 		Scheduling.getInstance().execute(() -> 
 		{
 			try
 			{
-				String sGeoFile = String.format(m_sGeoFileFormat, sId); // get the path of the geometry file
-				ArrayList<OsmWay> oWays = OsmUtil.finalizeNetwork(sGeoFile, sStateShps, oNetwork.m_sStates, oNetwork.m_sFilter, oNetwork.m_sOptions, sOsmDir);
-				ArrayList<Id> oIds = new ArrayList(oWays.size());
-				for (OsmWay oWay : oWays) // save the ids of the ways
-					oIds.add(oWay.m_oId);
-				oNetwork.m_oSegmentIds = oIds;
-				oNetwork.m_bFinalized = true; // set finalized flag
+				OsmUtil.publishNetwork(m_sGeoFileFormat, sId, sStateShps, oNetwork.m_sStates, oNetwork.m_sFilter, oNetwork.m_sOptions, sOsmDir, m_oLogger);
+				if (oNetwork.isStatus(Network.PUBLISHED)) // if the network is already published, remove the old definitions of ways
+					updateWays(oNetwork);
+				oNetwork.m_bCanRunTraffic = bTrafficModel;
+				oNetwork.m_bCanRunRoadWeather = bRoadWxModel;
+				oNetwork.m_bExternalPublish = bExternalPublish;
+				oNetwork.removeStatus(Network.PUBLISHING);
+				oNetwork.addStatus(Network.PUBLISHED);
 				SessMgr.getInstance().addNetwork(oNetwork.m_sNetworkId);
-				loadNetwork(oNetwork.toGeoJsonFeature(), false);
+				loadNetwork(oNetwork.toGeoJsonFeature());
 				writeNetworkFile(); // save changes
 			}
 			catch (Exception oEx)
 			{
-				m_oLogger.error(oEx);
+				m_oLogger.error("Failed to publish " + sId);
+				m_oLogger.error(oEx, oEx);
+				oNetwork.m_nStatus = Network.ERROR;
+				try
+				{
+					writeNetworkFile(); // save changes
+				}
+				catch (IOException oIOEx)
+				{
+					m_oLogger.error(oIOEx, oIOEx);
+				}
 			}
 		});
 	}
@@ -849,17 +975,20 @@ public class WayNetworks extends BaseBlock
 	
 	
 	/**
-	 * Creates a new list and adds the finalized Networks to it.
+	 * Creates a new list and adds the published Networks to it.
 	 * 
-	 * @return The created list that is filled with finalized Networks
+	 * @return The created list that is filled with published Networks
 	 */
 	public ArrayList<Network> getNetworks()
 	{
 		ArrayList<Network> oReturn = new ArrayList();
-		for (Network oNetwork : m_oNetworks)
+		synchronized (m_oNetworks)
 		{
-			if (oNetwork.m_bFinalized) // only add finalized Networks
-				oReturn.add(oNetwork);
+			for (Network oNetwork : m_oNetworks)
+			{
+				if (oNetwork.isStatus(Network.PUBLISHED)) // only add published Networks
+					oReturn.add(oNetwork);
+			}
 		}
 		
 		return oReturn;
@@ -873,9 +1002,12 @@ public class WayNetworks extends BaseBlock
 	public ArrayList<Network> getAllNetworks()
 	{
 		ArrayList<Network> oReturn = new ArrayList();
-		for (Network oNetwork : m_oNetworks)
+		synchronized (m_oNetworks)
 		{
-			oReturn.add(oNetwork);
+			for (Network oNetwork : m_oNetworks)
+			{
+				oReturn.add(oNetwork);
+			}
 		}
 		
 		return oReturn;
@@ -889,13 +1021,9 @@ public class WayNetworks extends BaseBlock
 	 * @return The associated TimeZone string of the given NetworkId, or "UTC" 
 	 * if there is not an associated TimeZone.
 	 */
-	public String getTimeZone(String sNetworkId)
+	public TimeZone getTimeZone(int nLon, int nLat)
 	{
-		String sRet = m_oTimeZones.get(sNetworkId);
-		if (sRet == null)
-			return "UTC";
-		
-		return sRet;
+		return TimeZone.getTimeZone("America/Chicago"); // all networks are central time in the current implementation
 	}
 	
 	
