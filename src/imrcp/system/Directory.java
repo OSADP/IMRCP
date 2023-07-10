@@ -106,6 +106,8 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 	 */
 	private final ArrayList<String> m_oDependentServlets = new ArrayList();
 	
+	private final ArrayList<String> m_oDoNotRegister = new ArrayList();
+	
 	
 	/**
 	 * Path to the directory that contains configuration JSON files
@@ -196,6 +198,13 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 			for (int i = 0; i < oClasses.length(); i++) //iterate through the strings
 			{
 				String sClassName = oClasses.getString(i++); // increment here because the classes configuration contains pairs: java class name, instance name
+				if (sClassName.startsWith("#@"))
+				{
+					synchronized (m_oDoNotRegister)
+					{
+						m_oDoNotRegister.add(oClasses.getString(i));
+					}
+				}
 				if (sClassName.startsWith("#")) // allows for "comments" in the json array
 					continue;
 				if (sClassName.startsWith("@"))
@@ -219,17 +228,17 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 					m_oLogger.error(oException, oException);
 				}
 			}
-			
-			JSONArray oResources = oDirConfig.getJSONArray("resources");
-				
-			for (int nIndex = 0; nIndex < oResources.length(); nIndex++)
-			{
-				JSONObject oResource = oResources.getJSONObject(nIndex);
-				ResourceRecord.createResources(oResource, RECORDS_BY_CONTRIB_OBSTYPE);
-			}
-			RECORDS_BY_OBSTYPE_CONTRIB.addAll(RECORDS_BY_CONTRIB_OBSTYPE);
-			Introsort.usort(RECORDS_BY_CONTRIB_OBSTYPE, ResourceRecord.COMP_BY_CONTRIB_OBSTYPE);
-			Introsort.usort(RECORDS_BY_OBSTYPE_CONTRIB, ResourceRecord.COMP_BY_OBSTYPE_CONTRIB);
+//			
+//			JSONArray oResources = oDirConfig.getJSONArray("resources");
+//				
+//			for (int nIndex = 0; nIndex < oResources.length(); nIndex++)
+//			{
+//				JSONObject oResource = oResources.getJSONObject(nIndex);
+//				ResourceRecord.createResources(oResource, RECORDS_BY_CONTRIB_OBSTYPE);
+//			}
+//			RECORDS_BY_OBSTYPE_CONTRIB.addAll(RECORDS_BY_CONTRIB_OBSTYPE);
+//			Introsort.usort(RECORDS_BY_CONTRIB_OBSTYPE, ResourceRecord.COMP_BY_CONTRIB_OBSTYPE);
+//			Introsort.usort(RECORDS_BY_OBSTYPE_CONTRIB, ResourceRecord.COMP_BY_OBSTYPE_CONTRIB);
 			
 			synchronized (m_oRegistered)
 			{
@@ -284,6 +293,20 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 	}
 	
 	
+	public boolean canRegister(String sName)
+	{
+		synchronized (m_oDoNotRegister)
+		{
+			for (String sTemp : m_oDoNotRegister)
+			{
+				if (sName.compareTo(sTemp) == 0)
+					return false;
+			}
+		}
+		
+		return true;
+	}
+	
 	/**
 	 * Registers the given BaseBlock with the given instance name dependencies.
 	 * @param oBlock The BaseBlock to register
@@ -329,6 +352,21 @@ public class Directory extends HttpServlet implements Runnable, Comparator<BaseB
 			}
 
 			m_oRegistered.add(~nIndex, oNew); //add the Block to the list of registered blocks sorted by name
+			
+			JSONObject oDirConfig = getConfig(getClass().getName(), "Directory");
+			JSONArray oResources = oDirConfig.getJSONArray("resources");
+			ArrayList<ResourceRecord> oNewRRs = new ArrayList();
+			for (nIndex = 0; nIndex < oResources.length(); nIndex++)
+			{
+				JSONObject oResource = oResources.getJSONObject(nIndex);
+				if (oResource.getString("writer").compareTo(oBlock.getName()) != 0)
+					continue;
+				ResourceRecord.createResources(oResource, oNewRRs);
+			}
+			RECORDS_BY_CONTRIB_OBSTYPE.addAll(oNewRRs);
+			RECORDS_BY_OBSTYPE_CONTRIB.addAll(oNewRRs);
+			Introsort.usort(RECORDS_BY_CONTRIB_OBSTYPE, ResourceRecord.COMP_BY_CONTRIB_OBSTYPE);
+			Introsort.usort(RECORDS_BY_OBSTYPE_CONTRIB, ResourceRecord.COMP_BY_OBSTYPE_CONTRIB);
 			synchronized (m_oDependentServlets)
 			{
 				nIndex = m_oDependentServlets.size();

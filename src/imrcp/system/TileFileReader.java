@@ -47,21 +47,12 @@ public class TileFileReader
 	public final static byte SLONGLONG = 14;
 	public final static byte QUADFLOAT = 15;
 	
-	public static ObsList parseFile(Path oFile, int nQueryObsType, int nLon1, int nLat1, int nLon2, int nLat2, long lQueryStart, long lQueryEnd, long lRefTime, ResourceRecord oRR)
-		throws IOException
-	{
-		ObsList oObsList = new ObsList();
-		parseFile(oFile, oObsList, nQueryObsType, nLon1, nLat1, nLon2, nLat2, lQueryStart, lQueryEnd, lRefTime, oRR);
-		return oObsList;
-	}
-	
-	
 	public static void parseFile(Path oFile, ObsList oObsList, int nQueryObsType, int nLon1, int nLat1, int nLon2, int nLat2, long lQueryStart, long lQueryEnd, long lRefTime, ResourceRecord oRR)
 		throws IOException
 	{
 		if (Files.size(oFile) == 0)
 			return;
-		
+		oObsList.m_bHasData = true;
 		if (nLon1 > nLon2)
 		{
 			nLon1 ^= nLon2;
@@ -261,6 +252,11 @@ public class TileFileReader
 					for (int nRingIndex = 0; nRingIndex < nRingCount; nRingIndex++)
 					{
 						int nPointCount = oData.readShort();
+						if (nPointCount == 0)
+						{
+							--nGeoArray[1];
+							continue;
+						}
 						nGeoArray = Arrays.ensureCapacity(nGeoArray, nPointCount * 2 + 5); // 4 spots for bb and 1 for point count
 						nGeoArray = Arrays.add(nGeoArray, nPointCount);
 						int nBBPos = nGeoArray[0];
@@ -310,7 +306,8 @@ public class TileFileReader
 							}
 						}
 					}
-					oGeometries.add(nGeoArray);
+					if (nGeoArray[1] > 0) // don't add invalid geometries
+						oGeometries.add(nGeoArray);
 				}
 				double[] dVals = oHeader.m_oValueReader.readValues(oData, oHeader.m_lStartTimes.length - 1);
 
@@ -423,7 +420,12 @@ public class TileFileReader
 				m_lEnd = m_lRecv + (nEndOffset * 1000L);
 			int nStartTimes = oIn.readByte();
 			if (nStartTimes < 0)
-				nStartTimes += 256;
+			{
+				int nSecond = oIn.readByte();
+				nStartTimes <<= 8;
+				nStartTimes += nSecond;
+				nStartTimes = -nStartTimes;
+			}
 			m_lStartTimes = new long[nStartTimes + 1];
 			m_lStartTimes[0] = m_lRecv + (oIn.readInt() * 1000L);
 			for (int nIndex = 1; nIndex < nStartTimes; nIndex++)

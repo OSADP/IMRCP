@@ -17,6 +17,7 @@ package imrcp.system;
 
 
 import imrcp.store.ObsList;
+import jakarta.servlet.ServletConfig;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -171,6 +172,7 @@ public abstract class BaseBlock extends HttpServlet implements Runnable, IRunTar
 	
 	protected String m_sDataPath;
 	protected String m_sArchPath;
+	protected String m_sTempPath;
 	
 	/**
 	 * Default constructor. Sets the status to {@link #INIT} and sets the id
@@ -243,10 +245,28 @@ public abstract class BaseBlock extends HttpServlet implements Runnable, IRunTar
 	public void init()
 		throws ServletException
 	{
-		setLogger();
 		try
 		{
-			reset();
+			ServletConfig oSConfig = getServletConfig();
+			if (oSConfig != null) // if there is a ServletConfig this instance was created by tomcat
+			{
+				if (Directory.getInstance().canRegister(oSConfig.getServletName()))
+				{
+					setName(oSConfig.getServletName());
+					setLogger();
+					reset();
+					register();
+				}
+				else
+				{
+					throw new ServletException("Configured to not run");
+				}
+			}
+			else
+			{
+				setLogger();
+				reset();
+			}
 		}
 		catch (IOException oEx)
 		{
@@ -398,6 +418,10 @@ public abstract class BaseBlock extends HttpServlet implements Runnable, IRunTar
 		m_sArchPath = oBlockConfig.getString("archpath");
 		if (!m_sArchPath.endsWith("/"))
 			m_sArchPath += "/";
+		
+		m_sTempPath = oBlockConfig.getString("temppath");
+		if (!m_sTempPath.endsWith("/"))
+			m_sTempPath += "/";
 	}
 
 	

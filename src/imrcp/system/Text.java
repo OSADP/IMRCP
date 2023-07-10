@@ -283,7 +283,7 @@ public class Text
                 compare(iCharSeq, NEG_INFINITY) == 0)
             return Double.NEGATIVE_INFINITY;
 
-        if (compare(iCharSeq, NAN) == 0)
+        if (compareIgnoreCase(iCharSeq, NAN) == 0)
             return Double.NaN;
 
         int nExponent = 0;

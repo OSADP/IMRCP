@@ -34,9 +34,7 @@ public class Emails extends BaseBlock
 		m_nSmtpPort = oBlockConfig.optInt("smtpport", 587);
 		m_sSmtpHost = oBlockConfig.getString("smtphost");
 		m_sDomain = oBlockConfig.getString("domain");
-		m_sFrom = oBlockConfig.optString("from", "");
-		if (m_sFrom.isEmpty())
-			m_sFrom = "donotreply@" + m_sDomain;
+		m_sFrom = oBlockConfig.optString("from", "donotreply@" + m_sDomain);
 	}
 	
 	

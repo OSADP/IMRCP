@@ -81,7 +81,7 @@ public class Id implements Comparable<Id>
 	/**
 	 * Single instance used for a "null" id
 	 */
-	public static Id NULLID = new Id(NULLSTRING);
+	public final static Id NULLID = new Id(NULLSTRING);
 
 	
 	/**

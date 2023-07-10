@@ -70,7 +70,8 @@ public class TileForPoly extends TileForFile
 							int nResults = GeoUtil.clipPolygon(lClipRef);
 							while (nResults-- > 0)
 							{
-								oPolygons.add(GeoUtil.popResult(lClipRef[0]));
+								int[] nGeo = GeoUtil.popResult(lClipRef[0]);
+								oPolygons.add(nGeo);
 							}
 						}
 						finally
@@ -86,6 +87,16 @@ public class TileForPoly extends TileForFile
 
 					for (int[] nPolygon : oPolygons)
 					{
+						int nRingCount = nPolygon[1];
+						int nPos = 2;
+						for (int nRing = 0; nRing < nRingCount; nRing++)
+						{
+							int nPoints = nPolygon[nPos];
+							if (nRing > 0)
+								GeoUtil.reverseRing(nPolygon, nPos);
+							nPos += 5 + nPoints * 2;
+						}
+						
 						if (m_oSP != null)
 						{
 							oRawOut.writeByte(m_nStringFlag);

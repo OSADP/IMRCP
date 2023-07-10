@@ -13,6 +13,9 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.TreeSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.json.JSONObject;
 
 /**
@@ -25,6 +28,8 @@ public abstract class TileFileWriter extends BaseBlock
 	protected final ArrayDeque<TileFileInfo> m_oRealTime = new ArrayDeque();
 	protected final TreeSet<String> m_oProcessing = new TreeSet();
 	protected int m_nThreads;
+	protected int m_nPeriod;
+	protected int m_nOffset;
 	
 	
 	@Override
@@ -32,6 +37,8 @@ public abstract class TileFileWriter extends BaseBlock
 	{
 		super.reset(oBlockConfig);
 		m_nThreads = oBlockConfig.optInt("threads", 1);
+		m_nPeriod = oBlockConfig.optInt("period", 0);
+		m_nOffset = oBlockConfig.optInt("offset", 0);
 	}
 	
 	
@@ -150,6 +157,8 @@ public abstract class TileFileWriter extends BaseBlock
 	{
 		TileFileInfo oInfo = new TileFileInfo(oRRs, lQueryStart, lQueryEnd, lQueryRef, bRequest);
 		OneTimeReentrantLock oReturn = oInfo.m_oLock;
+		if (oRRs.get(0).getTiledFf().isEmpty())
+			return oReturn;
 		final ArrayDeque<TileFileInfo> oQueue;
 		if (bRequest)
 			oQueue = m_oQueue;
@@ -185,6 +194,25 @@ public abstract class TileFileWriter extends BaseBlock
 		
 		return oReturn;
 	}
+	
+	
+	
+	protected ThreadPoolExecutor createThreadPool()
+	{
+		return (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads, new NameableThreadFactory());
+	}
+	
+	
+	private class NameableThreadFactory implements ThreadFactory
+	{
+		@Override
+		public Thread newThread(Runnable r)
+		{
+			return new Thread(r, String.format("%s-%d", getName(), System.nanoTime()));
+		}
+		
+	}
+	
 	
 	public static ValueWriter newValueWriter(int nByte)
 	{
