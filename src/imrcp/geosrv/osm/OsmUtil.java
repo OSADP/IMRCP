@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.logging.log4j.Logger;
 
 /**
  * This class contains utility methods for Open Street Maps(OSM) objects and algorithms used
@@ -1686,12 +1687,12 @@ public abstract class OsmUtil
 	 * or over written(false).
 	 * @throws Exception
 	 */
-	public static void writeLanesAndSpeeds(String sGeoFile, ArrayList<OsmWay> oWays, boolean bAppend)
+	public static void writeLanesAndSpeeds(String sGeoFf, String sNetworkId, ArrayList<OsmWay> oWays, boolean bAppend)
 		throws Exception
 	{
 		OpenOption[] oOpts = bAppend ? FileUtil.APPENDOPTS : FileUtil.WRITEOPTS;
-		try (DataOutputStream oSpeedLimits = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(sGeoFile.replace("geo.bin", "spdlimit.bin")), oOpts)));
-			DataOutputStream oLanes = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(sGeoFile.replace("geo.bin", "lanes.bin")), oOpts))))
+		try (DataOutputStream oSpeedLimits = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "spdlimit")), oOpts)));
+			DataOutputStream oLanes = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "lanes")), oOpts))))
 		{
 			for (OsmWay oWay : oWays)
 			{
@@ -1726,8 +1727,16 @@ public abstract class OsmUtil
 				String sLanes = oWay.get("lanes");
 				if (sLanes != null && sOneway != null && sOneway.compareTo("yes") == 0)
 				{
-					oWay.m_oId.write(oLanes);
-					oLanes.writeByte(Byte.parseByte(sLanes));
+					;
+					try
+					{
+						byte yLanes = Byte.parseByte(sLanes);
+						oWay.m_oId.write(oLanes);
+						oLanes.writeByte(yLanes);
+					}
+					catch (NumberFormatException oEx)
+					{
+					}
 				}
 			}
 		}
@@ -1735,7 +1744,7 @@ public abstract class OsmUtil
 	
 	
 	/**
-	 * Finalizes the network defined by {@code sGeoFile}. The split, merge, extrasegs,
+	 *Publishes the network defined by {@code sGeoFile}. The split, merge, extrasegs,
 	 * ramp determination, and separate algorithms are ran on the roadway segments
 	 * in the network.
 	 * 
@@ -1749,7 +1758,7 @@ public abstract class OsmUtil
 	 * have been ran on the network.
 	 * @throws Exception
 	 */
-	public static ArrayList<OsmWay> finalizeNetwork(String sGeoFile, String sStateShp, String[] sStates, String[] sFilter, String[] sOptions, String sOsmDir)
+	public static void publishNetwork(String sGeoFf, String sNetworkId, String sStateShp, String[] sStates, String[] sFilter, String[] sOptions, String sOsmDir, Logger oLogger)
 		throws Exception
 	{
 		ArrayList<OsmNode> oNodes = new ArrayList();
@@ -1766,7 +1775,9 @@ public abstract class OsmUtil
 				bConnectors = true;
 		}
 		
-		new OsmBinParser().parseFile(sGeoFile, oNodes, oWays, oPool);
+		String sUnpublished = String.format(sGeoFf, sNetworkId, "unpublished");
+		String sPublished = String.format(sGeoFf, sNetworkId, "published");
+		new OsmBinParser().parseFile(sUnpublished, oNodes, oWays, oPool);
 		int[] nWaysBb = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
 		for (OsmWay oWay : oWays)
 		{
@@ -1845,19 +1856,24 @@ public abstract class OsmUtil
 			
 			oStates.put(sName, oBorder);
 			
+			oLogger.info(String.format("Parsing hash - %s", sName));
 			new OsmBinParser().parseHashes(sOsmDir + sName + "-latest.bin", nWaysBb[0], nWaysBb[1], nWaysBb[2], nWaysBb[3], oHash);
 			oHashes.put(sName, oHash);
+			oLogger.info(String.format("Parsed hash - %s", sName));
 		}
 		
-		
+		oLogger.debug("Spliting ways");
 		oWays = OsmUtil.split(oWays);
 		oNodes.forEach(o -> o.m_oRefs = new ArrayList());
 		oWays.forEach(o -> {o.updateRefs();});
+		oLogger.debug("Merging ways");
 		oWays = OsmUtil.merge(oWays);
 		oNodes.forEach(o -> o.m_oRefs = new ArrayList());
 		oWays.forEach(o -> {o.updateRefs();});
+		oLogger.debug("Extra segs");
 		oWays = OsmUtil.extraSegs(oWays, oNodes, 250000);
 		
+		oLogger.debug("Determine Ramps");
 		OsmUtil.determineRamps(oWays, oStates, sOsmDir, sFilter);
 		
 		int nWayIndex = oWays.size();
@@ -1876,6 +1892,7 @@ public abstract class OsmUtil
 		oNodes.forEach(o -> o.m_oRefs = new ArrayList());
 		oWays.forEach(o -> {o.updateRefs();});
 		oNodes.forEach(o -> o.m_nOriginalRefForSep = o.m_oRefs.size());
+		oLogger.debug("Separating ways");
 		oWays = OsmUtil.separate(oWays, oNodes, 150);
 		
 		oNodes.forEach(o -> o.m_oRefs = new ArrayList());
@@ -1900,12 +1917,9 @@ public abstract class OsmUtil
 		oNodes = OsmUtil.removeZeroRefs(oNodes);
 		oPool.intern("oneway");
 		oPool.intern("yes");
-		try (BufferedOutputStream oOut = new BufferedOutputStream(Files.newOutputStream(Paths.get(sGeoFile.replace("geo", "pre-finalize")))))
-		{
-			Files.copy(Paths.get(sGeoFile), oOut);
-		}
-		OsmBz2ToBin.writeBin(sGeoFile, oPool, oNodes, oWays);
-		writeLanesAndSpeeds(sGeoFile, oWays, false);
-		return oWays;
+		
+
+		OsmBz2ToBin.writeBin(sPublished, oPool, oNodes, oWays);
+		writeLanesAndSpeeds(sGeoFf, sNetworkId, oWays, false);
 	}
 }

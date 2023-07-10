@@ -8,6 +8,7 @@ package imrcp.geosrv.osm;
 import imrcp.geosrv.GeoUtil;
 import imrcp.system.Introsort;
 import imrcp.system.StringPool;
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -62,7 +63,7 @@ public class OsmBinParser
 	{
 		int nNodeStart; // will store where node definitions start in the file
 		ArrayList<String> oPool;
-		try (DataInputStream oIn = new DataInputStream(Files.newInputStream(Paths.get(sFile)))) // open the file initially to read in the string pool and determine the starting position of node definitions
+		try (DataInputStream oIn = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(sFile))))) // open the file initially to read in the string pool and determine the starting position of node definitions
 		{ // do this now so we don't parse the string pool everytime in the loop below
 			int nCount = oIn.readInt();
 			oPool = new ArrayList(nCount); // local string pool
@@ -90,7 +91,7 @@ public class OsmBinParser
 		
 		ArrayList<OsmNode> oNodes = new ArrayList();
 		
-		try (DataInputStream oIndexIn = new DataInputStream(Files.newInputStream(Paths.get(sFile + ".ndx")))) // read the index file
+		try (DataInputStream oIndexIn = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(sFile + ".ndx"))))) // read the index file
 		{
 			int nBuckets = oIndexIn.readInt(); // read the number of buckets in the file
 			while (nBuckets-- > 0) // for each bucket
@@ -130,7 +131,7 @@ public class OsmBinParser
 				if (nNodes == null) 
 					continue;
 				ArrayList<OsmWay> oWays = oHashes.get(nBucket);
-				try (DataInputStream oIn = new DataInputStream(Files.newInputStream(Paths.get(sFile)))) // re-open the file
+				try (DataInputStream oIn = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(sFile))))) // re-open the file
 				{
 					oIn.skip(nNodeStart); // skip to the start of the nodes
 					int[] nFp = new int[]{nNodeStart};

@@ -182,6 +182,9 @@ public class OsmWay extends OsmObject
 	 * Length of the Way in decimal degrees
 	 */
 	public double m_dLength;
+	
+	
+	public boolean m_bInUse = false;
 
 	
 	/**
