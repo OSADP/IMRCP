@@ -116,18 +116,6 @@ public class DataAssimilation extends TileFileWriter
 	 * Stores the distance from the center of the kernel to each cell in the kernel
 	 */
 	protected double[][] m_dKernDists;
-
-	
-	/**
-	 * Period of execution in seconds
-	 */
-	protected int m_nPeriod;
-
-	
-	/**
-	 * Schedule offset from midnight in seconds
-	 */
-	protected int m_nOffset;
 	
 	
 	protected int m_nContribId;
@@ -151,8 +139,6 @@ public class DataAssimilation extends TileFileWriter
 		m_dMaxVal = oBlockConfig.optDouble("maxval", 60);
 		m_dBias = oBlockConfig.optDouble("bias", 0);
 		m_nKernelSize = oBlockConfig.optInt("kernel", 13);
-		m_nPeriod = oBlockConfig.optInt("period", 1200);
-		m_nOffset = oBlockConfig.optInt("offset", 90);
 		m_nContribId = Integer.valueOf(oBlockConfig.optString("contribid", "imrcp"), 36);
 		m_nSourceId = Integer.valueOf(oBlockConfig.optString("sourceid", "da"), 36);
 		m_nObsTypeId = Integer.valueOf(oBlockConfig.optString("obstypeid", "0"), 36);
