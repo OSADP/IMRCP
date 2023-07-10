@@ -42,16 +42,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TimeZone;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -69,6 +68,8 @@ public class NHC extends Collector
 	 * Threshold wind speed values in knots for the Saffir–Simpson hurricane wind scale
 	 */
 	private static final double[] SSHWS = new double[]{64.0, 83.0, 96.0, 113.0, 137.0}; // wind speeds in knots
+	
+	private static final double[] SSHWSMPERSEC = new double[]{32.924, 42.699, 49.387, 58.132, 70.479};
 	
 	/**
 	 * Array of file names to download
@@ -398,6 +399,7 @@ public class NHC extends Collector
 			Mercator oM = new Mercator(nPPT);
 			long lValid = oInfo.m_lRef / 86400000 * 86400000 + 86400000; // creating daily tile files so the ref time needs to be the start of the next day to get all of the files that could have forecasts for the day
 			long lStart = lValid - 86400000; // start of the day of the file
+			long lFileRecv = lStart;
 			long lEnd = lStart + oRR.getRange();
 			int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
 			TreeSet<Path> oAllValid = TileObsView.getArchiveFiles(lStart, lEnd, lValid, oRR);
@@ -464,6 +466,10 @@ public class NHC extends Collector
 				long lStormRecv = oCP.m_lCreated;
 				long lStormStart = oTP.m_lStart;
 				long lStormEnd = oTP.m_lEnd;
+				if (lStormStart < lStart)
+					lStart = lStormStart;
+				if (lStormEnd > lEnd)
+					lEnd = lStormEnd;
 
 				String[] sStrings = new String[]{sStormParts[0], sStormParts[1], oTP.m_sStormName, null, null, null, null, null};
 				for (int nIndex = 0; nIndex < m_nStrings; nIndex++)
@@ -477,6 +483,7 @@ public class NHC extends Collector
 				oPressure.m_oGeoArray = oCone.m_oGeoArray = oCP.m_nGeo;
 				oCone.m_dValue = lookupStormType(oCP.m_sStormType);
 				oPressure.m_dValue = oPressureConv.convert(oTP.m_nMinPressure);
+				
 				
 				if (oObsMap.containsKey(ObsType.TRSCNE))
 					oObsMap.get(ObsType.TRSCNE).add(oCone);
@@ -645,7 +652,7 @@ public class NHC extends Collector
 								if (nIndex < 0)
 								{
 									nIndex = ~nIndex;
-									oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lStart, nStringFlag, m_oLogger));
+									oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
 								}
 								
 								
@@ -678,13 +685,13 @@ public class NHC extends Collector
 					continue;
 				
 				ThreadPoolExecutor oTP = createThreadPool();
-				ArrayList<Future> oTasks = new ArrayList(oAllTiles);
+				ArrayList<Future> oTasks = new ArrayList(oAllTiles.size());
 				for (TileForFile oTile : oAllTiles)
 				{
 					oTile.m_oSP = oSPList;
 					oTile.m_oM = oM;
 					oTile.m_oRR = oRR;
-					oTile.m_lFileRecv = lStart;
+					oTile.m_lFileRecv = lFileRecv;
 					oTile.m_nStringFlag = nStringFlag;
 					oTile.m_bWriteObsFlag = false;
 					oTile.m_bWriteRecv = true;
@@ -695,7 +702,7 @@ public class NHC extends Collector
 				}
 				m_oLogger.debug(Integer.toString(oRR.getObsTypeId(), 36) + " " + oAllTiles.size());
 				FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
-				Path oTiledFile = oRR.getFilename(lStart, lStart, lEnd, oFF); // lStart is both the start time and the valid time of the file
+				Path oTiledFile = oRR.getFilename(lFileRecv, lStart, lEnd, oFF);
 				Files.createDirectories(oTiledFile.getParent());
 				try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTiledFile))))
 				{
@@ -709,10 +716,10 @@ public class NHC extends Collector
 					oOut.writeByte(yGeoType);
 					oOut.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
 					oOut.writeByte(Util.combineNybbles(0, 0b0111)); // associate with obj and timestamp flag, the lower bits are all 1 since recv, start, and end time are written per obs
-					oOut.writeLong(lStart); // lStart is both the start time and the valid time of the file
-					oOut.writeInt((int)((lEnd - lStart) / 1000));
+					oOut.writeLong(lFileRecv);
+					oOut.writeInt((int)((lEnd - lFileRecv) / 1000));
 					oOut.writeByte(1); // only file start time
-					oOut.writeInt((int)(0));
+					oOut.writeInt((int)((lStart - lFileRecv) / 1000));
 					ByteArrayOutputStream oRawBytes = new ByteArrayOutputStream(8192);
 					DataOutputStream oRawOut = new DataOutputStream(oRawBytes);
 					
@@ -965,6 +972,31 @@ public class NHC extends Collector
 	}
 	
 	
+	public static HashMap<String, String> getCurrentStorms(long lStart, long lEnd, long lRef)
+	{
+		HashMap<String, String> oStorms = new HashMap();
+		ObsList oCones = Directory.getInstance().lookup("ObsView").getData(ObsType.TRSCNE, lStart, lEnd, 0, 650000000, -1790000000, 0, lRef); // get all possible cones
+		Comparator<Obs> oNhcComp = (Obs o1, Obs o2) -> // compare nhc obs by storm number and reference time in reverse order
+		{
+			int nReturn = (o1.m_sStrings[0]).compareTo(o2.m_sStrings[0]);
+			if (nReturn == 0)
+				nReturn = Long.compare(o2.m_lTimeRecv, o1.m_lTimeRecv);
+			return nReturn;
+		};
+		Introsort.usort(oCones, oNhcComp);
+		String[] sPrevStorm = new String[]{"", ""};
+		for (Obs oObs : oCones)
+		{
+			if (oObs.m_sStrings[0].compareTo(sPrevStorm[0]) != 0)
+			{
+				sPrevStorm = oObs.m_sStrings;
+				oStorms.put(oObs.m_sStrings[0], oObs.m_sStrings[1]);
+			}
+		}
+		return oStorms;
+	}
+	
+	
 	private class Track
 	{
 		String m_sStormType;
@@ -1015,6 +1047,28 @@ public class NHC extends Collector
 		
 		return nCat;
 	}
+	
+	
+	public static int getSSHWS(double dWindSpeed, double[] dThresholds)
+	{
+		int nCat = 0;
+		int nIndex = dThresholds.length;
+		while (nIndex-- > 0 && nCat == 0)
+			if (dWindSpeed >= dThresholds[nIndex])
+				nCat = nIndex + 1;
+		
+		return nCat;
+	}
+	
+	
+	public static int getSSHWS(double dWindSpeed, boolean bKnots)
+	{
+		if (bKnots)
+			return getSSHWS(dWindSpeed, SSHWS);
+		else
+			return getSSHWS(dWindSpeed, SSHWSMPERSEC);
+	}
+	
 	
 	/**
 	 * Wrapper for {@link HashMap#get(java.lang.Object)} with a default value

@@ -313,8 +313,8 @@ public class NWS extends Collector
 						{
 							setError();
 						}
-						continue;
 					}
+					continue;
 				}
 
 				m_nIndexFails[i] = 0;
@@ -517,22 +517,22 @@ public class NWS extends Collector
 	{
 		try
 		{
-			if (oArchiveFiles.isEmpty())
-			{
-				for (ResourceRecord oRR : oInfo.m_oRRs)
-				{
-					int nPeriod = m_nDownloadPeriod * 1000;
-					int nOffset = m_nDownloadOffset * 1000;
-					long lRecv = oInfo.m_lStart / nPeriod * nPeriod + nOffset;
-					long lStart = lRecv + oRR.getDelay();
-					long lEnd = lStart + oRR.getRange();
-					FilenameFormatter oFf = new FilenameFormatter(oRR.getTiledFf());
-					Path oPath = oRR.getFilename(lRecv, lStart, lEnd, oFf);
-					Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
-					if (!Files.exists(oPath))
-						Files.createFile(oPath);
-				}
-			}
+//			if (oArchiveFiles.isEmpty())
+//			{
+//				for (ResourceRecord oRR : oInfo.m_oRRs)
+//				{
+//					int nPeriod = m_nDownloadPeriod * 1000;
+//					int nOffset = m_nDownloadOffset * 1000;
+//					long lRecv = oInfo.m_lStart / nPeriod * nPeriod + nOffset;
+//					long lStart = lRecv + oRR.getDelay();
+//					long lEnd = lStart + oRR.getRange();
+//					FilenameFormatter oFf = new FilenameFormatter(oRR.getTiledFf());
+//					Path oPath = oRR.getFilename(lRecv, lStart, lEnd, oFf);
+//					Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
+//					if (!Files.exists(oPath))
+//						Files.createFile(oPath);
+//				}
+//			}
 			long[] lParsedTimes = new long[3];
 			HashMap<String, NetcdfFile> oCachedFiles = new HashMap();
 			long lStart = oInfo.m_lStart;

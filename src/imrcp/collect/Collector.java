@@ -20,18 +20,6 @@ public abstract class Collector extends TileFileWriter
 	 * Base URL used for downloading data from remote sources
 	 */
 	protected String m_sBaseURL;
-
-	
-	/**
-	 * Schedule offset from midnight in seconds
-	 */
-	protected int m_nOffset;
-
-	
-	/**
-	 * Period of execution in seconds
-	 */
-	protected int m_nPeriod;
 	
 	protected int m_nContribId;
 	
@@ -50,8 +38,6 @@ public abstract class Collector extends TileFileWriter
 	{
 		super.reset(oBlockConfig);
 		m_sBaseURL = oBlockConfig.optString("url", "");
-		m_nOffset = oBlockConfig.optInt("offset", 0);
-		m_nPeriod = oBlockConfig.optInt("period", 0);
 		m_nContribId = Integer.valueOf(oBlockConfig.optString("contrib", ""), 36);
 		m_oSrcFile = new FilenameFormatter(oBlockConfig.optString("src", ""));
 		String sObsType = oBlockConfig.optString("obstypeid", "");
