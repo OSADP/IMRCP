@@ -17,9 +17,9 @@ import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.Emails;
 import imrcp.system.FileUtil;
+import imrcp.system.Scheduling;
 import imrcp.system.Text;
 import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
@@ -403,7 +403,6 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 			else
 				USERS.get(nIndex).update(oUser);
 			writeUserFile();
-			readUserFile();
 		}
 		if (oUser.m_sDeactivation.length() > 0) // deactivated user so remove an current sessions
 		{
@@ -423,12 +422,12 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 		{
 			StringBuilder sBuf = new StringBuilder();
 			WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-			ArrayList<Network> oFinalizedNetworks = oWayNetworks.getNetworks();
-			for (Network oNetwork : oFinalizedNetworks)
+			ArrayList<Network> oPublishedNetworks = oWayNetworks.getNetworks();
+			for (Network oNetwork : oPublishedNetworks)
 			{
 				sBuf.append(oNetwork.m_sNetworkId).append(',');
 			}
-			if (!oFinalizedNetworks.isEmpty())
+			if (!oPublishedNetworks.isEmpty())
 				sBuf.setLength(sBuf.length() - 1);
 			sBuf.append('\n');
 			
@@ -577,7 +576,11 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 				LOGGER.error(sUname + " invalid password " + oReq.getHeader("X-Real-IP"));
 				return "failure"; // password doesn't match
 			}
-
+			
+			Scheduling.getInstance().execute(() -> 
+			{
+				SecureBaseBlock.getRemoteNetworkOutlines();
+			});
 			byte[] yBytes = new byte[16];
 			synchronized(SESSIONS)
 			{
@@ -615,7 +618,6 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 				{
 					oUser.m_oProfile = new UserProfile();
 				}
-
 			}
 			
 			sBuf.append("\"token\":\"").append(oUser.m_sToken).append("\",");
@@ -786,18 +788,7 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 				SessMgr.getSecurePassword(sPword, ySalt, sHash);
 				oUser.m_ySalt = ySalt; // replace salt too
 				oUser.m_sPass = sHash.toString();
-
-				try (FileWriter oOut = new FileWriter(m_sPwdFile, true))
-				{
-					StringBuilder sEntry = new StringBuilder(oUser.m_sName);
-					sEntry.append(",").append(Text.toHexString(ySalt)).append(",").append(sHash).
-						append(",").append(oUser.m_sContact).append(",").append(oUser.m_sGroup).append("\n");
-					oOut.append(sEntry); // append new user entry to file
-					oOut.close();
-				}
-				catch (Exception oEx)
-				{
-				}
+				updateUser(oUser);
 			}
 			return "success";
 		}

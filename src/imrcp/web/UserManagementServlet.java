@@ -22,7 +22,7 @@ import org.json.JSONObject;
  */
 public class UserManagementServlet extends SecureBaseBlock
 {
-	public int doTable(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doTable(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws IOException
 	{
 		oRes.setContentType("application/json");
@@ -39,7 +39,7 @@ public class UserManagementServlet extends SecureBaseBlock
 	}
 	
 	
-	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws IOException
 	{
 		try

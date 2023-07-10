@@ -50,7 +50,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	}
 	
 	
-	public int doProfile(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doProfile(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws IOException
 	{
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
@@ -59,7 +59,7 @@ public class CommonMapServlet extends SecureBaseBlock
 		for (String sId : oSession.m_oProfile.m_sNetworks)
 		{
 			Network oNetwork = oWayNetworks.getNetwork(sId);
-			if (oNetwork != null && oNetwork.m_bFinalized)
+			if (oNetwork != null && oNetwork.isStatus(Network.PUBLISHED))
 			{
 				JSONObject oNetworkObj = new JSONObject();
 				oNetworkObj.put("id", sId);
@@ -89,7 +89,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doNetworkList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doNetworkList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws ServletException, IOException
 	{
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
@@ -121,7 +121,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doSaveGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doSaveGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		oRes.setContentType("application/json");
@@ -166,7 +166,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	}
 	
 	
-	public int doDeleteGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doDeleteGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		oRes.setContentType("application/json");
@@ -195,7 +195,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	}
 	
 	
-	public int doListGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doListGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		oRes.setContentType("application/json");
@@ -241,7 +241,7 @@ public class CommonMapServlet extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doGetGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doGetGeojson(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		oRes.setContentType("application/json");

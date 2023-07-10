@@ -50,6 +50,8 @@ public class ObsRequest
 	 * IMRCP contributor Id to use in the query
 	 */
 	private int m_nSourceId;
+	
+	private String m_sRequest;
 
 	
 	/**
@@ -157,5 +159,17 @@ public class ObsRequest
 	public void setSourceId(int nSourceId)
 	{
 		m_nSourceId = nSourceId;
+	}
+	
+	
+	public void setRequest(String sRequest)
+	{
+		m_sRequest = sRequest;
+	}
+	
+	
+	public String getRequest()
+	{
+		return m_sRequest;
 	}
 }

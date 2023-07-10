@@ -46,7 +46,7 @@ public class UserSettingsServlet extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doMapSettings(HttpServletRequest oReq, HttpServletResponse oResp, Session oSession)
+	public int doMapSettings(HttpServletRequest oReq, HttpServletResponse oResp, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		try 
@@ -90,7 +90,7 @@ public class UserSettingsServlet extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doSaveMapSettings(HttpServletRequest oReq, HttpServletResponse oResp, Session oSession)
+	public int doSaveMapSettings(HttpServletRequest oReq, HttpServletResponse oResp, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		try 

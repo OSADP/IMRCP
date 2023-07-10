@@ -12,10 +12,7 @@ import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.Scheduling;
-import imrcp.system.Text;
 import imrcp.system.Units;
-import java.awt.geom.Area;
-import java.awt.geom.Path2D;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -31,7 +28,6 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.TimeZone;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -461,7 +457,7 @@ public class Subscriptions extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		try
@@ -488,7 +484,7 @@ public class Subscriptions extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doAdd(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doAdd(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		ReportSubscription oNewSub;
@@ -540,7 +536,7 @@ public class Subscriptions extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doFiles(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doFiles(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws ServletException, IOException
 	{
 		String[] sUriParts = oReq.getRequestURI().split("/");

@@ -11,6 +11,9 @@ import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
 import imrcp.geosrv.WayNetworks.WayMetadata;
 import imrcp.forecast.mdss.MetroProcess;
+import imrcp.forecast.mlp.MLP;
+import imrcp.forecast.mlp.MLPCommons;
+import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.FileUtil;
 import imrcp.system.Id;
@@ -29,13 +32,13 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.TreeMap;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -70,6 +73,7 @@ public class Scenarios extends SecureBaseBlock
 	 */
 	private final ArrayList<String[]> m_oTemplates = new ArrayList();
 
+	private double m_dExtendDistTol;
 	
 	/**
 	 * Single reference for an array representing no data was able to be calculated
@@ -144,8 +148,111 @@ public class Scenarios extends SecureBaseBlock
 			m_sBaseDir += "/";
 		
 		m_sBaseDir = m_sDataPath + m_sBaseDir;
+		m_dExtendDistTol = oBlockConfig.optDouble("disttol", 480000);
 	}
 	
+	
+	@Override
+	public void process(String[] sNotification)
+	{
+		if (sNotification[MESSAGE].compareTo("mlp") == 0)
+		{
+			String sId = sNotification[2];
+			try
+			{
+				createData(getScenario(sId));
+			}
+			catch (Exception oEx)
+			{
+				m_oLogger.error(oEx, oEx);
+			}
+		}
+	}
+	
+	
+	private void createData(Scenario oScenario)
+		throws Exception
+	{
+		if (oScenario == null)
+			return;
+		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+		TreeMap<Id, double[]> oPreds = new TreeMap(Id.COMPARATOR);
+		ArrayList<OsmWay> oSegments = new ArrayList();
+		for (SegmentGroup oGroup : oScenario.m_oGroups)
+		{
+			oSegments.ensureCapacity(oGroup.m_oSegments.length);
+			for (Id oId : oGroup.m_oSegments)
+			{
+				OsmWay oWay = oWays.getWayById(oId);
+				if (oWay != null)
+					oSegments.add(oWay);
+			}
+		}
+		Path oProcessedFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId).replace("data", "processed"));
+		List<Path> oOneshotOutputs = Files.walk(oProcessedFile.getParent(), 2, FileVisitOption.FOLLOW_LINKS).filter(oP -> oP.toString().endsWith("mlp_oneshot_output.csv")).collect(Collectors.toList());
+		for (Path oOneshotOutput : oOneshotOutputs)
+		{
+			try (CsvReader oIn = new CsvReader(Files.newInputStream(oOneshotOutput)))
+			{
+				int nCols;
+				while ((nCols = oIn.readLine()) > 0)
+				{
+					Id oId = new Id(oIn.parseString(0));
+					double[] dPred = new double[nCols + 1]; // number of columns is the number of predictions + 1, we need number of predictions + 2
+					OsmWay oWay = oWays.getWayById(oId);
+					if (oWay == null)
+						continue;
+					java.util.Arrays.fill(dPred, Double.NaN);
+					dPred[0] = GeoUtil.fromIntDeg(oWay.m_nMidLon);
+					dPred[1] = GeoUtil.fromIntDeg(oWay.m_nMidLat);
+					for (int nCol = 1; nCol < nCols; nCol++)
+					{
+						dPred[nCol + 1] = oIn.parseDouble(nCol);
+					}
+					oPreds.put(oId, dPred);
+				}
+			}
+		}
+		MLPCommons.extendPredictions(oPreds, oSegments, oWays, m_dExtendDistTol, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+		JSONArray oGeoJsonFeatures;
+		
+		try (BufferedReader oIn = Files.newBufferedReader(oProcessedFile, StandardCharsets.UTF_8))
+		{
+			oGeoJsonFeatures = new JSONArray(new JSONTokener(oIn));
+		}
+		for (int nIndex = 0; nIndex < oGeoJsonFeatures.length(); nIndex++)
+		{
+			JSONObject oFeature = oGeoJsonFeatures.getJSONObject(nIndex);
+			JSONObject oProps = oFeature.getJSONObject("properties");
+			String sId = oProps.getString("imrcpid");
+			Id oId = new Id(sId);
+			if (oPreds.containsKey(oId))
+			{
+				double[] dSpeeds = oPreds.get(oId);
+				int[] nTraffic = new int[dSpeeds.length - 2];
+				double dLimit = (double)oProps.getInt("spdlimit");
+				for (int nSpdIndex = 2; nSpdIndex < dSpeeds.length; nSpdIndex++)
+				{
+					if (Double.isNaN(dSpeeds[nSpdIndex]))
+						nTraffic[nSpdIndex - 2] = -1;
+					else
+						nTraffic[nSpdIndex - 2] = (int)Math.round((dSpeeds[nSpdIndex] / dLimit) * 100);
+				}
+
+				oProps.put("trflnk", nTraffic);
+			}
+			else
+			{
+				oProps.put("trflnk", NODATA);
+			}
+		}
+		
+		try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId)), FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8")))
+		{
+			oGeoJsonFeatures.write(oOut);
+		}
+		Files.deleteIfExists(oProcessedFile);
+	}
 	
 	/**
 	 * Saves the Scenario Template defined in the request.
@@ -158,7 +265,7 @@ public class Scenarios extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		JSONObject oResponse = new JSONObject();
@@ -256,7 +363,7 @@ public class Scenarios extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doDeleteTemplate(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doDeleteTemplate(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		JSONObject oResponse = new JSONObject();
@@ -327,7 +434,7 @@ public class Scenarios extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		JSONArray oResponse = new JSONArray();
@@ -365,7 +472,7 @@ public class Scenarios extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doRun(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doRun(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		JSONObject oResponse = new JSONObject();
@@ -441,7 +548,7 @@ public class Scenarios extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doData(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess)
+	public int doData(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
 		throws IOException, ServletException
 	{
 		oRes.setContentType("application/json");
@@ -539,95 +646,90 @@ public class Scenarios extends SecureBaseBlock
 					continue;
 				
 				Path oDataFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId));
-				if (Files.exists(oDataFile)) // skip scenarios that have already been processed
+				Path oProcessedFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId).replace("data", "processed"));
+				if (Files.exists(oDataFile) || Files.exists(oProcessedFile)) // skip scenarios that have already been processed
 					continue;
 				oProcess.add(oScenario);
 			}
 			for (Scenario oScenario : oProcess)
 			{
 				m_oLogger.debug("Processing scenario: " + oScenario.m_sId);
-				
-//				MLPProcess oMlp = new MLPProcess();
-//				m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
-//				if (oScenario.m_bRunTraffic)
-//					oMlp.process(oScenario, m_sBaseDir, m_oLogger); // traffic prediction
-//				else
-//					oMlp.m_oOutputs = new HashMap();
-//				m_oLogger.debug("Finished mlp for: " + oScenario.m_sId);
-				MetroProcess oMetro = new MetroProcess(oScenario.m_oGroups[0].m_bPlowing.length); 
-				m_oLogger.debug("Starting metro for: " + oScenario.m_sId);
-				if (oScenario.m_bRunRoadWeather)
-					oMetro.process(oScenario); // road weater prediction
-				m_oLogger.debug("Finished metro for: " + oScenario.m_sId);
-				
-				
-				
-				JSONArray oGeoJsonFeatures = new JSONArray();
-				int nMetroCount = 0;
-				for (SegmentGroup oGroup : oScenario.m_oGroups) // create the JSONArray that contains all of the data
+				Path oDataFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId));
+				Path oProcessedFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId).replace("data", "processed"));
+				try
 				{
-					for (Id oId : oGroup.m_oSegments)
+					if (oScenario.m_bRunTraffic)
 					{
-						OsmWay oWay = oWays.getWayById(oId);
-						if (oWay == null)
-							continue;
-						JSONObject oFeature = new JSONObject();
-						JSONObject oGeo = new JSONObject();
-						JSONArray oCoords = new JSONArray();
-						for (OsmNode oN : oWay.m_oNodes)
+						m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
+						MLP oMLP = (MLP)Directory.getInstance().lookup("MLP");
+						oMLP.executeOneshot(oScenario, m_sBaseDir);
+						m_oLogger.debug("Finished queuing mlp for: " + oScenario.m_sId);
+					}
+
+					MetroProcess oMetro = null;
+					if (oScenario.m_bRunRoadWeather)
+					{
+						oMetro = new MetroProcess(oScenario.m_oGroups[0].m_bPlowing.length); 
+						m_oLogger.debug("Starting metro for: " + oScenario.m_sId);
+						oMetro.process(oScenario); // road weater prediction
+						m_oLogger.debug("Finished metro for: " + oScenario.m_sId);
+					}
+
+					JSONArray oGeoJsonFeatures = new JSONArray();
+					int nMetroCount = 0;
+					for (SegmentGroup oGroup : oScenario.m_oGroups) // create the JSONArray that contains all of the data
+					{
+						for (Id oId : oGroup.m_oSegments)
 						{
-							oCoords.put(new double[]{GeoUtil.fromIntDeg(oN.m_nLon), GeoUtil.fromIntDeg(oN.m_nLat)});
+							OsmWay oWay = oWays.getWayById(oId);
+							if (oWay == null)
+								continue;
+							JSONObject oFeature = new JSONObject();
+							JSONObject oGeo = new JSONObject();
+							JSONArray oCoords = new JSONArray();
+							for (OsmNode oN : oWay.m_oNodes)
+							{
+								oCoords.put(new double[]{GeoUtil.fromIntDeg(oN.m_nLon), GeoUtil.fromIntDeg(oN.m_nLat)});
+							}
+							oGeo.put("coordinates", oCoords);
+							oGeo.put("type", "LineString");
+							JSONObject oProps = new JSONObject();
+							WayMetadata oMetadata = oWays.getMetadata(oId);
+							oProps.put("imrcpid", oId.toString());
+							if (oScenario.m_bRunRoadWeather)
+							{
+								oProps.put("stpvt", oMetro.m_oStPvts.get(nMetroCount));
+								oProps.put("tpvt", oMetro.m_oTPvts.get(nMetroCount));
+								oProps.put("dphsn", oMetro.m_oDphsns.get(nMetroCount));
+							}
+							else
+							{
+								oProps.put("stpvt", NODATA);
+								oProps.put("tpvt", NODATADOUBLES);
+								oProps.put("dphsn", NODATADOUBLES);
+							}
+							if (!oScenario.m_bRunTraffic)
+								oProps.put("trflnk", NODATA);
+							oProps.put("spdlimit", oMetadata.m_nSpdLimit);
+							oProps.put("lanecount", oMetadata.m_nLanes);
+							oFeature.put("type", "Feature");
+							oFeature.put("properties", oProps);
+							oFeature.put("geometry", oGeo);
+							oGeoJsonFeatures.put(oFeature);
+							++nMetroCount;
 						}
-						oGeo.put("coordinates", oCoords);
-						oGeo.put("type", "LineString");
-						JSONObject oProps = new JSONObject();
-						WayMetadata oMetadata = oWays.getMetadata(oId);
-						oProps.put("imrcpid", oId.toString());
-						if (oScenario.m_bRunRoadWeather)
-						{
-							oProps.put("stpvt", oMetro.m_oStPvts.get(nMetroCount));
-							oProps.put("tpvt", oMetro.m_oTPvts.get(nMetroCount));
-							oProps.put("dphsn", oMetro.m_oDphsns.get(nMetroCount));
-						}
-						else
-						{
-							oProps.put("stpvt", NODATA);
-							oProps.put("tpvt", NODATADOUBLES);
-							oProps.put("dphsn", NODATADOUBLES);
-						}
-						oProps.put("spdlimit", oMetadata.m_nSpdLimit);
-						oProps.put("lanecount", oMetadata.m_nLanes);
-//						if (oMlp.m_oOutputs.containsKey(oId.toString()))
-//						{
-//							double[] dSpeeds = oMlp.m_oOutputs.get(oId.toString());
-//							int[] nTraffic = new int[dSpeeds.length];
-//							double dLimit = oMetadata.m_nSpdLimit;
-//							for (int nIndex = 0; nIndex < dSpeeds.length; nIndex++)
-//							{
-//								if (Double.isNaN(dSpeeds[nIndex]))
-//									nTraffic[nIndex] = -1;
-//								else
-//									nTraffic[nIndex] = (int)Math.round((dSpeeds[nIndex] / dLimit) * 100);
-//							}
-//							
-//							oProps.put("trflnk", nTraffic);
-//						}
-//						else
-//						{
-//							oProps.put("trflnk", NODATA);
-//						}
-						oProps.put("trflnk", NODATA); // mlp5 not implemented yet
-						oFeature.put("type", "Feature");
-						oFeature.put("properties", oProps);
-						oFeature.put("geometry", oGeo);
-						oGeoJsonFeatures.put(oFeature);
-						++nMetroCount;
+					}
+					
+					try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oScenario.m_bRunTraffic ? oProcessedFile : oDataFile, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8"))) // write the file
+					{
+						oGeoJsonFeatures.write(oOut);
 					}
 				}
-				Path oDataFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId));
-				try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oDataFile, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8"))) // write the data file
+				catch (Exception oEx)
 				{
-					oGeoJsonFeatures.write(oOut);
+					Files.deleteIfExists(oProcessedFile);
+					Files.createFile(oProcessedFile);
+					m_oLogger.error(oEx, oEx);
 				}
 			}
 			m_oLogger.debug("Finished processing scenarios");
@@ -639,7 +741,8 @@ public class Scenarios extends SecureBaseBlock
 					continue;
 				
 				Path oDataFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId));
-				if (Files.exists(oDataFile)) // skip scenarios that have already been processed
+				Path oProcessedFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId).replace("data", "processed"));
+				if (Files.exists(oDataFile) || Files.exists(oProcessedFile)) // skip scenarios that have already been processed
 					continue;
 				oProcess.add(oScenario);
 			}

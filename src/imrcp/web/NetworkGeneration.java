@@ -15,12 +15,12 @@ import imrcp.geosrv.osm.OsmBz2ToBin;
 import imrcp.geosrv.osm.OsmUtil;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
+import imrcp.store.Obs;
 import imrcp.system.dbf.DbfResultSet;
 import imrcp.system.shp.Header;
 import imrcp.system.shp.Polyline;
 import imrcp.system.shp.PolyshapeIterator;
 import imrcp.system.Arrays;
-import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.Id;
 import imrcp.system.Introsort;
@@ -28,7 +28,6 @@ import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -36,29 +35,21 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.StringReader;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.DecimalFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Map.Entry;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream;
+import java.util.HashMap;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -125,18 +116,6 @@ public class NetworkGeneration extends SecureBaseBlock
 
 	
 	/**
-	 * Format string used to generate detector file names
-	 */
-	private String m_sDetectorFileFormat;
-
-	
-	/**
-	 * Format string used to generate detector mapping file names
-	 */
-	private String m_sDetectorMappingFormat;
-
-	
-	/**
 	 * Tolerance in decimal degrees scaled to 7 decimal places to determine is
 	 * nodes are the "same"
 	 */
@@ -155,23 +134,8 @@ public class NetworkGeneration extends SecureBaseBlock
 	private boolean m_bSave = true;
 
 	
-	/**
-	 * Tolerance in decimal degrees scaled to 7 decimal places used in snapping
-	 * algorithms
-	 */
-	private int m_nSnapTol;
-
-	
-	/**
-	 * Contains the network ids are currently being exported to osm xml
-	 */
-	private final ArrayList<String> m_oProcessingOsm = new ArrayList();
-
-	
-	/**
-	 * Root data directory.
-	 */
-	private String m_sRoot;
+	private final HashMap<String, ArrayList<int[]>> m_oCachedStates = new HashMap();
+	private long m_lClearCache = 0;
 	
 	
 	/**
@@ -193,7 +157,6 @@ public class NetworkGeneration extends SecureBaseBlock
 	{
 		super.reset(oBlockConfig);
 		m_sStateShp = oBlockConfig.getString("statefile");
-		m_sStateShp = m_sStateShp;
 		m_nOffset = oBlockConfig.optInt("offset", 0);
 		m_nPeriod = oBlockConfig.optInt("period", 1800);
 		m_sOsmDownload = oBlockConfig.optString("osm", "http://download.geofabrik.de/north-america/us/%s-latest.osm.bz2");
@@ -205,23 +168,8 @@ public class NetworkGeneration extends SecureBaseBlock
 		m_sOsmDir = m_sArchPath + m_sOsmDir;
 		m_lFileTimeout = oBlockConfig.optLong("filetimeout", 2592000000L);
 		m_nConnTimeout = oBlockConfig.optInt("conntimeout", 60000);
-		m_sGeoFileFormat = oBlockConfig.optString("geolines", "");
-		if (m_sGeoFileFormat.startsWith("/"))
-			m_sGeoFileFormat = m_sGeoFileFormat.substring(1);
-		m_sGeoFileFormat = m_sDataPath + m_sGeoFileFormat;
-		
-		m_sDetectorFileFormat = oBlockConfig.optString("detfile", "");
-		if (m_sDetectorFileFormat.startsWith("/"))
-			m_sDetectorFileFormat = m_sDetectorFileFormat.substring(1);
-		m_sDetectorFileFormat = m_sDataPath + m_sDetectorFileFormat;
-		
-		m_sDetectorMappingFormat = oBlockConfig.optString("detfilemap", "");
-		if (m_sDetectorMappingFormat.startsWith("/"))
-			m_sDetectorMappingFormat = m_sDetectorMappingFormat.substring(1);
-		m_sDetectorMappingFormat = m_sDataPath + m_sDetectorMappingFormat;
+		m_sGeoFileFormat = m_sDataPath + WayNetworks.NETWORKFF;
 		m_nTol = oBlockConfig.optInt("tol", 10);
-		m_nSnapTol = oBlockConfig.optInt("snaptol", 1000);
-		m_sRoot = oBlockConfig.optString("root", "");
 	}
 	
 	
@@ -236,7 +184,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws ServletException, IOException
 	{
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
@@ -266,7 +214,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @return HTTP status code to be included in the response.
 	 * @throws ServletException
 	 */
-	public int doHash(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doHash(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws ServletException
 	{
 		try
@@ -275,66 +223,96 @@ public class NetworkGeneration extends SecureBaseBlock
 			int nLat = GeoUtil.toIntDeg(Double.parseDouble(oReq.getParameter("lat")));
 			int nLon = GeoUtil.toIntDeg(Double.parseDouble(oReq.getParameter("lon")));
 			String sNetworkId = oReq.getParameter("networkid");
+			String sFile = null;
+			synchronized (m_oCachedStates)
+			{
+				if (m_lClearCache < System.currentTimeMillis())
+				{
+					m_oCachedStates.clear();
+					m_lClearCache = System.currentTimeMillis() + 3600000;
+				}
+				for (Entry<String, ArrayList<int[]>> oEntry: m_oCachedStates.entrySet())
+				{
+					int nRingIndex = 0;
+					boolean bInside = false;
+					while (!bInside && nRingIndex < oEntry.getValue().size())
+					{
+						int[] nStateGeo = oEntry.getValue().get(nRingIndex++);
+						bInside = GeoUtil.isPointInsideRingAndHoles(nStateGeo, nLon, nLat);
+					}
+					if (bInside)
+					{
+						sFile = oEntry.getKey();
+					}
+				}
+				if (sFile == null)
+				{
+					DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
+					DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp));
+					Header oHeader = new Header(oShp);
+					PolyshapeIterator oIter = null;
+					ArrayList<int[]> oOuters = new ArrayList();
+					ArrayList<int[]> oHoles = new ArrayList();
+					while (oDbf.next()) // find states the network intersects
+					{
+						String sState = oDbf.getString("NAME");
+						oOuters.clear();
+						oHoles.clear();
+						Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
+						oIter = oPoly.iterator(oIter);
+
+						while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
+						{
+							int[] nPolygon = Arrays.newIntArray();
+							nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
+							int nPointIndex = nPolygon[0];
+							nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
+							int nBbIndex = nPolygon[0];
+							nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+							while (oIter.nextPoint())
+							{
+								nPolygon[nPointIndex] += 1; // increment point count
+								nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
+							}
+							if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
+							{
+								nPolygon[nPointIndex] -= 1;
+								nPolygon[0] -= 2;
+							}
+							if (GeoUtil.isClockwise(nPolygon, 2))
+								oOuters.add(nPolygon);
+							else
+								oHoles.add(nPolygon);
+						}
+						GeoUtil.getPolygons(oOuters, oHoles);
+						boolean bInside = false;
+						int nRingIndex = 0;
+						while (!bInside && nRingIndex < oOuters.size())
+						{
+							int[] nStateGeo = oOuters.get(nRingIndex++);
+							bInside = GeoUtil.isPointInsideRingAndHoles(nStateGeo, nLon, nLat);
+						}
+						if (bInside)
+						{
+							sFile = m_sOsmDir + sState.toLowerCase().replaceAll(" ", "-") + "-latest.bin";
+							m_oCachedStates.put(sFile, oOuters);
+							break;
+						}
+					}
+				}
+			}
+			oRes.setContentType("application/json");
+			if (sFile == null || !Files.exists(Paths.get(sFile)))
+			{
+				oRes.getWriter().append("{}");
+				return HttpServletResponse.SC_NOT_FOUND;
+			}
 			EditList oList = getList(oSession.m_sToken, sNetworkId);
 			WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 			synchronized (oList)
 			{
 				ArrayList<OsmNode> oNodes = new ArrayList();
 				ArrayList<OsmWay> oWays = new ArrayList();
-				int nX = 0;
-				int nY = 0;
-				DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
-				DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp));
-				new Header(oShp); // read through shp header
-				PolyshapeIterator oIter = null;
-				String sFile = null;
-				while (oDbf.next() && sFile == null) // find which state the requested point is in
-				{
-					Polyline oLine = new Polyline(oShp, true);
-					oIter = oLine.iterator(oIter);
-					String sState = oDbf.getString("NAME");
-					int[] nPart = Arrays.newIntArray();
-					{
-						while (oIter.nextPart())
-						{
-							int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-							nPart[0] = 1;
-
-							while (oIter.nextPoint())
-							{
-								nX = oIter.getX();
-								nY = oIter.getY();
-								if (nX < nBB[0])
-									nBB[0] = nX;
-								if (nY < nBB[1])
-									nBB[1] = nY;
-								if (nX > nBB[2])
-									nBB[2] = nX;
-								if (nY > nBB[3])
-									nBB[3] = nY;
-								nPart = Arrays.add(nPart, nX, nY);
-							}
-
-							int nLen = Arrays.size(nPart);
-							if (nPart[1] != nPart[nLen - 2] || nPart[2] != nPart[nLen - 1]) // close the polygon if needed
-								nPart = Arrays.add(nPart, nPart[1], nPart[2]);
-
-							if (GeoUtil.isInside(nLon, nLat, nBB[0], nBB[1], nBB[2], nBB[3], 0) && GeoUtil.isInsidePolygon(nPart, nLon, nLat, 1))
-							{
-								sFile = m_sOsmDir + sState.toLowerCase().replaceAll(" ", "-") + "-latest.bin";
-								break;
-							}
-						}
-					}
-				}
-
-				oRes.setContentType("application/json");
-				if (sFile == null || !Files.exists(Paths.get(sFile)))
-				{
-					oRes.getWriter().append("{}");
-					return HttpServletResponse.SC_NOT_FOUND;
-				}
-
 				new OsmBinParser().parseHash(sFile, nHash, oNodes, oWays); // open the hash index file for the state
 				StringBuilder sWayBuf = new StringBuilder();
 				sWayBuf.append('[');
@@ -380,7 +358,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doDelete(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doDelete(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sNetworkId = oReq.getParameter("networkid");
@@ -426,7 +404,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doReprocess(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doReprocess(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sNetworkId = oReq.getParameter("networkid");
@@ -464,7 +442,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doCreate(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doCreate(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sCoords = oReq.getParameter("coords");
@@ -555,19 +533,16 @@ public class NetworkGeneration extends SecureBaseBlock
 		
 			
 			long lFileTimeout = System.currentTimeMillis() - m_lFileTimeout;
-		
-			DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
-			DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp));
-			Header oHeader = new Header(oShp);
-			PolyshapeIterator oIter = null;
-			int[] nPt = new int[2];
 			ArrayList<String> oStates = new ArrayList();
-			ArrayList<int[]> oOuters = new ArrayList();
-			ArrayList<int[]> oHoles = new ArrayList();
 			int[] nNetworkGeo = oNetwork.getGeometry();
-			long lNetworkRef = GeoUtil.makePolygon(nNetworkGeo);
-			try
+			try (DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
+				DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp)))
 			{
+				Header oHeader = new Header(oShp);
+				PolyshapeIterator oIter = null;
+				ArrayList<int[]> oOuters = new ArrayList();
+				ArrayList<int[]> oHoles = new ArrayList();
+				
 				while (oDbf.next()) // find states the network intersects
 				{
 					String sState = oDbf.getString("NAME");
@@ -600,50 +575,29 @@ public class NetworkGeneration extends SecureBaseBlock
 							oHoles.add(nPolygon);
 					}
 					GeoUtil.getPolygons(oOuters, oHoles);
-					boolean bIntersects = false;
 					int nRingIndex = 0;
-					
-					
-					while (!bIntersects && nRingIndex < oOuters.size())
+
+					while (nRingIndex < oOuters.size())
 					{
 						int[] nStateGeo = oOuters.get(nRingIndex++);
-						if (!GeoUtil.boundingBoxesIntersect(nNetworkGeo[3], nNetworkGeo[4], nNetworkGeo[5], nNetworkGeo[6], nStateGeo[3], nStateGeo[4], nStateGeo[5], nStateGeo[6]))
-							continue;
-						long lStateRef = GeoUtil.makePolygon(nStateGeo);
-						try
+						if (GeoUtil.isInsideRingAndHoles(nStateGeo, Obs.POLYGON, nNetworkGeo))
 						{
-							long[] lClipRef = new long[]{0L, lNetworkRef, lStateRef};
-							int nResults = GeoUtil.clipPolygon(lClipRef);
-							bIntersects = nResults > 0;
-							while (nResults-- > 0)
-							{
-								GeoUtil.popResult(lClipRef[0]);
-							}
+							oStates.add(sState.toLowerCase().replaceAll(" ", "-"));
+							break;
 						}
-						finally
-						{
-							GeoUtil.freePolygon(lStateRef);
-						}
-					}
-					if (bIntersects)
-					{
-						oStates.add(sState.toLowerCase().replaceAll(" ", "-"));
 					}
 				}
 			}
-			finally
-			{
-				GeoUtil.freePolygon(lNetworkRef);
-			}
-				
-			oShp.close();
-			oDbf.close();
 			
 			ArrayList<OsmWay> oWays = new ArrayList();
 			ArrayList<OsmNode> oNodes = new ArrayList();
 			StringPool oStringPool = new StringPool();
 			String[] sStates = new String[oStates.size()];
 			int nStateCount = 0;
+			if (oStates.isEmpty())
+			{
+				throw new Exception("Does not intersect any state polygon");
+			}
 			for (String sState : oStates) // for each state
 			{
 				sStates[nStateCount++] = sState;
@@ -691,7 +645,7 @@ public class NetworkGeneration extends SecureBaseBlock
 			oNetwork.m_sStates = sStates;
 			m_oLogger.info(String.format("%d ways", oWays.size()));
 			m_oLogger.info(String.format("%d nodes", oNodes.size()));
-			String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId);
+			String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId, "unpublished");
 			Files.createDirectories(Paths.get(sGeoFile).getParent(), FileUtil.DIRPERS);
 			try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(sGeoFile + ".ids"))))) // write a list of the original ways of the network
 			{
@@ -708,7 +662,7 @@ public class NetworkGeneration extends SecureBaseBlock
 				oWay.calcMidpoint();
 				oWay.setBridge();
 				oWay.generateId();
-				oNetwork.m_oSegmentIds.add(oWay.m_oId);
+				oNetwork.m_oNetworkWays.add(oWay);
 				for (Entry<String, String> oTag : oWay.entrySet())
 				{
 					oNetworkPool.intern(oStringPool.intern(oTag.getKey()));
@@ -731,7 +685,8 @@ public class NetworkGeneration extends SecureBaseBlock
 				{
 					OsmBz2ToBin.writeBin(sGeoFile, oNetworkPool, oNodes, oWays); // write the IMRCP OSM binary file
 					m_oProcessQueue.pollFirst(); // remove id
-					oNetwork.m_nLoaded = 0;
+					oNetwork.removeStatus(Network.ASSEMBLING);
+					oNetwork.addStatus(Network.WORKINPROGRESS);
 					oWayNetworks.writeNetworkFile();
 				}
 				if (!m_oProcessQueue.isEmpty())
@@ -744,7 +699,7 @@ public class NetworkGeneration extends SecureBaseBlock
 			{
 				synchronized (m_oProcessQueue)
 				{
-					oNetwork.m_nLoaded = 2;
+					oNetwork.m_nStatus = Network.ERROR;
 					oWayNetworks.writeNetworkFile();
 				}
 			}
@@ -769,11 +724,11 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doSave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sNetworkId = oReq.getParameter("networkid");
-		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId);
+		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId, "unpublished");
 		ArrayList<OsmWay> oWays = new ArrayList();
 		ArrayList<OsmNode> oNodes = new ArrayList();
 		StringPool oPool = new StringPool();
@@ -853,15 +808,7 @@ public class NetworkGeneration extends SecureBaseBlock
 		try
 		{
 			OsmBz2ToBin.writeBin(sGeoFile, oPool, oNodes, oWays); // write the edited network
-			OsmUtil.writeLanesAndSpeeds(sGeoFile, oNewWays, true); // append the new way to the metadata files
-			ArrayList<Id> oIds = new ArrayList();
-			for (OsmWay oWay : oWays)
-				oIds.add(oWay.m_oId);
-			
-			WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-			Network oNetwork = oWayNetworks.getNetwork(sNetworkId);
-			oNetwork.m_oSegmentIds = oIds; // update the network
-			oWayNetworks.writeNetworkFile();
+			OsmUtil.writeLanesAndSpeeds(m_sGeoFileFormat, sNetworkId, oNewWays, true); // append the new way to the metadata files			
 		}
 		catch (Exception oEx)
 		{
@@ -885,14 +832,18 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doGeo(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doGeo(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sNetworkId = oReq.getParameter("networkid");
 		StringBuilder sLineBuf = new StringBuilder();
 		ArrayList<OsmNode> oNodes = new ArrayList();
 		StringPool oPool = new StringPool();
-		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId);
+		String sPublished = oReq.getParameter("published");
+		String sFile = "unpublished";
+		if (sPublished != null && Boolean.parseBoolean(sPublished))
+			sFile = "published";
+		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId, sFile);
 		EditList oList = getList(oSession.m_sToken, sNetworkId);
 		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		synchronized (oList)
@@ -901,7 +852,7 @@ public class NetworkGeneration extends SecureBaseBlock
 			oList.m_oOriginalWays.clear();
 			if (oReq.getParameter("separate") == null)
 			{
-				try (DataInputStream oIn = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(sGeoFile + ".ids")))))
+				try (DataInputStream oIn = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(String.format(m_sGeoFileFormat, sNetworkId, "unpublished") + ".ids")))))
 				{
 					int nCount = oIn.readInt();
 					while (nCount-- > 0)
@@ -947,7 +898,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doAdd(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doAdd(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		EditList oList = getList(oSession.m_sToken, oReq.getParameter("networkid"));
@@ -979,7 +930,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doRemove(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doRemove(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		EditList oList = getList(oSession.m_sToken, oReq.getParameter("networkid"));
@@ -997,12 +948,10 @@ public class NetworkGeneration extends SecureBaseBlock
 		
 		return HttpServletResponse.SC_OK;
 	}
-	
+		
 	
 	/**
-	 * Attempts to merge the roadway segments with the requested ids. If the merge
-	 * is successful, the geometry of the newly merged roadway segment is added to
-	 * the response.
+	 * Queues the requested network to be published.
 	 * 
 	 * @param oReq object that contains the request the client has made of the servlet
 	 * @param oRes object that contains the response the servlet sends to the client
@@ -1012,510 +961,29 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doMerge(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		StringBuilder sBuf = new StringBuilder();
-		EditList oList = getList(oSession.m_sToken, oReq.getParameter("networkid"));
-		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-		synchronized (oList)
-		{
-			Id oId1 = new Id(oReq.getParameter("id1"));
-			sBuf.setLength(0);
-			Id oId2 = new Id(oReq.getParameter("id2"));
-			OsmWay oSearch = new OsmWay();
-			oSearch.m_oId = oId1;
-			int nIndex = Collections.binarySearch(oList.m_oWays, oSearch, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-			{
-				return HttpServletResponse.SC_BAD_REQUEST;
-			}
-			OsmWay oWay1 = oList.m_oWays.get(nIndex);
-			
-			oSearch.m_oId = oId2;
-			nIndex = Collections.binarySearch(oList.m_oWays, oSearch, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-			{
-				return HttpServletResponse.SC_BAD_REQUEST;
-			}
-			OsmWay oWay2 = oList.m_oWays.get(nIndex);
-			
-			OsmWay oMerge = OsmUtil.forceMerge(oWay1, oWay2);
-			if (oMerge == null)
-			{
-				return HttpServletResponse.SC_BAD_REQUEST;
-			}
-			
-			nIndex = Collections.binarySearch(oList.m_oWays, oMerge, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-				oList.m_oWays.add(~nIndex, oMerge); // add the newly merged segment to the overall way list
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oMerge.m_oId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oAdd.add(~nIndex, oMerge.m_oId); // add the newly merged segment to the add list
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oWay1.m_oId, Id.COMPARATOR);
-			if (nIndex >= 0)
-				oList.m_oAdd.remove(nIndex); // remove the first way from the add list
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oWay2.m_oId, Id.COMPARATOR);
-			if (nIndex >= 0)
-				oList.m_oAdd.remove(nIndex); // remove the second way from the add list
-			
-			nIndex = Collections.binarySearch(oList.m_oRemove, oWay1.m_oId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oRemove.add(~nIndex, oWay1.m_oId); // add the first way to the remove list
-			
-			nIndex = Collections.binarySearch(oList.m_oRemove, oWay2.m_oId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oRemove.add(~nIndex, oWay2.m_oId); // add the second way to the remove list
-			
-			sBuf.setLength(0);
-			oMerge.appendLineGeoJson(sBuf, oWays);
-			sBuf.setLength(sBuf.length() - 1);
-		}
-		
-		oRes.setContentType("application/json");
-		try (BufferedWriter oOut = new BufferedWriter(oRes.getWriter()))
-		{
-			oOut.append(sBuf);
-		}
-		
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Splits the requested roadway segment at the index specified in the request.
-	 * The geometry of the subsequent ways is added to the response.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doSplit(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		StringBuilder sBuf = new StringBuilder();
-		EditList oList = getList(oSession.m_sToken, oReq.getParameter("networkid"));
-		WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-		synchronized (oList)
-		{
-			sBuf.append(oReq.getParameter("way"));
-			Id oWayId = new Id(oReq.getParameter("way"));
-			sBuf.setLength(0);
-			int nSplitIndex = Integer.parseInt(oReq.getParameter("node"));
-			
-			OsmWay oSearch = new OsmWay();
-			oSearch.m_oId = oWayId;
-			int nIndex = Collections.binarySearch(oList.m_oWays, oSearch, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-			{
-				return HttpServletResponse.SC_BAD_REQUEST;
-			}
-			OsmWay oWay = oList.m_oWays.get(nIndex);
-			OsmWay oNewWay = OsmUtil.forceSplit(oWay, nSplitIndex);
-			if (oNewWay == null)
-			{
-				return HttpServletResponse.SC_BAD_REQUEST;
-			}
-			
-			oList.m_oWays.remove(nIndex);
-			
-			nIndex = Collections.binarySearch(oList.m_oWays, oWay, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-				oList.m_oWays.add(~nIndex, oWay);
-			
-			nIndex = Collections.binarySearch(oList.m_oWays, oNewWay, OsmWay.WAYBYTEID);
-			if (nIndex < 0)
-				oList.m_oWays.add(~nIndex, oNewWay);
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oWayId, Id.COMPARATOR);
-			if (nIndex >= 0)
-				oList.m_oAdd.remove(nIndex);
-			
-			nIndex = Collections.binarySearch(oList.m_oRemove, oWayId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oRemove.add(~nIndex, oWayId);
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oWay.m_oId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oAdd.add(~nIndex, oWay.m_oId);
-			
-			nIndex = Collections.binarySearch(oList.m_oAdd, oNewWay.m_oId, Id.COMPARATOR);
-			if (nIndex < 0)
-				oList.m_oAdd.add(~nIndex, oNewWay.m_oId);
-			
-			sBuf.setLength(0);
-			sBuf.append('[');
-			oWay.appendLineGeoJson(sBuf, oWays);
-			oNewWay.appendLineGeoJson(sBuf, oWays);
-			sBuf.setLength(sBuf.length() - 1);
-			sBuf.append(']');
-		}
-		
-		oRes.setContentType("application/json");
-		try (BufferedWriter oOut = new BufferedWriter(oRes.getWriter()))
-		{
-			oOut.append(sBuf);
-		}
-		
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * If a detector file exists for the requested network, adds the detectors
-	 * to the response.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doDetectors(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		String sNetwork = oReq.getParameter("networkid");
-		File oDetectorFile = new File(String.format(m_sDetectorFileFormat, sNetwork));
-		if (!oDetectorFile.exists())
-		{
-			oRes.getWriter().append("no detector file");
-			return HttpServletResponse.SC_NOT_FOUND;
-		}
-		
-		oRes.setContentType("application/json");
-		try (CsvReader oIn = new CsvReader(new FileInputStream(oDetectorFile));
-		     BufferedWriter oOut = new BufferedWriter(oRes.getWriter());
-		     CsvReader oMapIn = new CsvReader(new FileInputStream(String.format(m_sDetectorMappingFormat, sNetwork))))
-		{
-			int nCol;
-			oIn.readLine(); // skip header
-			StringBuilder sBuf = new StringBuilder();
-			StringBuilder sMapBuf = new StringBuilder();
-			sBuf.append('[');
-			while ((nCol = oIn.readLine()) > 0)
-			{
-				int nMapCol = oMapIn.readLine();
-//				if (nCol > 6 && !oIn.parseString(6).isEmpty() && oIn.parseInt(6) != 1) // not in service
-//					continue;
-				if (nMapCol > 2)
-				{
-					sMapBuf.append("\"").append(oMapIn.parseString(2)).append("\"");
-					for (int nExtra = 3; nExtra < nMapCol; nExtra++)
-						sMapBuf.append(",\"").append(oMapIn.parseString(nExtra)).append("\"");
-				}
-				sBuf.append(String.format("{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[%2.7f, %2.7f]},\"properties\":{\"cid\":\"%s\",\"aid\":\"%s\",\"label\":\"%s\",\"mappedto\":[%s]}},", oIn.parseDouble(4), oIn.parseDouble(5), oIn.parseString(0), oIn.parseString(1), oIn.parseString(2), sMapBuf));
-				sMapBuf.setLength(0);
-			}
-			if (sBuf.length() > 1)
-				sBuf.setLength(sBuf.length() - 1);
-			sBuf.append(']');
-			
-			oOut.append(sBuf);
-		}
-		
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Saves the way mapping for the requested detector.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doDetsave(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		StringBuilder sLineBuf = new StringBuilder();
-		String sPrevCid = oReq.getParameter("prevcid");
-		if (sPrevCid == null)
-		{
-			return HttpServletResponse.SC_BAD_REQUEST;
-		}
-		
-		for (String sKey : new String[]{"cid", "aid", "label", "lane", "lon", "lat", "insvc", "outsvc"})
-		{
-			String sVal = oReq.getParameter(sKey);
-			if (sVal != null)
-				sLineBuf.append(sVal);
-			sLineBuf.append(',');
-		}
-		
-		sLineBuf.setLength(sLineBuf.length() - 1);
-		String sNetworkId = oReq.getParameter("networkid");
-		StringBuilder sFileBuf = new StringBuilder();
-		StringBuilder sMapBuf = new StringBuilder();
-		try (BufferedReader oIn = new BufferedReader(new FileReader(String.format(m_sDetectorFileFormat, sNetworkId)));
-		   BufferedReader oMapIn = new BufferedReader(new FileReader(String.format(m_sDetectorMappingFormat, sNetworkId))))
-		{
-			String sLine = oIn.readLine();
-			String sMapLine = null;
-			sFileBuf.append(sLine).append('\n'); // preserve header
-			while ((sLine = oIn.readLine()) != null)
-			{
-				sMapLine = oMapIn.readLine();
-				String sLineCid = sLine.substring(0, sLine.indexOf(","));
-				if (sLineCid.compareTo(sPrevCid) == 0)
-				{
-					sFileBuf.append(sLineBuf).append('\n');
-					sMapBuf.append(sLineBuf.substring(0, sLineBuf.indexOf(",", sLineBuf.indexOf(",") + 1))).append(',').append(oReq.getParameter("way")).append('\n');
-				}
-				else
-				{
-					sFileBuf.append(sLine).append('\n');
-					sMapBuf.append(sMapLine).append('\n');
-				}
-			}
-		}
-		
-		try (BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format(m_sDetectorFileFormat, sNetworkId))))
-		{
-			oOut.append(sFileBuf);
-		}
-		
-		try (BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format(m_sDetectorMappingFormat, sNetworkId))))
-		{
-			oOut.append(sMapBuf);
-		}
-		
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Saves the detector file specified in the request and creates the mapping
-	 * file for the detectors.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doUpload(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doPublish(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sNetworkId = oReq.getParameter("networkid");
-		ArrayList<String[]> oDets = new ArrayList();
-		try (BufferedReader oIn = new BufferedReader(new StringReader(oReq.getParameter("file")));
-		   BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format(m_sDetectorFileFormat, sNetworkId))))
-		{
-			String sLine = oIn.readLine(); // skip header
-			oOut.append(sLine).append('\n');
-			while ((sLine = oIn.readLine()) != null)
-			{
-				oOut.append(sLine).append('\n');
-				oDets.add(sLine.split(",", -1));
-			}
-		}
-		EditList oList = getList(oSession.m_sToken, sNetworkId);
-		ArrayList<OsmWay> oSnappedTo = new ArrayList();
-		StringBuilder sBuf = new StringBuilder();
-		synchronized (oList)
-		{
-			for (String[] sDet : oDets)
-			{
-				int nLon = GeoUtil.toIntDeg(Double.parseDouble(sDet[4]));
-				int nLat = GeoUtil.toIntDeg(Double.parseDouble(sDet[5]));
-				snap(nLon, nLat, oList.m_oWays, oSnappedTo, m_nSnapTol);
-				sBuf.append(sDet[0]).append(',').append(sDet[1]);
-				for (OsmWay oWay : oSnappedTo)
-					sBuf.append(',').append(oWay.m_oId.toString());
-				sBuf.append('\n');
-				oSnappedTo.clear();
-			}
-		}
+		String sTrafficModel = oReq.getParameter("trafficmodel");
+		boolean bTrafficModel = false;
+		if (sTrafficModel != null)
+			bTrafficModel = Boolean.parseBoolean(sTrafficModel);
 		
-		try (BufferedWriter oOut = new BufferedWriter(new FileWriter(String.format(m_sDetectorMappingFormat, sNetworkId))))
-		{
-			oOut.append(sBuf);
-		}
+		String sRoadWxModel = oReq.getParameter("roadwxmodel");
+		boolean bRoadWxModel = false;
+		if (sRoadWxModel != null)
+			bRoadWxModel = Boolean.parseBoolean(sRoadWxModel);
 		
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Adds an OSM .xml.bz2 representation of the requested network to the
-	 * response.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doOsm(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		String sNetworkId = oReq.getParameter("networkid");
-		String sLabel = oReq.getParameter("label");
-		synchronized (m_oProcessingOsm)
-		{
-			int nIndex = Collections.binarySearch(m_oProcessingOsm, sNetworkId); // ignore the request if it is already processing
-			if (nIndex < 0)
-				m_oProcessingOsm.add(~nIndex, sNetworkId);
-			else
-				return HttpServletResponse.SC_CONFLICT;
-		}
-		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId);
-		Path oBzFile = Paths.get(sGeoFile.substring(0, sGeoFile.lastIndexOf("/") + 1) + sLabel + ".osm.bz2");
-		ArrayList<OsmWay> oWays = new ArrayList();
-		ArrayList<OsmNode> oNodes = new ArrayList();
-		StringPool oPool = new StringPool();
-		int[] nBounds = new OsmBinParser().parseFile(sGeoFile, oNodes, oWays, oPool);
-		double[] dBounds = new double[]{GeoUtil.fromIntDeg(nBounds[0]), GeoUtil.fromIntDeg(nBounds[1]), GeoUtil.fromIntDeg(nBounds[2]), GeoUtil.fromIntDeg(nBounds[3])};
-		ByteArrayOutputStream oByteStream = new ByteArrayOutputStream();
-		DecimalFormat oDf = new DecimalFormat("##.#######");
-		long lIdCount = 0;
-		try (BufferedWriter oOut = new BufferedWriter(new OutputStreamWriter(oByteStream, StandardCharsets.UTF_8));
-			BZip2CompressorOutputStream oBzip = new BZip2CompressorOutputStream(Files.newOutputStream(oBzFile)))
-		{
-			oOut.append("<?xml version='1.0' encoding='UTF-8'?>\n");
-			oOut.append("<osm version=\"0.6\" generator=\"imrcp\">\n");
-			oOut.append(String.format("<bounds minlat=\"%s\" minlon=\"%s\" maxlat=\"%s\" maxlon=\"%s\"/>\n", oDf.format(dBounds[1]), oDf.format(dBounds[0]), oDf.format(dBounds[3]), oDf.format(dBounds[2])));
-			for (OsmNode oNode : oNodes)
-			{
-				oNode.m_lId = lIdCount++;
-
-				oOut.append(String.format("<node id=\"%d\" lat=\"%s\" lon=\"%s\"", oNode.m_lId, oDf.format(GeoUtil.fromIntDeg(oNode.m_nLat)), oDf.format(GeoUtil.fromIntDeg(oNode.m_nLon))));
-				if (oNode.isEmpty()) // no tags
-				{
-					oOut.append("/>\n");
-				}
-				else
-				{
-					oOut.write(">\n");
-					for (Map.Entry<String, String> oTag : oNode.entrySet())
-						oOut.append(String.format("<tag k=\"%s\" v=\"%s\"/>\n", oTag.getKey(), oTag.getValue()));
-					oOut.append("</node>\n");
-				}
-			}
-			
-			for (OsmWay oWay : oWays)
-			{
-				oWay.m_lId = lIdCount++;
-				oOut.append(String.format("<way id=\"%d\">\n", oWay.m_lId));
-				oWay.put("imrcpid", oWay.m_oId.toString());
-				for (OsmNode oNode : oWay.m_oNodes)
-					oOut.append(String.format("<nd ref=\"%d\"/>\n", oNode.m_lId));
-				for (Map.Entry<String, String> oTag : oWay.entrySet())
-					oOut.append(String.format("<tag k=\"%s\" v=\"%s\"/>\n", oTag.getKey(), oTag.getValue()));
-				oOut.append("</way>\n");
-			}
-			oOut.write("</osm>");
-			oOut.flush();
-			oBzip.write(oByteStream.toByteArray());
-			oBzip.flush();
-		}
+		String sExternalPublish = oReq.getParameter("externalpublish");
+		boolean bExternalPublish = false;
+		if (sExternalPublish != null)
+			bExternalPublish = Boolean.parseBoolean(sExternalPublish);
 		
-		String sDownload = oBzFile.toString();
-		sDownload = sDownload.substring(m_sRoot.length());
-		oRes.setContentType("application/x-bzip2");
-		try (PrintWriter oOut = oRes.getWriter())
-		{
-			oOut.append(sDownload);
-		}
-		
-		synchronized (m_oProcessingOsm)
-		{
-			int nIndex = Collections.binarySearch(m_oProcessingOsm, sNetworkId);
-			if (nIndex >= 0)
-				m_oProcessingOsm.remove(nIndex);
-		}
-		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Queues the requested network to be finalized.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws IOException
-	 * @throws ServletException
-	 */
-	public int doFinalize(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
-	   throws IOException, ServletException
-	{
-		String sNetworkId = oReq.getParameter("networkid");
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-		oWayNetworks.finalizeNetwork(sNetworkId, m_sStateShp, m_sOsmDir);
+		m_oLogger.debug("publishing " + sNetworkId);
+		oWayNetworks.publishNetwork(sNetworkId, m_sStateShp, m_sOsmDir, bTrafficModel, bRoadWxModel, bExternalPublish);
 		return HttpServletResponse.SC_OK;
-	}
-	
-	
-	/**
-	 * Attempts to snap the given point to the roadway segments in the
-	 * given list. The segments are within the tolerance are added to {@code oSnappedTo}
-	 * with the segment closest to the point in position 0.
-	 * 
-	 * @param nLon longitude of point in decimal degrees scaled to 7 decimal places
-	 * @param nLat latitude of the point decimal degrees scaled to 7 decimal places
-	 * @param oAllWays contains the candidate roadway segments to snap to
-	 * @param oSnappedTo gets filled with the roadway segments within the tolerance
-	 * the point can be snapped to. The closest way will be in position 0.
-	 * @param nTol tolerance for snapping algorithm in decimal degrees scaled to
-	 * 7 decimal places
-	 */
-	private void snap(int nLon, int nLat, ArrayList<OsmWay> oAllWays, ArrayList<OsmWay> oSnappedTo, int nTol)
-	{
-		int nSqTol = nTol * nTol; // squared tolerance for comparison
-		int nOverallDist = Integer.MAX_VALUE; // narrow to the minimum dist
-		for (OsmWay oWay : oAllWays)
-		{
-			if (!GeoUtil.isInside(nLon, nLat, oWay.m_nMinLon, oWay.m_nMinLat, oWay.m_nMaxLon, oWay.m_nMaxLat, nTol))
-				continue;
-			
-			
-			int nWayDist = Integer.MAX_VALUE;
-			ArrayList<OsmNode> oNodes = oWay.m_oNodes;
-			for (int nIndex = 0; nIndex < oNodes.size() - 1; nIndex++)
-			{
-				OsmNode o1 = oNodes.get(nIndex);
-				OsmNode o2 = oNodes.get(nIndex + 1);
-				if (GeoUtil.isInside(nLon, nLat, o1.m_nLon, o1.m_nLat, o2.m_nLon, o2.m_nLat, nTol))
-				{
-					int nSqDist = GeoUtil.getPerpDist(nLon, nLat, o1.m_nLon, o1.m_nLat, o2.m_nLon, o2.m_nLat);
-					if (nSqDist >= 0 && nSqDist <= nSqTol && nSqDist < nWayDist)
-					{
-						nWayDist = nSqDist; // reduce to next smallest distance
-					}
-				}
-			}
-			
-			if (nWayDist != Integer.MAX_VALUE)
-			{
-				if (nWayDist < nOverallDist)
-				{
-					nOverallDist = nWayDist;
-					oSnappedTo.add(0, oWay);
-				}
-				else
-					oSnappedTo.add(oWay);
-			}
-		}
 	}
 	
 	
@@ -1523,7 +991,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * Removes the given list from the active session list.
 	 * @param oList edit list to remove
 	 */
-	public void removeList(EditList oList)
+	private void removeList(EditList oList)
 	{
 		synchronized (m_oSessionLists)
 		{
@@ -1540,7 +1008,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * @param sNetworkId network id
 	 * @return active EditList associated with the session id and network id.
 	 */
-	public EditList getList(String sSessionId, String sNetworkId)
+	private EditList getList(String sSessionId, String sNetworkId)
 	{
 		synchronized (m_oSessionLists)
 		{

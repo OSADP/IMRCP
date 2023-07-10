@@ -187,7 +187,7 @@ public class USCenPlaceLookup extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doLookup(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doLookup(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sReq = oReq.getParameter("lookup");
@@ -264,7 +264,7 @@ public class USCenPlaceLookup extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doGeo(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doGeo(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sPlace = oReq.getParameter("place");
