@@ -580,6 +580,12 @@ public abstract class BaseBlock extends HttpServlet implements Runnable, IRunTar
 	{
 		return m_sInstanceName;
 	}
+	
+	
+	public String getDataPath()
+	{
+		return m_sDataPath;
+	}
 
 
 	/**
