@@ -5,7 +5,7 @@ import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly, getLineSt
 	isFeatureInsidePolygonFeature, pointToPaddedBounds, mapOffBoundFn, addStyleRule} from './map-util.js';
 import {minutesToHHmm, minutesToHH} from './common.js';
 import {loadSettings} from './map-settings.js';
-import {getNetworksAjax, getProfileAjax, initCommonMap} from './map-common.js';
+import {getNetworksAjax, getProfileAjax, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus} from './map-common.js';
 
 window.g_oRequirements = {'groups': 'imrcp-user;imrcp-admin'};
 let g_oMap;
@@ -36,6 +36,18 @@ async function initialize()
 		let oNetworks = {'type': 'geojson', 'maxzoom': 9, 'data': {'type': 'FeatureCollection', 'features': []}, 'generateId': true};
 		for (let oNetwork of oAllNetworks.values())
 		{
+			let nStatus = oNetwork.properties.status;
+			let nDisplayStatus = 4;
+			if (isStatus(nStatus, ASSEMBLING))
+				nDisplayStatus = 0;
+			else if (isStatus(nStatus, WORKINPROGRESS))
+				nDisplayStatus = 1;
+			else if (isStatus(nStatus, PUBLISHING))
+				nDisplayStatus = 2;
+			else if (isStatus(nStatus, PUBLISHED))
+				nDisplayStatus = 3;
+
+			oNetwork.properties.displaystatus = nDisplayStatus;
 			for (let oProfileNetwork of oProfile.networks.values())
 			{
 				if (oProfileNetwork.id === oNetwork.properties.networkid)

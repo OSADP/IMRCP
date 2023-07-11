@@ -11,6 +11,11 @@ let g_oLayers = {};
 let g_oPopup;
 let g_aQueryLayers = [];
 let g_oIcons = ["workzone","slow-traffic","very-slow-traffic","unusual-congestion","lengthy-queue","incident","low-visibility","dew-on-roadway","frost-on-roadway","ice-on-bridge","blowing-snow","flooded-road","detector-sdf","diamond-mgray","diamond-lblue","diamond-dblue","precip-light","precip-medium","precip-heavy","winter-precip-light","winter-precip-medium","winter-precip-heavy","light-precip","medium-precip","heavy-precip","light-winter-precip","medium-winter-precip","heavy-winter-precip","stage-action","stage-flood","nhc-sd","nhc-td","nhc-ss","nhc-ts","nhc-hu","nhc-mh","delete","chevron-sdf","hexagon-sdf"];
+let ASSEMBLING = 0b1;
+let WORKINPROGRESS = 0b10;
+let PUBLISHING = 0b100;
+let PUBLISHED = 0b1000;
+let ERROR = 0b10000;
 
 function getNetworksAjax()
 {
@@ -693,5 +698,11 @@ function labelGeojson(oEvent)
 	
 }
 
+function isStatus(nStatus, nStatusToCheck)
+{
+	return (nStatus & nStatusToCheck) === nStatusToCheck;
+}
 
-export {getNetworksAjax, getProfileAjax, MapControlIcons, addGeojsonToolbar, ignoreInput, initCommonMap, showPageoverlay, timeoutPageoverlay, getLastLayer}
+
+export {getNetworksAjax, getProfileAjax, MapControlIcons, addGeojsonToolbar, ignoreInput, initCommonMap, showPageoverlay, timeoutPageoverlay, getLastLayer,
+		ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus}

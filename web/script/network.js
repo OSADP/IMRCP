@@ -5,13 +5,8 @@ import {buildNetworkDialog, buildRoadLegendDialog, buildCancelDialog, buildNetwo
 import {switchToDetector, leaveDetectors, checkDetectorFile, uploadFile} from './detectors.js';
 
 import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly} from './map-util.js';
-import {getNetworksAjax, MapControlIcons, initCommonMap} from './map-common.js';
+import {getNetworksAjax, MapControlIcons, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus} from './map-common.js';
 
-let ASSEMBLING = 0b1;
-let WORKINPROGRESS = 0b10;
-let PUBLISHING = 0b100;
-let PUBLISHED = 0b1000;
-let ERROR = 0b10000;
 let g_oMap;
 let g_nHoverId;
 let g_oNetworkHover = {};
@@ -1827,12 +1822,6 @@ function setCursor(sCursor)
 {
 	g_sCursor = sCursor;
 }
-
-function isStatus(nStatus, nStatusToCheck)
-{
-	return (nStatus & nStatusToCheck) === nStatusToCheck;
-}
-
 
 
 $(document).on('initPage', initialize);

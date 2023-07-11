@@ -2,7 +2,7 @@ import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly, getLineSt
 	isFeatureInsidePolygonFeature, pointToPaddedBounds, mapOffBoundFn, addStyleRule} from './map-util.js';
 import {minutesToHHmm, minutesToHH} from './common.js';
 import {loadSettings} from './map-settings.js';
-import {getNetworksAjax, getProfileAjax, ignoreInput, initCommonMap} from './map-common.js';
+import {getNetworksAjax, getProfileAjax, ignoreInput, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus} from './map-common.js';
 import './jquery/jquery.datetimepicker.full.js';
 
 window.g_oRequirements = {'groups': 'imrcp-user;imrcp-admin'};
@@ -33,7 +33,7 @@ let g_bRunInstructions = false;
 // let g_nColors = ['#1e7145', '#603cba', '#00aba9', '#2d89ef', '#ffc40d', '#ee1111', '#00a300', '#e3a21a'];
 let g_nColors = ['#c00', '#0c0', '#00f', '#cc0', '#0cc', '#f0f', '#f90', '#9f0', '#90f'];
 let g_oImrcpIds = {};
-let ERROR = 0;
+let ERRORSTATE = 0;
 let ADDREMOVE = 1;
 let SELECTEDIT = 2;
 let VIEWGROUPS = 3;
@@ -83,6 +83,18 @@ async function initialize()
 		let oNetworks = {'type': 'geojson', 'maxzoom': 9, 'data': {'type': 'FeatureCollection', 'features': []}, 'generateId': true};
 		for (let oNetwork of oAllNetworks.values())
 		{
+			let nStatus = oNetwork.properties.status;
+			let nDisplayStatus = 4;
+			if (isStatus(nStatus, ASSEMBLING))
+				nDisplayStatus = 0;
+			else if (isStatus(nStatus, WORKINPROGRESS))
+				nDisplayStatus = 1;
+			else if (isStatus(nStatus, PUBLISHING))
+				nDisplayStatus = 2;
+			else if (isStatus(nStatus, PUBLISHED))
+				nDisplayStatus = 3;
+
+			oNetwork.properties.displaystatus = nDisplayStatus;
 			for (let oProfileNetwork of oProfile.networks.values())
 			{
 				if (oProfileNetwork.id === oNetwork.properties.networkid)
@@ -801,7 +813,7 @@ function addRemove(oEvent)
 }
 
 
-function switchState(nNewState, nFallback = ERROR)
+function switchState(nNewState, nFallback = ERRORSTATE)
 {
 	let bSame = nNewState === STATE;
 	switch (STATE)
@@ -818,7 +830,7 @@ function switchState(nNewState, nFallback = ERROR)
 			setValues();
 			break;
 		}
-		case ERROR:
+		case ERRORSTATE:
 		default:
 			break;
 	}
@@ -891,7 +903,7 @@ function switchState(nNewState, nFallback = ERROR)
 			g_oCurrentGroup = undefined;
 			break;
 		}
-		case ERROR:
+		case ERRORSTATE:
 		default:
 			break;
 	}
