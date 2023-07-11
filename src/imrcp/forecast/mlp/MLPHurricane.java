@@ -76,7 +76,6 @@ public class MLPHurricane extends TileFileWriter
 	private final String m_sLinkSpeedPast = "link_speed_past7d.csv";
 	private final String m_sOneshot = "hos_input.csv";
 	private final String m_sOneshotMinMax = "dummy_input_oneshot.csv";
-	private final String m_sModelFf = "%s/mlphurricane/%s/%s_{}.pth";
 	private final String m_sLinkSpeedNext = "link_speed_next7d.csv";
 	private final String m_sLinkSpeedNextMinMax = "dummy_input_lstm.csv";
 	private final String m_sOnlineOutput = "hur_output.csv";
@@ -118,18 +117,18 @@ public class MLPHurricane extends TileFileWriter
 	public boolean start()
 		throws Exception
 	{
-//		Scheduling.getInstance().scheduleOnce(this, 1000);
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		Scheduling.getInstance().scheduleOnce(this, 1000);
+//		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 	
 	@Override
 	public void execute()
 	{
-//		GregorianCalendar oCal = new GregorianCalendar(Directory.m_oUTC);
-//		oCal.set(2021, 7, 27, 0, 0, 0);
-//		long lNow = oCal.getTimeInMillis() / 60000 * 60000;
-		long lNow = System.currentTimeMillis() / 60000 * 60000; // floor to nearest minute
+		GregorianCalendar oCal = new GregorianCalendar(Directory.m_oUTC);
+		oCal.set(2021, 7, 27, 0, 0, 0);
+		long lNow = oCal.getTimeInMillis() / 60000 * 60000;
+//		long lNow = System.currentTimeMillis() / 60000 * 60000; // floor to nearest minute
 		TileObsView oOv = (TileObsView)Directory.getInstance().lookup("ObsView");
 
 		Comparator<Obs> oConeComp = (Obs o1, Obs o2) -> // compare cones by reference time and storm number and forecast number
@@ -158,9 +157,18 @@ public class MLPHurricane extends TileFileWriter
 		{
 			try
 			{
-				Path oModel = getModelPath(oNetwork.m_sNetworkId);
-				if (!Files.isDirectory(oModel.getParent()))
-					continue;
+				String sNetworkDir = String.format(oNetworks.getDataPath() + WayNetworks.NETWORKFF, oNetwork.m_sNetworkId, "");
+				sNetworkDir = sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/") + 1); // include the slash
+				sNetworkDir = MLPCommons.getModelDir(sNetworkDir, true);
+				int nIndex = 0;
+				String sFf = "online_model_%dhour.pth";
+				boolean bExists = Files.exists(Paths.get(sNetworkDir + "oneshot_model.pth"));
+				while (bExists && nIndex++ < 6)
+					bExists = Files.exists(Paths.get(sNetworkDir + String.format(sFf, nIndex)));
+				
+				if (!bExists) // model files do not exist so don't run the traffic model
+					continue; 
+
 				int[] nNetworkPoly = oNetwork.getGeometry();
 				String[] sStorm = null;
 				for (Obs oCone : oCones)
@@ -193,7 +201,7 @@ public class MLPHurricane extends TileFileWriter
 				}
 
 				ObsList oCats = oOv.getData(ObsType.TRSCAT, oCone.m_lObsTime1, oCone.m_lObsTime2, nCone[1], nCone[3], nCone[0], nCone[2], oCone.m_lTimeRecv);
-				int nIndex = oCats.size();
+				nIndex = oCats.size();
 				while (nIndex-- > 0)
 				{
 					Obs oTemp = oCats.get(nIndex);
@@ -258,7 +266,7 @@ public class MLPHurricane extends TileFileWriter
 				if (Double.isNaN(dLandfall[0]) || lLandfall < lNow) // hurricane is not projected to make landfall or landfall has already occured
 					continue;
 				
-				MLPHurricaneSession oSess = new MLPHurricaneSession(oNetwork, lNow, oModel, oNetwork.m_oNetworkWays, oCones.get(0), oCats, oGstWnds, dLandfall, lLandfall);
+				MLPHurricaneSession oSess = new MLPHurricaneSession(oNetwork, lNow, sNetworkDir, oNetwork.m_oNetworkWays, oCones.get(0), oCats, oGstWnds, dLandfall, lLandfall);
 				synchronized (m_oActiveRequestsByTimeAndFunction)
 				{
 					String sKey = Long.toString(oSess.m_lRuntime) + oSess.m_sFunction;
@@ -315,13 +323,6 @@ public class MLPHurricane extends TileFileWriter
 			queueMLPSession(oOneshotSess);
 		}
 	}
-	
-	
-	private Path getModelPath(String sNetworkId)
-	{
-		return Paths.get(String.format(m_sModelFf, m_sDataPath, sNetworkId, sNetworkId));
-	}
-
 	
 	
 	private boolean createInputFiles(MLPHurricaneSession oSess, WayNetworks oWayNetworks, TileObsView oOv)
@@ -906,7 +907,7 @@ public class MLPHurricane extends TileFileWriter
 		String sQuery = String.format("function=%s&dir=%s&model=%s&session=%s&starttime=%s&model=%s", 
 			URLEncoder.encode(oSess.m_sFunction, StandardCharsets.UTF_8), 
 			URLEncoder.encode(oSess.m_sDirectory, StandardCharsets.UTF_8),
-			URLEncoder.encode(oSess.m_oModel.toString(), StandardCharsets.UTF_8),
+			URLEncoder.encode(oSess.m_sNetworkDir, StandardCharsets.UTF_8),
 			URLEncoder.encode(oSess.m_sId, StandardCharsets.UTF_8),
 			URLEncoder.encode(oSdf.format(oSess.m_lRuntime - 300000), StandardCharsets.UTF_8),
 			URLEncoder.encode("mlphur", StandardCharsets.UTF_8));
@@ -1053,7 +1054,6 @@ public class MLPHurricane extends TileFileWriter
 		private ArrayList<OsmWay> m_oSegments;
 		private Network m_oNetwork;
 		private long m_lRuntime;
-		private Path m_oModel;
 		private Obs m_oCone;
 		private ObsList m_oCats;
 		private ObsList m_oGstWnds;
@@ -1062,6 +1062,7 @@ public class MLPHurricane extends TileFileWriter
 		private String m_sDirectory;
 		private boolean m_bProcessed = false;
 		private String m_sFunction = "hur";
+		private String m_sNetworkDir;
 		
 		
 		MLPHurricaneSession(MLPHurricaneSession oSess)
@@ -1071,7 +1072,7 @@ public class MLPHurricane extends TileFileWriter
 			m_oSegments = oSess.m_oSegments;
 			m_oNetwork = oSess.m_oNetwork;
 			m_lRuntime = oSess.m_lRuntime;
-			m_oModel = oSess.m_oModel;
+			m_sNetworkDir = oSess.m_sNetworkDir;
 			m_oCone = oSess.m_oCone;
 			m_oCats = oSess.m_oCats;
 			m_oGstWnds = oSess.m_oGstWnds;
@@ -1081,13 +1082,13 @@ public class MLPHurricane extends TileFileWriter
 			m_bProcessed = false;
 		}
 		
-		MLPHurricaneSession(Network oNetwork, long lRuntime, Path oModel, ArrayList<OsmWay> oSegments, Obs oCone, ObsList oCats, ObsList oGstWnds, double[] dLandfall, long lLandfall)
+		MLPHurricaneSession(Network oNetwork, long lRuntime, String sNetworkDir, ArrayList<OsmWay> oSegments, Obs oCone, ObsList oCats, ObsList oGstWnds, double[] dLandfall, long lLandfall)
 		{
 			m_sId = Long.toString(System.nanoTime());
 			m_oSegments = oSegments;
 			m_oNetwork = oNetwork;
 			m_lRuntime = lRuntime;
-			m_oModel = oModel;
+			m_sNetworkDir = sNetworkDir;
 			m_oCone = oCone;
 			m_oCats = oCats;
 			m_oGstWnds = oGstWnds;

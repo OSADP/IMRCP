@@ -78,7 +78,6 @@ public class MLP extends TileFileWriter
 	private String m_sRTInputFf = "mlprt/%s_%s/%d_%d/mlp_input.csv";
 	private String m_sLtsInputFf = "%d_%d/mlp_lts_input.csv";
 	private String m_sOneshotFf = "%d_%d/mlp_oneshot_input.csv";
-	private String m_sModelDir;
 	private final ArrayList<MLPSession> m_oActiveRequests = new ArrayList();
 	private final HashMap<String, ArrayList<MLPSession>> m_oActiveRequestsByRun = new HashMap();
 	private int m_nPort;
@@ -90,12 +89,6 @@ public class MLP extends TileFileWriter
 		super.reset(oBlockConfig);
 		m_nPort = oBlockConfig.optInt("port", 8000);
 		m_dExtendDistTol = oBlockConfig.optDouble("disttol", 480000);
-		m_sModelDir = oBlockConfig.optString("modeldir", "mlp/");
-		if (m_sModelDir.startsWith("/"))
-			m_sModelDir = m_sModelDir.substring(1);
-		if (!m_sModelDir.endsWith("/"))
-			m_sModelDir += "/";
-		m_sModelDir = m_sTempPath + m_sModelDir;
 	}
 	
 	
@@ -103,8 +96,6 @@ public class MLP extends TileFileWriter
 	public boolean start()
 		throws Exception
 	{
-		if (m_sModelDir == null)
-			return false;
 //		Scheduling.getInstance().scheduleOnce(this, 10000);
 		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
@@ -119,6 +110,9 @@ public class MLP extends TileFileWriter
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		String sKey = Long.toString(lNow) + "rt";
 		ArrayList<MLPSession> oSessions = getSessions(lNow, "rt", oWayNetworks, sKey, null);
+		
+		if (oSessions.isEmpty())
+			return;
 		
 		for (MLPSession oSess : oSessions)
 			oSess.m_sKey = sKey;
@@ -166,6 +160,12 @@ public class MLP extends TileFileWriter
 		{
 			if (!oNetwork.m_bCanRunTraffic)
 				continue;
+			String sNetworkDir = String.format(oWayNetworks.getDataPath() + WayNetworks.NETWORKFF, oNetwork.m_sNetworkId, "");
+			sNetworkDir = sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/") + 1); // include the slash
+			sNetworkDir = MLPCommons.getModelDir(sNetworkDir, false);
+			
+			if (!Files.exists(Paths.get(sNetworkDir + "decision_tree.pickle")) || !Files.exists(Paths.get(sNetworkDir + "mlp_python_data.pkl"))) // model files do not exist so don't run the traffic model
+				continue;
 			int[] nBb = oNetwork.getBoundingBox();
 			ArrayList<OsmWay> oNetworkSegments = new ArrayList();
 			oWayNetworks.getWays(oNetworkSegments, 0, nBb[0], nBb[1], nBb[2], nBb[3]);
@@ -195,7 +195,7 @@ public class MLP extends TileFileWriter
 				if (nIndex < 0)
 				{
 					nIndex = ~nIndex;
-					MLPSession oSess = new MLPSession(nTile[0], nTile[1], lRuntime, sFunction, oWayNetworks, oM, oRR, sKey);
+					MLPSession oSess = new MLPSession(nTile[0], nTile[1], lRuntime, sFunction, oWayNetworks, oM, oRR, sKey, sNetworkDir);
 					oSessions.add(nIndex, oSess);
 				}
 				ArrayList<OsmWay> oDownstreams = new ArrayList();
@@ -249,7 +249,7 @@ public class MLP extends TileFileWriter
 	}
 	
 	
-	public void executeOneshot(Scenario oScenario, String sBaseDir)
+	public boolean executeOneshot(Scenario oScenario, String sBaseDir)
 	{
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		String sKey = oScenario.m_sId + "os";
@@ -267,6 +267,8 @@ public class MLP extends TileFileWriter
 		
 		ArrayList<MLPSession> oSessions = getSessions(lLongTsUpdateStart + 3600000, "os", oWayNetworks, sKey, oScenario);
 		m_oLogger.debug("Sessions: " + oSessions.size());
+		if (oSessions.isEmpty())
+			return false;
 		
 		synchronized (m_oActiveRequestsByRun)
 		{	
@@ -286,7 +288,7 @@ public class MLP extends TileFileWriter
 			oOneshotSess.m_nForecastOffset = nForecastOffset;
 			oOneshotSess.m_lRefTime = lRefTime;
 			oOneshotSess.createOneshotInputFiles();
-			MLPSession oLts = new MLPSession(oOneshotSess.m_nX, oOneshotSess.m_nY, lLongTsUpdateStart, "lts", oWayNetworks, oOneshotSess.m_oM, oOneshotSess.m_oRR, sKey);
+			MLPSession oLts = new MLPSession(oOneshotSess.m_nX, oOneshotSess.m_nY, lLongTsUpdateStart, "lts", oWayNetworks, oOneshotSess.m_oM, oOneshotSess.m_oRR, sKey, oOneshotSess.m_sNetworkDir);
 			oLts.m_oSessionRecords = oOneshotSess.m_oSessionRecords;
 			oLts.m_sDirectory = sBaseDir + oScenario.m_sId + "/";
 			oLts.m_oScenario = oScenario;
@@ -313,6 +315,8 @@ public class MLP extends TileFileWriter
 			oSession.createLongTsInputFiles();
 			queueMLPSession(oSession);
 		}
+		
+		return true;
 	}
 	
 	public void longTsUpdate()
@@ -569,13 +573,14 @@ public class MLP extends TileFileWriter
 		private String m_sKey;
 		private Scenario m_oScenario;
 		private int m_nForecastOffset;
+		private String m_sNetworkDir;
 		
 
 		MLPSession()
 		{
 		}
 		
-		MLPSession(int nX, int nY, long lRuntime, String sFunction, WayNetworks oWayNetworks, Mercator oM, ResourceRecord oRR, String sKey)
+		MLPSession(int nX, int nY, long lRuntime, String sFunction, WayNetworks oWayNetworks, Mercator oM, ResourceRecord oRR, String sKey, String sNetworkDir)
 		{
 			m_sId = Long.toString(System.nanoTime());
 			m_nX = nX;
@@ -586,6 +591,7 @@ public class MLP extends TileFileWriter
 			m_oM = oM;
 			m_oRR = oRR;
 			m_sKey = sKey;
+			m_sNetworkDir = sNetworkDir;
 		}
 		
 		
@@ -1211,7 +1217,7 @@ public class MLP extends TileFileWriter
 			URLEncoder.encode(oSess.m_sDirectory, StandardCharsets.UTF_8),
 			URLEncoder.encode(oSess.m_sId, StandardCharsets.UTF_8),
 			URLEncoder.encode(oSdf.format(oSess.m_lRuntime - 300000), StandardCharsets.UTF_8),
-			URLEncoder.encode(m_sModelDir, StandardCharsets.UTF_8),
+			URLEncoder.encode(oSess.m_sNetworkDir, StandardCharsets.UTF_8),
 			URLEncoder.encode("mlp", StandardCharsets.UTF_8));
 		
 		if (oSess.m_sFunction.compareTo("os") == 0)

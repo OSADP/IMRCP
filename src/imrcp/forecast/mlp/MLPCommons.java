@@ -14,6 +14,8 @@ import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.system.Id;
 import imrcp.system.ObsType;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.TreeMap;
@@ -256,5 +258,29 @@ public class MLPCommons
 			return 4; // 4-PM PEAK
 
 		return 5; // 5-NIGHT
+	}
+	
+	
+	public static String getModelDir(String sNetworkDir, boolean bHurricaneModel)
+	{
+		if (bHurricaneModel)
+		{
+			int nIndex = 0;
+			String sFf = "online_model_%dhour.pth";
+			boolean bExists = Files.exists(Paths.get(sNetworkDir + "oneshot_model.pth"));
+			while (bExists && nIndex++ < 6)
+				bExists = Files.exists(Paths.get(sNetworkDir + String.format(sFf, nIndex)));
+			if (bExists)
+				return sNetworkDir;
+		}
+		else
+		{
+			if (Files.exists(Paths.get(sNetworkDir + "decision_tree.pickle")) && Files.exists(Paths.get(sNetworkDir + "mlp_python_data.pkl")))
+			{
+				return sNetworkDir;
+			}
+		}
+		
+		return sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/", sNetworkDir.length() - 2) + 1); // -2 to skip the ending "/" and then + 1 to include the slash
 	}
 }
