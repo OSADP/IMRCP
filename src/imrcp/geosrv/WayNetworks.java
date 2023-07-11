@@ -94,12 +94,6 @@ public class WayNetworks extends BaseBlock
 	 * Path to the Network JSON file
 	 */
 	private String m_sNetworkFile;
-
-	
-	/**
-	 * Maps Network Ids to TimeZone string ids used in {@link java.util.TimeZone#getTimeZone(java.lang.String)}
-	 */
-	private HashMap<String, String> m_oTimeZones = new HashMap();
 	
 	
 	@Override
@@ -111,11 +105,6 @@ public class WayNetworks extends BaseBlock
 			m_sNetworkFile = m_sNetworkFile.substring(1);
 		m_sGeoFileFormat = m_sDataPath + NETWORKFF;
 		m_sNetworkFile = m_sDataPath + m_sNetworkFile;
-		String[] sTzs = JSONUtil.getStringArray(oBlockConfig, "tzs");
-		for (int nIndex = 0; nIndex < sTzs.length;)
-		{
-			m_oTimeZones.put(sTzs[nIndex++], sTzs[nIndex++]);
-		}
 	}
 	
 	
