@@ -656,23 +656,24 @@ public class Scenarios extends SecureBaseBlock
 				m_oLogger.debug("Processing scenario: " + oScenario.m_sId);
 				Path oDataFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId));
 				Path oProcessedFile = Paths.get(m_sBaseDir + String.format(m_sDataFf, oScenario.m_sId).replace("data", "processed"));
+				boolean bWriteProcessed = oScenario.m_bRunTraffic;
 				try
 				{
-					if (oScenario.m_bRunTraffic)
-					{
-						m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
-						MLP oMLP = (MLP)Directory.getInstance().lookup("MLP");
-						oMLP.executeOneshot(oScenario, m_sBaseDir);
-						m_oLogger.debug("Finished queuing mlp for: " + oScenario.m_sId);
-					}
-
 					MetroProcess oMetro = null;
+					
 					if (oScenario.m_bRunRoadWeather)
 					{
 						oMetro = new MetroProcess(oScenario.m_oGroups[0].m_bPlowing.length); 
 						m_oLogger.debug("Starting metro for: " + oScenario.m_sId);
 						oMetro.process(oScenario); // road weater prediction
 						m_oLogger.debug("Finished metro for: " + oScenario.m_sId);
+					}
+					if (oScenario.m_bRunTraffic)
+					{
+						m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
+						MLP oMLP = (MLP)Directory.getInstance().lookup("MLP");
+						bWriteProcessed = oMLP.executeOneshot(oScenario, m_sBaseDir);
+						m_oLogger.debug("Finished queuing mlp for: " + oScenario.m_sId);
 					}
 
 					JSONArray oGeoJsonFeatures = new JSONArray();
@@ -708,7 +709,7 @@ public class Scenarios extends SecureBaseBlock
 								oProps.put("tpvt", NODATADOUBLES);
 								oProps.put("dphsn", NODATADOUBLES);
 							}
-							if (!oScenario.m_bRunTraffic)
+							if (!bWriteProcessed)
 								oProps.put("trflnk", NODATA);
 							oProps.put("spdlimit", oMetadata.m_nSpdLimit);
 							oProps.put("lanecount", oMetadata.m_nLanes);
@@ -720,7 +721,7 @@ public class Scenarios extends SecureBaseBlock
 						}
 					}
 					
-					try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oScenario.m_bRunTraffic ? oProcessedFile : oDataFile, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8"))) // write the file
+					try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(bWriteProcessed ? oProcessedFile : oDataFile, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8"))) // write the file
 					{
 						oGeoJsonFeatures.write(oOut);
 					}
