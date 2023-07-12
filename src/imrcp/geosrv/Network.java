@@ -323,31 +323,6 @@ public class Network implements Comparable<Network>
 	 */
 	public boolean wayInside(OsmWay oWay)
 	{
-		if (Collections.binarySearch(m_oNetworkWays, oWay, OsmWay.WAYBYTEID) >= 0)
-		{
-			int[] nGeo = Arrays.newIntArray(oWay.m_oNodes.size() + 4);
-			nGeo = Arrays.add(nGeo, oWay.m_nMinLon, oWay.m_nMinLat);
-			nGeo = Arrays.add(nGeo, oWay.m_nMaxLon, oWay.m_nMaxLat);
-			for (OsmNode oNode : oWay.m_oNodes)
-				nGeo = Arrays.add(nGeo, oNode.m_nLon, oNode.m_nLat);
-			return GeoUtil.isInsideRingAndHoles(m_nGeometry, Obs.LINESTRING, nGeo);
-		}
-		
-		return false;
-	}
-	
-	
-	/**
-	 * Determines if the given Id is included in the Network. Any Id that does
-	 * not represent a roadway segment is by default included.
-	 * 
-	 * @param oId Id to test
-	 * @return true if the Id does not represent a roadway segment or if the Id
-	 * represents a roadway segment and is in {@link #m_oNetworkWays}, otherwise
-	 * false
-	 */
-	public boolean includeWay(OsmWay oWay)
-	{
 		return Collections.binarySearch(m_oNetworkWays, oWay, OsmWay.WAYBYTEID) >= 0;
 	}
 	
