@@ -383,7 +383,7 @@ public class TileServlet extends SecureBaseBlock
 							{
 								int[] nPt = oIt.next();
 								OsmWay oSnap = WAYS.getWay(nSnapTol, nPt[0], nPt[1]);
-								if (oSnap == null || !oNetwork.includeWay(oSnap))
+								if (oSnap == null || !oNetwork.wayInside(oSnap))
 									continue;
 
 								oObs.m_oObjId = oSnap.m_oId;
@@ -805,7 +805,6 @@ public class TileServlet extends SecureBaseBlock
 	
 	private void forwardRequest(String sRequest, int nRequestType, int nGeoRequestType, int nLon1, int nLat1, int nLon2, int nLat2, VectorTile.Tile.Builder oTileBuilder, StringBuilder sTimeCookies)
 	{
-		int[] nBoundingPolygon = GeoUtil.getBoundingPolygon(nLon1, nLat1, nLon2, nLat2);
 		for (int nIndex = 0; nIndex < SERVERS.size(); nIndex++)
 		{
 			ServerConfig oConfig = SERVERS.get(nIndex);
@@ -814,7 +813,8 @@ public class TileServlet extends SecureBaseBlock
 			ArrayList<int[]> oGeos = oConfig.m_oNetworkGeometries;
 			for (int nGeoIndex = 0; nGeoIndex < oGeos.size(); nGeoIndex++)
 			{
-				if (nGeoRequestType == Obs.POLYGON || GeoUtil.isInsideRingAndHoles(oGeos.get(nGeoIndex), Obs.POLYGON, nBoundingPolygon))
+				int[] oGeo = oGeos.get(nGeoIndex);
+				if (nGeoRequestType == Obs.POLYGON || GeoUtil.boundingBoxesIntersect(nLon1, nLat1, nLon2, nLat2, oGeo[3], oGeo[4], oGeo[5], oGeo[6]))
 				{
 					try
 					{
@@ -922,11 +922,21 @@ public class TileServlet extends SecureBaseBlock
 				}
 			}
 		}
-		else
+		else // road network boundary request
 		{
 			ArrayList<int[]> oPolygons = new ArrayList();
 			for (Network oNetwork : WAYS.getNetworks())
-				oPolygons.add(oNetwork.getGeometry());
+			{
+				for (int nNetworkIndex = 0; nNetworkIndex < oSession.m_oProfile.m_sNetworks.length; nNetworkIndex++)
+				{
+					if (oNetwork.m_sNetworkId.compareTo(oSession.m_oProfile.m_sNetworks[nNetworkIndex]) == 0)
+					{
+						oPolygons.add(oNetwork.getGeometry());
+						break;
+					}
+				}
+				
+			}
 			ServerConfig oPrev = new ServerConfig("", null, 0);
 			for (int nIndex = 0; nIndex < SERVERS.size(); nIndex++)
 			{
@@ -1142,7 +1152,7 @@ public class TileServlet extends SecureBaseBlock
 //			}
 //		}
 
-		if (oSession != null && nRequestType != RNP) // do not forward request if this is already a forwarded request
+		if (oSession != null && nRequestType != RNP) // do not forward request if this is already a forwarded request, don't forward road network boundary request since the geometries are cached
 			forwardRequest(sRequest, nRequestType, Obs.POLYGON, nLon1, nLat1, nLon2, nLat2, oTileBuilder, sTimeCookies);
 		oResponse.setContentType("application/x-protobuf");
 		if (oTileBuilder.getLayersCount() > 0)
