@@ -208,17 +208,17 @@ function networksSuccess(data, textStatus, jqXHR)
 		oGeoJson.features.push(value);
 		
 	}
-		
-	if (oGeoJson.features.length === 0)
-	{
-		$('#instructions-error').html('No networks have been created. Create one by using the "Create Network" button');
-		return;
-	}
 	
 	removeSource('network-polygons', g_oMap);
 	g_oMap.addSource('network-polygons', {'type': 'geojson', 'data': oGeoJson, 'generateId': true});
 	g_oMap.addLayer(g_oLayers['network-polygons']);
 	g_oMap.addLayer(g_oLayers['network-polygons-del']);
+	
+	if (oGeoJson.features.length === 0)
+	{
+		$('#instructions-error').html('No networks have been created. Create one by using the "Create Network" button');
+		return;
+	}
 	
 	g_oMap.on('click', clickNetwork);
 	g_oMap.on('mousemove', mousemoveNetworkPolygons);
