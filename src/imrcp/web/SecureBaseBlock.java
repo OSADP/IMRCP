@@ -18,7 +18,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
-import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -114,9 +113,11 @@ public class SecureBaseBlock extends BaseBlock
 						InetAddress oHost = InetAddress.getByName(oClient.getString("host"));
 						String sUUID = oClient.getString("uuid");
 						JSONArray oObsTypes = oClient.getJSONArray("obstypes");
-						int[] nObsTypes = new int[oObsTypes.length()];
-						for (int nObsIndex = 0; nObsIndex < nObsTypes.length; nObsIndex++)
+						int[] nObsTypes = new int[oObsTypes.length() + 2];
+						for (int nObsIndex = 0; nObsIndex < nObsTypes.length - 2; nObsIndex++)
 							nObsTypes[nObsIndex] = Integer.valueOf(oObsTypes.getString(nObsIndex), 36);
+						nObsTypes[nObsTypes.length - 2] = Integer.valueOf("rnm", 36);
+						nObsTypes[nObsTypes.length - 1] = Integer.valueOf("rnp", 36);
 						CLIENTS.add(new ClientConfig(sUUID, oHost, nObsTypes));
 						
 					}
@@ -142,6 +143,8 @@ public class SecureBaseBlock extends BaseBlock
 							int nObsType = Integer.valueOf(oObsTypes.getString(nObsIndex), 36);
 							SERVERS.add(new ServerConfig(sUUID, oHost, nObsType));
 						}
+						SERVERS.add(new ServerConfig(sUUID, oHost, Integer.valueOf("rnm", 36)));
+						SERVERS.add(new ServerConfig(sUUID, oHost, Integer.valueOf("rnp", 36)));
 					}
 					catch (Exception oEx)
 					{
