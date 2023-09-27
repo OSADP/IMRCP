@@ -6,6 +6,7 @@
 
 package imrcp.forecast.mlp;
 
+import imrcp.collect.Events;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.geosrv.Network;
@@ -162,7 +163,7 @@ public class MLP extends TileFileWriter
 				continue;
 			String sNetworkDir = String.format(oWayNetworks.getDataPath() + WayNetworks.NETWORKFF, oNetwork.m_sNetworkId, "");
 			sNetworkDir = sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/") + 1); // include the slash
-			sNetworkDir = MLPCommons.getModelDir(sNetworkDir, false);
+			sNetworkDir = MLPCommons.getModelDir(sNetworkDir, "", false);
 			
 			if (!Files.exists(Paths.get(sNetworkDir + "decision_tree.pickle")) || !Files.exists(Paths.get(sNetworkDir + "mlp_python_data.pkl"))) // model files do not exist so don't run the traffic model
 				continue;
@@ -230,11 +231,23 @@ public class MLP extends TileFileWriter
 					nOnRamps = Integer.parseInt(oWay.get("ingress"));
 				else
 					nOnRamps = 0;
-				int nLanes = oWayMetadata.m_nLanes;
+				int nLanes;
+				int nSpdLimit;
+				if (oScenario != null && oScenario.m_oUserDefinedMetadata.containsKey(oWay.m_oId))
+				{
+					int[] nMetadata = oScenario.m_oUserDefinedMetadata.get(oWay.m_oId);
+					nLanes = nMetadata[0];
+					nSpdLimit = nMetadata[1];
+				}
+				else
+				{
+					nLanes = oWayMetadata.m_nLanes;
+					nSpdLimit = oWayMetadata.m_nSpdLimit;
+				}
 				if (nLanes < 0)
 					nLanes = 2;
-
-				String sSpdLimit = oWayMetadata.m_nSpdLimit < 0 ? "65" : Integer.toString(oWayMetadata.m_nSpdLimit);
+				
+				String sSpdLimit = nSpdLimit < 0 ? "65" : Integer.toString(oWayMetadata.m_nSpdLimit);
 				oSessions.get(nIndex).m_oSessionRecords.add(new MLPSessionRecord(oWay, oDownstreams, GeoUtil.getBoundingPolygon(oWay.m_nMidLon - nTol, oWay.m_nMidLat - nTol, oWay.m_nMidLon + nTol, oWay.m_nMidLat + nTol), oGroup, new MLPMetadata(sId, sSpdLimit, oWayMetadata.m_nHOV, nDirection, nCurve, nOffRamps, nOnRamps, oWayMetadata.m_nPavementCondition, oWay.m_sName, nLanes)));
 			}
 		}
@@ -738,7 +751,7 @@ public class MLP extends TileFileWriter
 		{
 			try
 			{
-				long lQueryTime = m_lRuntime;
+				long lQueryTime = m_lRuntime - 21600000;
 				long lEnd = lQueryTime + 608400000; // accumulate 1 week of weather forecasts
 				double[] dBounds = new double[4];
 				m_oM.lonLatBounds(m_nX, m_nY, m_oRR.getZoom(), dBounds);
@@ -754,7 +767,7 @@ public class MLP extends TileFileWriter
 				m_oTz = m_oWayNetworks.getTimeZone(nTileBb[0], nTileBb[1]);
 				GregorianCalendar oCal = new GregorianCalendar(m_oTz);
 				ArrayList<RealTimeRecord> oRTRecords = new ArrayList(m_oSessionRecords.size() * 168);
-				int nForecastHour = 0;
+				int nForecastHour = -6;
 				double dIncident = ObsType.lookup(ObsType.EVT, "incident");
 				double dWorkzone = ObsType.lookup(ObsType.EVT, "workzone");
 				double dFloodedRoad = ObsType.lookup(ObsType.EVT, "flooded-road");
@@ -847,10 +860,10 @@ public class MLP extends TileFileWriter
 						oInput.m_nSpecialEvents = oRec.m_oMetadata.m_nSpecialEvents;
 						int nLanesClosed = 0;
 						int nLanesClosedDownstream = 0;
-						if (bUseScenarioMetadata)
+						if (bUseScenarioMetadata && nScenarioTimeIndex >= 0)
 						{
 							nLanesClosed = oRec.m_oMetadata.m_nLanes - oRec.m_oGroup.m_nLanes[nScenarioTimeIndex];
-							oInput.m_sSpeedLimit = Integer.toString(oRec.m_oGroup.m_nVsl[nScenarioTimeIndex]);
+							oInput.m_nVsl = oRec.m_oGroup.m_nVsl[nScenarioTimeIndex];
 							for (OsmWay oDown : oRec.m_oDownstreams)
 							{
 								for (int nTempIndex = 0; nTempIndex < m_oScenario.m_oGroups.length; nTempIndex++)
@@ -887,8 +900,20 @@ public class MLP extends TileFileWriter
 							oInput.m_nIncidentDownstream = 1;
 						oInput.m_nWorkzoneOnLink = nEvents[2];
 						oInput.m_nWorkzoneDownstream = nEvents[3];
-						oInput.m_nLanesClosedOnLink = nEvents[4] == -1 ? oInput.m_nLanes : nEvents[4]; // -1 means there was a flooded road event so all lanes are closed
-						oInput.m_nLanesClosedDownstream = nEvents[5] == -1 ? oInput.m_nLanes : nEvents[5];
+						if (nEvents[4] == Events.ALLLANES)
+							oInput.m_nLanesClosedOnLink = oInput.m_nLanes;
+						else if (nEvents[4] == Events.HALFLANES)
+							oInput.m_nLanesClosedOnLink = oInput.m_nLanes / 2;
+						else
+							oInput.m_nLanesClosedOnLink = nEvents[4];
+						
+						if (nEvents[5] == Events.ALLLANES)
+							oInput.m_nLanesClosedDownstream = oInput.m_nLanes;
+						else if (nEvents[5] == Events.HALFLANES)
+							oInput.m_nLanesClosedDownstream = oInput.m_nLanes / 2;
+						else
+							oInput.m_nLanesClosedDownstream = nEvents[5];
+							
 						oInput.m_nLanesClosedDownstream = Math.max(oInput.m_nLanesClosedDownstream, nLanesClosedDownstream);
 						oInput.m_nLanesClosedOnLink = Math.max(oInput.m_nLanesClosedOnLink, nLanesClosed);
 						if (oInput.m_nLanesClosedOnLink > oRec.m_oMetadata.m_nLanes)
@@ -1066,8 +1091,21 @@ public class MLP extends TileFileWriter
 							oInput.m_nIncidentDownstream = nEvents[1];
 							oInput.m_nWorkzoneOnLink = nEvents[2];
 							oInput.m_nWorkzoneDownstream = nEvents[3];
-							oInput.m_nLanesClosedOnLink = nEvents[4] == -1 ? oInput.m_nLanes : nEvents[4]; // -1 means there was a flooded road event so all lanes are closed
-							oInput.m_nLanesClosedDownstream = nEvents[5] == -1 ? oInput.m_nLanes : nEvents[5];
+							if (nEvents[4] == Events.ALLLANES)
+								oInput.m_nLanesClosedOnLink = oInput.m_nLanes;
+							else if (nEvents[4] == Events.HALFLANES)
+								oInput.m_nLanesClosedOnLink = oInput.m_nLanes / 2;
+							else
+								oInput.m_nLanesClosedOnLink = nEvents[4];
+
+							if (nEvents[5] == Events.ALLLANES)
+								oInput.m_nLanesClosedDownstream = oInput.m_nLanes;
+							else if (nEvents[5] == Events.HALFLANES)
+								oInput.m_nLanesClosedDownstream = oInput.m_nLanes / 2;
+							else
+								oInput.m_nLanesClosedDownstream = nEvents[5];
+							if (oInput.m_nLanesClosedOnLink > oInput.m_nLanes)
+								oInput.m_nLanesClosedOnLink = oInput.m_nLanes;
 							oRTRecords.add(oInput);
 						}
 						lQueryTime = lQueryEnd;
@@ -1181,7 +1219,7 @@ public class MLP extends TileFileWriter
 		return Double.NaN;
 	}
 	
-	private double getAverageValue(ObsList oData, int[] nQueryGeo)
+	public static double getAverageValue(ObsList oData, int[] nQueryGeo)
 	{
 		double dTotal = 0.0;
 		int nCount = 0;

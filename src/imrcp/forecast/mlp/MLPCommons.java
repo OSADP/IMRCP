@@ -6,6 +6,7 @@
 
 package imrcp.forecast.mlp;
 
+import imrcp.collect.Events;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.WayNetworks;
 import imrcp.geosrv.osm.OsmNode;
@@ -124,6 +125,7 @@ public class MLPCommons
 			Obs oEvent = oEvents.get(nIndex);
 			if (oEvent.m_lObsTime1 >= lTimestamp + 300000 || oEvent.m_lObsTime2 < lTimestamp)
 				continue;
+			int nLanes = Integer.parseInt(oEvent.m_sStrings[3]);
 			if (oEvent.m_dValue == dIncident || oEvent.m_dValue == dFloodedRoad)
 			{
 				for (OsmWay oDown : oDownstream)
@@ -133,11 +135,11 @@ public class MLPCommons
 						nReturn[1] = 1;
 						if (oEvent.m_dValue == dIncident)
 						{
-							if (nReturn[5] >= 0)
-								nReturn[5] += Integer.parseInt(oEvent.m_sStrings[3]);
+							if (nLanes > nReturn[5])
+								nReturn[5] = nLanes;
 						}
-						else
-							nReturn[5] = -1;
+						else // flooded road
+							nReturn[5] = Events.ALLLANES;
 						break;
 					}
 					if (nReturn[1] == 1)
@@ -148,22 +150,22 @@ public class MLPCommons
 					nReturn[0] = 1;
 					if (oEvent.m_dValue == dIncident)
 					{
-						if (nReturn[4] >= 0)
-							nReturn[4] += Integer.parseInt(oEvent.m_sStrings[3]);
+						if (nLanes > nReturn[4])
+							nReturn[4] = nLanes;
 					}
-					else
-						nReturn[4] = -1;
+					else // flooded road
+						nReturn[4] = Events.ALLLANES;
 				}
 			}
-			else 
+			else // workzone
 			{
 				for (OsmWay oDown : oDownstream)
 				{
 					if (Id.COMPARATOR.compare(oDown.m_oId, oEvent.m_oObjId) == 0)
 					{
 						nReturn[3] = 1;
-						if (nReturn[5] >= 0)
-							nReturn[5] += Integer.parseInt(oEvent.m_sStrings[3]);
+						if (nLanes > nReturn[5])
+							nReturn[5] = nLanes;
 						break;
 					}
 					if (nReturn[3] == 1)
@@ -172,8 +174,8 @@ public class MLPCommons
 				if (Id.COMPARATOR.compare(oWay.m_oId, oEvent.m_oObjId) == 0)
 				{
 					nReturn[2] = 1;
-					if (nReturn[4] >= 0)
-						nReturn[4] += Integer.parseInt(oEvent.m_sStrings[3]);
+					if (nLanes > nReturn[4])
+						nReturn[4] += nLanes;
 				}
 			}
 		}
@@ -261,17 +263,14 @@ public class MLPCommons
 	}
 	
 	
-	public static String getModelDir(String sNetworkDir, boolean bHurricaneModel)
+	public static String getModelDir(String sNetworkDir, String sSubDir, boolean bHurricaneModel)
 	{
 		if (bHurricaneModel)
 		{
-			int nIndex = 0;
-			String sFf = "online_model_%dhour.pth";
-			boolean bExists = Files.exists(Paths.get(sNetworkDir + "oneshot_model.pth"));
-			while (bExists && nIndex++ < 6)
-				bExists = Files.exists(Paths.get(sNetworkDir + String.format(sFf, nIndex)));
+			String sDirFullPath = sNetworkDir + sSubDir;
+			boolean bExists = hurricaneModelFilesExist(sDirFullPath);
 			if (bExists)
-				return sNetworkDir;
+				return sDirFullPath;
 		}
 		else
 		{
@@ -282,5 +281,17 @@ public class MLPCommons
 		}
 		
 		return sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/", sNetworkDir.length() - 2) + 1); // -2 to skip the ending "/" and then + 1 to include the slash
+	}
+	
+	
+	public static boolean hurricaneModelFilesExist(String sDirectory)
+	{
+		String sFf = "online_model_%dhour.pth";
+		boolean bExists = Files.exists(Paths.get(sDirectory + "oneshot_model.pth"));
+		int nIndex = 0;
+		while (bExists && nIndex++ < 6)
+			bExists = Files.exists(Paths.get(sDirectory + String.format(sFf, nIndex)));
+		
+		return bExists;
 	}
 }

@@ -35,6 +35,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -66,6 +67,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /**
  *
@@ -107,9 +109,10 @@ public class MLPHurricane extends TileFileWriter
 	{
 		super.reset(oBlockConfig);
 		m_sDirFormatString = m_sTempPath + "mlphurricane/%s/%s/";
-		m_nPort = oBlockConfig.optInt("port", 8000);
+		m_nPort = oBlockConfig.getInt("port");
 		m_nInterpolateLimit = oBlockConfig.optInt("intlimit", 72) + 2; // default 6 hour interpolation
 		m_dExtendDistTol = oBlockConfig.optDouble("disttol", 480000);
+		
 	}
 	
 	
@@ -117,18 +120,14 @@ public class MLPHurricane extends TileFileWriter
 	public boolean start()
 		throws Exception
 	{
-		Scheduling.getInstance().scheduleOnce(this, 1000);
-//		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 	
 	@Override
 	public void execute()
 	{
-		GregorianCalendar oCal = new GregorianCalendar(Directory.m_oUTC);
-		oCal.set(2021, 7, 27, 0, 0, 0);
-		long lNow = oCal.getTimeInMillis() / 60000 * 60000;
-//		long lNow = System.currentTimeMillis() / 60000 * 60000; // floor to nearest minute
+		long lNow = System.currentTimeMillis() / 60000 * 60000; // floor to nearest minute
 		TileObsView oOv = (TileObsView)Directory.getInstance().lookup("ObsView");
 
 		Comparator<Obs> oConeComp = (Obs o1, Obs o2) -> // compare cones by reference time and storm number and forecast number
@@ -157,16 +156,11 @@ public class MLPHurricane extends TileFileWriter
 		{
 			try
 			{
-				String sNetworkDir = String.format(oNetworks.getDataPath() + WayNetworks.NETWORKFF, oNetwork.m_sNetworkId, "");
-				sNetworkDir = sNetworkDir.substring(0, sNetworkDir.lastIndexOf("/") + 1); // include the slash
-				sNetworkDir = MLPCommons.getModelDir(sNetworkDir, true);
-				int nIndex = 0;
-				String sFf = "online_model_%dhour.pth";
-				boolean bExists = Files.exists(Paths.get(sNetworkDir + "oneshot_model.pth"));
-				while (bExists && nIndex++ < 6)
-					bExists = Files.exists(Paths.get(sNetworkDir + String.format(sFf, nIndex)));
+				String sNetworkDir = oNetworks.getNetworkDir(oNetwork.m_sNetworkId);
+				JSONObject oStatus = oNetworks.getHurricaneModelStatus(oNetwork);
 				
-				if (!bExists) // model files do not exist so don't run the traffic model
+				sNetworkDir = MLPCommons.getModelDir(sNetworkDir, oStatus.getString("model"), true);
+				if (!MLPCommons.hurricaneModelFilesExist(sNetworkDir)) // model files do not exist so don't run the traffic model
 					continue; 
 
 				int[] nNetworkPoly = oNetwork.getGeometry();
@@ -201,7 +195,7 @@ public class MLPHurricane extends TileFileWriter
 				}
 
 				ObsList oCats = oOv.getData(ObsType.TRSCAT, oCone.m_lObsTime1, oCone.m_lObsTime2, nCone[1], nCone[3], nCone[0], nCone[2], oCone.m_lTimeRecv);
-				nIndex = oCats.size();
+				int nIndex = oCats.size();
 				while (nIndex-- > 0)
 				{
 					Obs oTemp = oCats.get(nIndex);
@@ -888,6 +882,10 @@ public class MLPHurricane extends TileFileWriter
 		m_oLogger.debug("done");
 	}
 	
+	public int getPort()
+	{
+		return m_nPort;
+	}
 	
 	@Override
 	protected void createFiles(TileFileInfo oInfo, TreeSet<Path> oArchiveFiles)
