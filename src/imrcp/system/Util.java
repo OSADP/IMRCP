@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
@@ -20,13 +22,9 @@ public class Util
 	private static final float[] SHORT_FLOAT = new float[65536];
 
 	public static void main(String[] sArgs)
+		throws Exception
 	{
-		int nByte = combineNybbles(1, -1);
-		int nMSN = getUpperNybble(nByte, true);
-		int nLSN = getLowerNybble(nByte, true);
-		System.out.println(nByte);
-		System.out.println(nMSN);
-		System.out.println(nLSN);
+		System.out.println(getLastLinesOfFile("C:/Users/aaron.cherney/Documents/IMRCP5/testlog.log", 4));
 	}
 	
 	static
@@ -73,6 +71,45 @@ public class Util
 				sBuffer.append((char)nByte);
 			}
 			return sBuffer.reverse().toString();
+		}
+	}
+	
+	
+	public static String getLastLinesOfFile(String sFilename, int nLines)
+	{
+		try
+		{
+			if (!Files.exists(Paths.get(sFilename)) || nLines < 1)
+				return null;
+			int nCount = 0;
+			try (RandomAccessFile oIn = new RandomAccessFile(sFilename, "r")) // open for read
+			{
+				long lLength = oIn.length() - 1; // start at the end of the file
+				StringBuilder sBuffer = new StringBuilder();
+				for (long lPointer = lLength; lPointer != -1; lPointer--) // iterate backwards
+				{
+					oIn.seek(lPointer);
+					int nByte = oIn.readByte();
+
+					if (nByte == 0xA) // check for new line character
+					{
+						if (lPointer == lLength) // check for new line at the end of the file
+							continue; // skip it
+						if (++nCount == nLines)
+							break;
+					}
+					else if (nByte == 0xD) // check for carriage return
+					{
+						continue;
+					}
+					sBuffer.append((char)nByte);
+				}
+				return sBuffer.reverse().toString();
+			}
+		}
+		catch (IOException oEx)
+		{
+			return null;
 		}
 	}
 	

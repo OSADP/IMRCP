@@ -89,6 +89,9 @@ public class TileForPoly extends TileForFile
 					{
 						int nRingCount = nPolygon[1];
 						int nPos = 2;
+						int nFirstRingPointCount = nPolygon[nPos];
+						if (nFirstRingPointCount > 65535) // spec is for unsigned short
+							continue;
 						for (int nRing = 0; nRing < nRingCount; nRing++)
 						{
 							int nPoints = nPolygon[nPos];
@@ -102,10 +105,10 @@ public class TileForPoly extends TileForFile
 							oRawOut.writeByte(m_nStringFlag);
 							Obs.writeStrings(oData.m_sStrings, oRawOut, m_oSP);
 						}
-						int nNumRings = nPolygon[1];
-						oRawOut.writeShort(nNumRings); // write total ring count
-						ArrayList<int[]> nRings = deltaTixels(nPolygon, dPt, m_oM, m_nX, m_nY, m_oRR.getZoom());
 
+						
+						ArrayList<int[]> nRings = deltaTixels(nPolygon, dPt, m_oM, m_nX, m_nY, m_oRR.getZoom());
+						oRawOut.writeShort(nRings.size()); // write total ring count
 
 						for (int[] nRing : nRings)
 						{
@@ -128,7 +131,6 @@ public class TileForPoly extends TileForFile
 			{
 				GeoUtil.freePolygon(lTilePolyRef);
 			}
-
 			oRawOut.flush();
 			if (oRawBytes.size() == 0)
 				return null;
@@ -151,6 +153,8 @@ public class TileForPoly extends TileForFile
 		for (int nRingIndex = 0; nRingIndex < nNumRings; nRingIndex++)
 		{
 			int nNumPoints = nPolygon[nPolyPos];
+			if (nNumPoints > 65535)
+				continue;
 			int[] dTixels = new int[nNumPoints * 2];
 			int nTixelPos = 0;
 			nPolyPos += 5; // skip number of points and bounding box

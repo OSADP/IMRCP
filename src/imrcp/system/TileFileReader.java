@@ -251,7 +251,7 @@ public class TileFileReader
 					nGeoArray = Arrays.add(nGeoArray, nRingCount);
 					for (int nRingIndex = 0; nRingIndex < nRingCount; nRingIndex++)
 					{
-						int nPointCount = oData.readShort();
+						int nPointCount = oData.readUnsignedShort();
 						if (nPointCount == 0)
 						{
 							--nGeoArray[1];

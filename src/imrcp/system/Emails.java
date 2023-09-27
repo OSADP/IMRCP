@@ -23,6 +23,7 @@ public class Emails extends BaseBlock
 	private String m_sSmtpHost;
 	private String m_sDomain;
 	private String m_sFrom;
+	private String m_sSupportEmail;
 		
 	
 	@Override
@@ -35,6 +36,7 @@ public class Emails extends BaseBlock
 		m_sSmtpHost = oBlockConfig.getString("smtphost");
 		m_sDomain = oBlockConfig.getString("domain");
 		m_sFrom = oBlockConfig.optString("from", "donotreply@" + m_sDomain);
+		m_sSupportEmail = oBlockConfig.optString("support", null);
 	}
 	
 	
@@ -98,5 +100,11 @@ public class Emails extends BaseBlock
 	public String getDomain()
 	{
 		return m_sDomain;
+	}
+	
+	
+	public String getSupportEmail()
+	{
+		return m_sSupportEmail;
 	}
 }
