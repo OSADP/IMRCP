@@ -655,7 +655,7 @@ public abstract class OsmUtil
 				}
 			}
 		}
-		int[] nCount = new int[1];
+
 		for (OsmWay oWay : oMwTrunkLinks)
 		{
 			if (oWay.m_bTraversed) // skip ways that have already been processed

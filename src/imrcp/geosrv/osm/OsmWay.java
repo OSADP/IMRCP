@@ -260,6 +260,8 @@ public class OsmWay extends OsmObject
 			nTemp += 8;
 		}
 		
+		if (!containsKey("highway"))
+			put("highway", "unclassified");
 		generateId();
 		setBridge();
 		calcMidpoint();
@@ -593,6 +595,7 @@ public class OsmWay extends OsmObject
 					oReturn.m_nSqDist = nDist;
 					oReturn.m_nRightHandRule = (int)(((o2.m_nLon - o1.m_nLon) * (nY - o1.m_nLat)) - ((o2.m_nLat - o1.m_nLat) * (nX - o1.m_nLon)));
 					oReturn.m_nIndex = nNodeIndex - 1;
+					oReturn.m_bPerpAlgorithm = false;
 				}
 			}
 		}

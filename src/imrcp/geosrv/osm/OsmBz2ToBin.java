@@ -397,7 +397,7 @@ public class OsmBz2ToBin extends DefaultHandler
 	   throws Exception
 	{
 		Path oBinFile = Paths.get(sFile.substring(0, sFile.indexOf(".", sFile.lastIndexOf("/"))) + ".bin");
-		
+		oStringPool.intern("unclassified");
 		try (DataOutputStream oBin = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oBinFile))))
 		{
 			ArrayList<String> oPool = oStringPool.toList();

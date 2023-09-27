@@ -302,6 +302,8 @@ public class OsmBinParser
 			while (nCount-- > 0)
 			{
 				OsmWay oTemp = new OsmWay(oIn, oPool, oNodes, nFp);
+				if (oTemp.m_oNodes.size() == 1)
+					continue;
 				oTemp.updateRefs();
 				if (oTemp.m_nMinLon < nBounds[0])
 					nBounds[0] = oTemp.m_nMinLon;

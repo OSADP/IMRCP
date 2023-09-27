@@ -50,6 +50,8 @@ public class WaySnapInfo implements Comparable<WaySnapInfo>
 	 * The node index of the line segment the point snapped to
 	 */
 	public int m_nIndex;
+	
+	public boolean m_bPerpAlgorithm = true;
 
 	
 	/**

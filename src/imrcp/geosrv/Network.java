@@ -5,11 +5,9 @@
  */
 package imrcp.geosrv;
 
-import imrcp.geosrv.osm.OsmNode;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.store.Obs;
 import imrcp.system.Arrays;
-import imrcp.system.Id;
 import imrcp.system.Introsort;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,6 +27,8 @@ public class Network implements Comparable<Network>
 	public static final int PUBLISHING = 0b100;
 	public static final int PUBLISHED = 0b1000;
 	public static final int ERROR = 0b10000;
+	public static final int TRAINING = 0b100000;
+	
 	/**
 	 * Bounding polygon of the network
 	 */
@@ -89,6 +89,7 @@ public class Network implements Comparable<Network>
 	public boolean m_bCanRunTraffic;
 	public boolean m_bCanRunRoadWeather;
 	public boolean m_bExternalPublish = true;
+	public String m_sMsg = "";
 	
 	
 	/**
@@ -208,7 +209,7 @@ public class Network implements Comparable<Network>
 	 * 
 	 * @return GeoJson Feature object representing the Network
 	 */
-	public JSONObject toGeoJsonFeature()
+	public JSONObject toGeoJsonFeature(boolean bIncludeMsg)
 	{
 		JSONObject oFeature = new JSONObject(); // Feature object
 		oFeature.put("type", "Feature");
@@ -223,6 +224,8 @@ public class Network implements Comparable<Network>
 		oProps.put("canruntraffic", m_bCanRunTraffic);
 		oProps.put("canrunroadwx", m_bCanRunRoadWeather);
 		oProps.put("publish", m_bExternalPublish);
+		if (bIncludeMsg && m_sMsg != null && !m_sMsg.isEmpty())
+			oProps.put("msg", m_sMsg);
 		oFeature.put("properties", oProps);
 		
 		JSONObject oGeo = new JSONObject(); // geometry object

@@ -1351,4 +1351,47 @@ public abstract class GeoUtil
 			}
 		}
 	}
+	
+	
+	public static int[] centroid(int[] nPolygon)
+	{
+		double[] dCentroid = new double[]{0.0, 0.0};
+		double dSignedArea = 0.0;
+		double dX0 = 0.0;
+		double dY0 = 0.0;
+		double dX1 = 0.0;
+		double dY1 = 0.0;
+		double dA = 0.0;
+		
+		int nPoints = nPolygon[2];
+		int nPos = 7;
+		int nEnd = nPos + nPoints * 2 - 2;
+		while (nPos < nEnd)
+		{
+			dX0 = nPolygon[nPos++];
+			dY0 = nPolygon[nPos++];
+			dX1 = nPolygon[nPos];
+			dY1 = nPolygon[nPos + 1];
+			dA = dX0 * dY1 - dX1 * dY0;
+			dSignedArea += dA;
+			dCentroid[0] += (dX0 + dX1) * dA;
+			dCentroid[1] += (dY0 + dY1) * dA;
+		}
+		
+		dX0 = nPolygon[nPos++];
+		dY0 = nPolygon[nPos];
+		dX1 = nPolygon[7];
+		dY1 = nPolygon[8];
+		dA = dX0 * dY1 - dX1 * dY0;
+		dSignedArea += dA;
+		dCentroid[0] += (dX0 + dX1) * dA;
+		dCentroid[1] += (dY0 + dY1) * dA;
+		
+		dSignedArea *= 0.5;
+		
+		dCentroid[0] /= (6.0 * dSignedArea);
+		dCentroid[1] /= (6.0 * dSignedArea);
+		
+		return new int[]{(int)Math.round(dCentroid[0]), (int)Math.round(dCentroid[1])};
+	}
 }

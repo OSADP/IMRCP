@@ -5,6 +5,8 @@
  */
 package imrcp.geosrv;
 
+import imrcp.forecast.mlp.MLPCommons;
+import imrcp.forecast.mlp.MLPHurricaneTraining;
 import imrcp.system.BaseBlock;
 import imrcp.geosrv.osm.HashBucket;
 import imrcp.geosrv.osm.OsmBinParser;
@@ -18,6 +20,7 @@ import imrcp.system.Introsort;
 import imrcp.system.JSONUtil;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
+import imrcp.system.Util;
 import imrcp.web.SessMgr;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -51,6 +54,10 @@ import org.json.JSONTokener;
 public class WayNetworks extends BaseBlock
 {
 	public static final String NETWORKFF = "networks/%s/%s.bin";
+	public static final int HURMODEL_NOTTRAINED = 0;
+	public static final int HURMODEL_TRAINING = 1;
+	public static final int HURMODEL_TRAINED = 2;
+	public static final int HURMODEL_ERROR = 3;
 	
 	/**
 	 * Contains HashBuckets which spatial index roadway segments on a grid whose
@@ -159,6 +166,10 @@ public class WayNetworks extends BaseBlock
 				{
 					oNetwork.removeStatus(Network.PUBLISHING);
 					oNetwork.addStatus(Network.WORKINPROGRESS);
+				}
+				if (oNetwork.isStatus(Network.TRAINING))
+				{
+					oNetwork.removeStatus(Network.TRAINING);
 				}
 			}
 		}
@@ -513,6 +524,7 @@ public class WayNetworks extends BaseBlock
 		ArrayList<WaySnapInfo> oInTol = new ArrayList();
 		if (oWays.isEmpty()) // no roadway segments to check
 			return oInTol;
+		boolean bHasPerp = false;
 		for (OsmWay oWay : oWays)
 		{
 			WaySnapInfo oInfo = oWay.snap(nTol, nLon, nLat); // attempt to snap
@@ -526,12 +538,22 @@ public class WayNetworks extends BaseBlock
 					if (dHdgDiff > dHdgTol) // skip ways that are not in the "same" direction
 						continue;
 				}
+				bHasPerp = bHasPerp || oInfo.m_bPerpAlgorithm;
 				int nIndex = Collections.binarySearch(oInTol, oInfo, oComp);
 				if (nIndex < 0) // add WaySnapInfos in sorted order
 					oInTol.add(~nIndex, oInfo);
 			}
 		}
 
+		if (bHasPerp)
+		{
+			int nIndex = oInTol.size();
+			while (nIndex-- > 0)
+			{
+				if (!oInTol.get(nIndex).m_bPerpAlgorithm)
+					oInTol.remove(nIndex);
+			}
+		}
 		return oInTol;
 	}
 	
@@ -816,7 +838,7 @@ public class WayNetworks extends BaseBlock
 				oNetwork.removeStatus(Network.PUBLISHING);
 				oNetwork.addStatus(Network.PUBLISHED);
 				SessMgr.getInstance().addNetwork(oNetwork.m_sNetworkId);
-				loadNetwork(oNetwork.toGeoJsonFeature());
+				loadNetwork(oNetwork.toGeoJsonFeature(false));
 				writeNetworkFile(); // save changes
 			}
 			catch (Exception oEx)
@@ -886,7 +908,7 @@ public class WayNetworks extends BaseBlock
 		{
 			for (Network oNetwork : m_oNetworks)
 			{
-				oFeatures.put(oNetwork.toGeoJsonFeature());
+				oFeatures.put(oNetwork.toGeoJsonFeature(false));
 			}
 		
 			try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(Paths.get(m_sNetworkFile), FileUtil.WRITEOPTS), "UTF-8"))) // rewrite the entire file
@@ -993,9 +1015,59 @@ public class WayNetworks extends BaseBlock
 		ArrayList<Network> oReturn = new ArrayList();
 		synchronized (m_oNetworks)
 		{
+			boolean bRewrite = false;
 			for (Network oNetwork : m_oNetworks)
 			{
+				if (oNetwork.isStatus(Network.TRAINING))
+				{
+					JSONObject oStatus = getHurricaneModelStatus(oNetwork);
+					if (oStatus == null)
+					{
+						bRewrite = true;
+						oNetwork.addStatus(Network.ERROR);
+						continue;
+					}
+					
+					int nStatus = oStatus.getInt("status");
+					if (nStatus == HURMODEL_ERROR)
+					{
+						bRewrite = true;
+						oNetwork.addStatus(Network.ERROR);
+						continue;
+					}
+
+					if (nStatus == HURMODEL_TRAINING)
+					{
+						String sCurrentModel = oStatus.getString("model");
+						String sNextModel = sCurrentModel.contains("model_a") ? "model_b/" : "model_a/";
+						String sNetworkDir = getNetworkDir(oNetwork.m_sNetworkId);
+						String sModelDir = sNetworkDir + sNextModel;
+						String sStatusLog = sNetworkDir + MLPHurricaneTraining.STATUSLOG;
+						oNetwork.m_sMsg = Util.getLastLinesOfFile(sStatusLog, 4);
+						if (oNetwork.m_sMsg != null)
+							oNetwork.m_sMsg = oNetwork.m_sMsg.replace("\n", "<br>");
+						if (MLPCommons.hurricaneModelFilesExist(sModelDir))
+						{
+							bRewrite = true;
+							writeHurricaneModelStatus(oNetwork, sNextModel, HURMODEL_TRAINED);
+							oNetwork.removeStatus(Network.TRAINING);
+						}
+					}
+				}
+				else
+					oNetwork.m_sMsg = "";
 				oReturn.add(oNetwork);
+			}
+			if (bRewrite)
+			{
+				try
+				{
+					writeNetworkFile(); // save changes
+				}
+				catch (IOException oIOEx)
+				{
+					m_oLogger.error(oIOEx, oIOEx);
+				}
 			}
 		}
 		
@@ -1015,6 +1087,52 @@ public class WayNetworks extends BaseBlock
 		return TimeZone.getTimeZone("America/Chicago"); // all networks are central time in the current implementation
 	}
 	
+	
+	public String getNetworkDir(String sNetworkId)
+	{
+		String sGeoFile = String.format(m_sGeoFileFormat, sNetworkId, "published");
+		return sGeoFile.substring(0, sGeoFile.lastIndexOf("/") + 1);
+	}
+	
+	
+	public synchronized JSONObject getHurricaneModelStatus(Network oNetwork)
+	{
+		String sNetworkDir = getNetworkDir(oNetwork.m_sNetworkId);
+		Path oStatusFile = Paths.get(sNetworkDir + "modelstatus.json");
+		JSONObject oStatus;
+		if (!Files.exists(oStatusFile))
+		{
+			writeHurricaneModelStatus(oNetwork, "model_b/", HURMODEL_NOTTRAINED);
+		}
+		try (BufferedReader oIn = Files.newBufferedReader(oStatusFile, StandardCharsets.UTF_8))
+		{
+			oStatus = new JSONObject(new JSONTokener(oIn));
+		}
+		catch (IOException oEx)
+		{
+			m_oLogger.error(oEx, oEx);
+			return null;
+		}
+		
+		return oStatus;
+	}
+	
+	
+	public synchronized void writeHurricaneModelStatus(Network oNetwork, String sModel, int nStatus)
+	{
+		String sNetworkDir = getNetworkDir(oNetwork.m_sNetworkId);
+		Path oStatusFile = Paths.get(sNetworkDir + "modelstatus.json");
+		if (!sModel.endsWith("/"))
+			sModel += "/";
+		try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oStatusFile, FileUtil.WRITE, FileUtil.FILEPERS), StandardCharsets.UTF_8)))
+		{
+			oOut.append("{\"model\":\"").append(sModel).append("\",\"status\":").append(Integer.toString(nStatus)).append("}");
+		}
+		catch (IOException oEx)
+		{
+			m_oLogger.error(oEx, oEx);
+		}
+	}
 	
 	/**
 	 * Gets the WayMetadata object of the roadway segment with the given Id.
