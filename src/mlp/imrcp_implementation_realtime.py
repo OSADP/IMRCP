@@ -9,42 +9,73 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from pmdarima.arima import auto_arima
+import random
+from mlph_functions import mlp_log
+
 
 
 #%%
-def long_ts_update(startt, histdatafm, logger):
+def long_ts_update(startt, histdatafm):
 	startt = histdatafm['Timestamp'].tolist().index(startt)
 	datmp = histdatafm.iloc[startt-2015:startt+1, :]
+	
+# =============================================================================
+# 	raw_wkd = datmp[datmp['DayOfWeek']==2]['Speed'].values
+# 	means = []
+# 	for i in range(288):
+# 		temp = []
+# 		for j in raw_wkd[i:i+288*5:288]:
+# 			if not math.isnan(j):
+# 				temp.append(j)
+# 		means.append(np.mean(temp))
+# 
+# 	sss1 = np.array(means)
+# =============================================================================
 	raw_wkd = datmp[datmp['DayOfWeek']==2]['Speed'].dropna().values # select all weekdays from the last 7 days
 	sss1 = np.array([np.mean(raw_wkd[i:i+288*5:288]) for i in range(288)])
 	ss1 = pd.Series(np.tile(sss1, 5), dtype='double')
 	ss1_rol = ss1.rolling(12).mean()
 	ss1_rol[0] = ss1[0]
 	ss1_rol.interpolate(inplace=True)
-	ss1_rol_smooth = ss1_rol[0:len(ss1_rol):12]  
+	ss1_rol_smooth = ss1_rol[0:len(ss1_rol):12]
+
 	arima_model =  auto_arima(ss1_rol_smooth,start_p=0, d=1, start_q=0, 
 								max_p=5, max_d=5, max_q=5, start_P=0, 
 								D=1, start_Q=0, max_P=5, max_D=5,
 								max_Q=5, m=24, seasonal=True )
 	pred = arima_model.predict(n_periods = 24)
-	pred = np.repeat(pred, 12, axis=0)
+	pred = np.repeat(pred, 12)
 	rdm = np.random.uniform(low = 0.995, high = 1.005, size=288)  
 	spd_forecastwkday = pred*rdm
 	
 	datmp = histdatafm.iloc[startt-2015:startt+1, :]
 	raw_wkn = datmp[datmp['DayOfWeek']==1]['Speed'].dropna().values   # select all weekend days from the last 7 days
 	sss2 = np.array([np.mean(raw_wkn[i:i+288*2:288]) for i in range(288)])
+
+# =============================================================================
+# 	raw_test = datmp[datmp['DayOfWeek']==1]['Speed'].values
+# 	means = []
+# 	for i in range(288):
+# 		temp = []
+# 		for j in raw_test[i:i+288*2:288]:
+# 			if not math.isnan(j):
+# 				temp.append(j)
+# 		means.append(np.mean(temp))
+# 	sss3 = np.array(means)
+# =============================================================================
+	
 	ss2 = pd.Series(np.tile(sss2, 2), dtype='double')
 	ss2_rol = ss2.rolling(12).mean()
 	ss2_rol[0] = ss2[0]
 	ss2_rol.interpolate(inplace=True)
-	ss2_rol_smooth = ss2_rol[0:len(ss2_rol):12]  
+	ss2_rol_smooth = ss2_rol[0:len(ss2_rol):12]
+	
 	arima_model =  auto_arima(ss2_rol_smooth,start_p=0, d=1, start_q=0, 
 								max_p=5, max_d=5, max_q=5, start_P=0, 
 								D=1, start_Q=0, max_P=5, max_D=5,
 								max_Q=5, m=24, seasonal=True )
 	pred = arima_model.predict(n_periods = 24)
-	pred = np.repeat(pred, 12, axis=0)
+	pred = np.repeat(pred, 12)
 	rdm = np.random.uniform(low = 0.995, high = 1.005, size=288)
 	spd_forecastwkend = pred*rdm
 
@@ -357,4 +388,159 @@ def oneshot(weather_intvl, startt, histdatafm, long_ts_predfm, loaded_data):
 					
 				predspd.append(tempsp)
 	return predspd
+
+#  oneshot_input is a table combining scenario settins and long-term speed prediction values
+def oneshot_new(oneshot_input, start_time, lts, loaded_data):
+	# oneshot_all is used to store all predicted values across 7 days
+	oneshot_all = []
+	
+	markov_contra = loaded_data["markov_contra"]
+	markov_scenario = loaded_data["markov_ohio"]
+	markov_vsl = loaded_data["markov_vsl"]
+	markov_hsr = loaded_data["markov_hsr"]
+	centers_contra = loaded_data["centers_contra"]
+
+	
+	msss = loaded_data["centers_ohio"]
+	msss_vsl = loaded_data["centers_vsl"]
+	msss_hsr = loaded_data["centers_hsr"]
+	
+	nOSIndex = oneshot_input['Timestamp'].tolist().index(start_time)
+	nLTSIndex = lts['timestamplist'].tolist().index(start_time)
+	# spdlimit refers the orignal speed limit of the road link
+	spdlimit = oneshot_input['SpeedLimit'].max()
+	dPrevSpeed = lts['speed'].loc[nLTSIndex - 12]
+	for i in range(nOSIndex, len(oneshot_input)):
+		dCurSpeed = lts['speed'].loc[nLTSIndex]
+		sBranch = None
+		# if speed limit changes at this time step, change long-term predicted speed accordingly
+		nVsl = oneshot_input.loc[i,'vsl']
+		if nVsl == spdlimit:
+			nVsl = 0
+		if nVsl > 0 and nVsl != spdlimit:
+			dCurSpeed = dCurSpeed + (nVsl - spdlimit)
+		# if all lanes closed, reduce speed to zero:
+		if oneshot_input.loc[i,'LanesClosedOnLink'] >= oneshot_input.loc[i,'Lanes']:
+			tempsp = 0
+			sBranch = 'lanesclosed'
+		# First, determine if the contraflow ever existed in the last 5 minutes. Make sure 'contraflow' is one of the column names.
+		elif 'contraflow' in oneshot_input.columns and oneshot_input.loc[i-1, 'contraflow'] > 0:
+			# If contraflow is implemented, determine which contraflow scenario it meets
+			if oneshot_input.loc[i-1, 'contraflow'] == 1:
+				if lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() >= 20:
+					mc = markov_contra[0]
+					msss_contra = centers_contra[0]
+				elif lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() >= 10 and lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() < 20:
+					mc = markov_contra[1]
+					msss_contra = centers_contra[1]
+				else:
+					mc = markov_contra[2]
+					msss_contra = centers_contra[2]
+			else:
+				if lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() >= 20:
+					mc = markov_contra[3]
+					msss_contra = centers_contra[3]
+				elif lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() >= 10 and lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() < 20:
+					mc = markov_contra[4]
+					msss_contra = centers_contra[4]
+				else:
+					mc = markov_contra[5]
+					msss_contra = centers_contra[5]
+			tempsp = dPrevSpeed
+			sBranch = 'contra'
+			for j in range(2):
+				stt = np.argmin(np.abs(msss_contra - np.array([tempsp])))
+				mss = msss_contra.copy()
+				mss[stt] = tempsp
+				tempsp = round(np.sum(mc[stt,:] * mss), 2)
+		else:
+			# Second, determine if the vsl ever existed in the last 30 minutes
+			nPrevVsl = oneshot_input.loc[i - 1, 'vsl']
+			if nPrevVsl == spdlimit:
+				nPrevVsl = -1
+			if nVsl > 0 or nPrevVsl > 0:
+				mc = markov_vsl[0]
+				tempsp = dPrevSpeed
+				sBranch = 'vsl'
+				for j in range(2):
+					stt = abs(msss_vsl - tempsp).argmin()
+					mss = msss_vsl.copy()
+					mss[stt] = tempsp
+					tempsp = round((mc * mss).sum(), 2)
+			elif i > 0 and oneshot_input.loc[i - 1, 'hsr'] > 0:
+				mc = markov_hsr[0]
+				tempsp = dPrevSpeed
+				sBranch = 'hsr'
+				for j in range(2):
+					stt = abs(msss_hsr - tempsp).argmin()
+					mss = msss_hsr.copy()
+					mss[stt] = tempsp
+					tempsp = round((mc * mss).sum(), 2)
+			else:
+				if oneshot_input.iloc[i]["IncidentOnLink"] == 0 and oneshot_input.iloc[i]["IncidentDownstream"] == 0:
+					if (any(oneshot_input.iloc[i-1:i-4]["IncidentOnLink"] == 1) or 
+						any(oneshot_input.iloc[i-1:i-4]["IncidentDownstream"] == 1) or 
+						any(oneshot_input.iloc[i-1:i-4]["WorkzoneOnLink"] == 1)) and oneshot_input.iloc[i]["Precipitation"] == 1:
+						tempsp = dCurSpeed
+						sBranch = 'previncident_precip1'
+					elif oneshot_input.iloc[i]["Precipitation"] > 2 or oneshot_input.loc[i,"LanesClosedOnLink"] >0 or oneshot_input.loc[i,"WorkzoneOnLink"] >0 or oneshot_input.loc[i,"WorkzoneDownstream"] >0:
+						t = random.random()
+						if t >= 0.5 :
+							if oneshot_input.iloc[i]["Precipitation"] in [2,3,5]:
+								mc = markov_scenario[0]
+							else:
+								mc = markov_scenario[1]
+							tempsp = dPrevSpeed
+							sBranch = 'incident_precip2'
+							for j in range(2):
+								stt = np.argmin(np.abs(msss - np.array(tempsp)))
+								mss = msss
+								mss[stt] = tempsp
+								tempsp = round(np.sum(mc[stt,:] * mss), 2)
+						else:
+							sBranch = 'incident_precip2_coinflip'
+							tempsp = dCurSpeed
+					else:
+						sBranch = 'no incident'
+						tempsp = dCurSpeed
+				else:
+					t = random.random()
+					if t >= 0.5 :
+						if oneshot_input.loc[i,"IncidentOnLink"] == 1:
+							if oneshot_input.loc[i,"Precipitation"] == 1 and oneshot_input.loc[i,"LanesClosedOnLink"] < 2:
+								mc = markov_scenario[3]
+							elif oneshot_input.loc[i,"Precipitation"] == 1 and oneshot_input.loc[i,"LanesClosedOnLink"] >= 2:
+								mc = markov_scenario[4]
+							elif oneshot_input.loc[i,"Precipitation"] in [2, 3, 5] and oneshot_input.loc[i,"LanesClosedOnLink"] < 2:
+								mc = markov_scenario[7]
+							elif oneshot_input.loc[i,"Precipitation"] in [2, 3, 5] and oneshot_input.loc[i,"LanesClosedOnLink"] >= 2:
+								mc = markov_scenario[8]
+							elif oneshot_input.loc[i,"Precipitation"] in [4, 6, 7, 8]:
+								mc = markov_scenario[11]
+						elif oneshot_input.loc[i,"IncidentDownstream"] == 1:
+							if oneshot_input.loc[i,"Precipitation"] == 1 and oneshot_input.loc[i,"LanesClosedDownstream"] < 2:
+								mc = markov_scenario[5]
+							elif oneshot_input.loc[i,"Precipitation"] == 1 and oneshot_input.loc[i,"LanesClosedDownstream"] >= 2:
+								mc = markov_scenario[6]
+							elif oneshot_input.loc[i,"Precipitation"] in [2, 3, 5] and oneshot_input.loc[i,"LanesClosedDownstream"] < 2:
+								mc = markov_scenario[9]
+							elif oneshot_input.loc[i,"Precipitation"] in [2, 3, 5] and oneshot_input.loc[i,"LanesClosedDownstream"] >= 2:
+								mc = markov_scenario[10]
+							elif oneshot_input.loc[i,"Precipitation"] in [4, 6, 7, 8]:
+								mc = markov_scenario[12]
+						tempsp = dPrevSpeed
+						sBranch = 'markov'
+						for j in range(2):
+							stt = np.argmin(np.abs(msss - np.array(tempsp)))
+							mss = msss
+							mss[stt] = tempsp
+							tempsp = round(np.sum(mc[stt,]*mss), 2)
+					else:
+						sBranch = 'coinflip'
+						tempsp = dCurSpeed
+		oneshot_all.append(tempsp)
+		dPrevSpeed = tempsp
+		nLTSIndex += 12
+	oneshot_all = np.array(oneshot_all)
+	return oneshot_all
 

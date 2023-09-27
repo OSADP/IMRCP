@@ -10,15 +10,39 @@ import imrcp_implementation_online as huronline
 import imrcp_implementation_oneshot as huroneshot
 import imrcp_implementation_realtime as realtime
 import torch
+import torch.nn as nn
 import pandas as pd
 import math
 import sys
 import pickle
 import warnings
 import logging
-import datetime
 import numpy as np
+import json
+import os
+import traceback
 
+import matplotlib.pyplot as plt
+import statistics as sta
+from sklearn.preprocessing import MinMaxScaler
+import time
+import random
+import glob
+import haversine as hs
+from datetime import datetime, timedelta
+
+
+from mlph_functions import extract_csvfile
+from mlph_functions import spatial_temporal_feature
+from mlph_functions import create_dummy_oneshot
+from mlph_functions import create_dummy_online
+from mlph_functions import filter_mata
+from mlph_functions import oneshot_annotate
+from mlph_functions import mlp_log
+from mlph_functions import log_exception
+
+from model_training import train_oneshot
+from model_training import train_online
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(filename = sys.argv[4], format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
@@ -43,6 +67,7 @@ class MlpHandler(BaseHTTPRequestHandler):
 			oUrlParse = urlparse(self.path)
 			oDict = parse_qs(oUrlParse.query)
 			oDict['port_post'] = self.port_post
+			oDict['log_dir'] = self.log_dir
 			self.pool.apply_async(compute, kwds=oDict)
 			# Send a response to the client
 			self.send_response(200)
@@ -71,15 +96,90 @@ def compute(**kwargs):
 			sErrors = runLongTs(kwargs)
 		elif sFunction == 'os':
 			sErrors = runOneshot(kwargs)
-	except:
+		elif sFunction == 'trainhur':
+			sErrors = trainHur(kwargs)
+			logger.error(sErrors)
+			return
+	except BaseException as oEx:
 		sErrors = 'Uncaught error in {}'.format(sFunction)
-		logger.exception('')
+		log_exception(oEx,'{}{}.log'.format(kwargs['log_dir'], os.getpid()))
 	port_post = kwargs['port_post']
 	req = urllib.request.Request('http://127.0.0.1:{}/api/{}/done'.format(port_post, kwargs['return'][0]), data = urllib.parse.urlencode({'errors': sErrors, 'session': kwargs['session'][0]}).encode())
 	urllib.request.urlopen(req)
 
 def loadData(sPath):
 	return pd.read_csv(sPath, encoding='utf_8')
+
+
+def trainHur(kwds):
+	sMetadataFile = kwds['metadatafile'][0]
+	
+	sLogFile = '{}{}.log'.format(kwds['log_dir'], os.getpid())
+	mlp_log('training', sLogFile)
+	oMetadataObj = None
+	with open(sMetadataFile, 'r') as oFile:
+		oMetadataObj = json.load(oFile)
+	
+	oStats = oMetadataObj['stats']
+	data_mata = loadData(oMetadataObj['linkid'])
+	freeway_name = oMetadataObj['freeway_name']
+	filtered_mata = filter_mata(data_mata, freeway_name)
+	file_pattern_prefix = oMetadataObj['file_pattern_prefix']
+	folder_path = oMetadataObj['folder_path']
+	lf_time = oMetadataObj['lf_time']
+	category = oMetadataObj['category']
+	lf_zone = oMetadataObj['lf_zone']
+	lf_coord = oMetadataObj['lf_coord']
+	hurricane = oMetadataObj['hurricane']
+	sStatusLog = oMetadataObj['statuslog']
+	mlp_log('Starting training for {}'.format(sMetadataFile), sStatusLog)
+	data_w_feature_7d = None
+	data_w_feature_8d = None
+	data_6hr_7d_all = None
+	for i in range(len(lf_time)):
+		mlp_log('Assembling data for storm {}'.format(hurricane[i]), sStatusLog)
+		mlp_log(hurricane[i], sLogFile)
+		oMeansAndStds = oStats[hurricane[i]]
+		combined_past7d,combined_next7d,combined_next8d = extract_csvfile(folder_path[i],file_pattern_prefix,hurricane[i], category[i] ,lf_time[i],lf_zone[i],lf_coord[i])
+		data_w_feature_7d_single = spatial_temporal_feature(combined_next7d,hurricane[i],lf_time[i],category[i],lf_zone[i],lf_coord[i],filtered_mata)
+		data_w_feature_8d_single = spatial_temporal_feature(combined_next8d,hurricane[i],lf_time[i],category[i],lf_zone[i],lf_coord[i],filtered_mata)
+		
+		data_6hr_7d_all_single = oneshot_annotate(data_w_feature_7d_single,combined_past7d,lf_time[i], sLogFile, sStatusLog, oMeansAndStds, hurricane[i])
+		
+		if data_w_feature_7d is None:
+			data_w_feature_7d = data_w_feature_7d_single
+			data_w_feature_8d = data_w_feature_8d_single
+			data_6hr_7d_all = data_6hr_7d_all_single
+		else:
+			data_w_feature_7d = pd.concat([data_w_feature_7d, data_w_feature_7d_single])
+			data_w_feature_8d = pd.concat([data_w_feature_8d, data_w_feature_8d_single])
+			data_6hr_7d_all = pd.concat([data_6hr_7d_all, data_6hr_7d_all_single])
+	
+	data_w_feature_7d = pd.DataFrame(data_w_feature_7d)
+	data_w_feature_8d = pd.DataFrame(data_w_feature_8d)
+	data_6hr_7d_all = pd.DataFrame(data_6hr_7d_all)
+	sOutputDir = oMetadataObj['networkdir']
+	os.makedirs(sOutputDir, exist_ok=True)
+	mlp_log('Starting training for oneshot model', sStatusLog)
+	data_6hr_7d_all.to_csv('{}data_6hr_7d_all.csv'.format(sOutputDir), index=False)
+	data_w_feature_8d.to_csv('{}data_w_feature_8d.csv'.format(sOutputDir), index=False)
+	dummy_oneshot = create_dummy_oneshot(data_w_feature_8d,data_6hr_7d_all)
+	dummy_oneshot.to_csv('{}dummy_oneshot.csv'.format(sOutputDir),index=False)
+	model_oneshot = train_oneshot(data_6hr_7d_all,dummy_oneshot, sLogFile, sStatusLog)
+	
+	mlp_log('Saving trained oneshot model', sStatusLog)
+	torch.save(model_oneshot.state_dict(), '{}oneshot_model.pth.tmp'.format(oMetadataObj['networkdir']))
+	
+	dummy_online = create_dummy_online(data_w_feature_8d,data_6hr_7d_all)
+	dummy_online.to_csv('dummy_online.csv',index=False)
+	
+	for horizon in range(1, 7):
+		mlp_log('Starting online model for hour {}'.format(horizon), sStatusLog)
+		model_online = train_online(data_6hr_7d_all,data_w_feature_8d,dummy_online,horizon, sLogFile, sStatusLog)
+		torch.save(model_online.state_dict(), '{}online_model_{}hour.pth'.format(oMetadataObj['networkdir'], horizon))
+		mlp_log('Finished online model for hour {}'.format(horizon), sStatusLog)
+	
+	os.rename('{}oneshot_model.pth.tmp'.format(oMetadataObj['networkdir']), '{}oneshot_model.pth'.format(oMetadataObj['networkdir']))
 
 def runOneshot(kwds):
 	oPredictions = []
@@ -105,8 +205,13 @@ def runOneshot(kwds):
 	for sGroupName, oDf in oGroupsById:
 		oDf = oDf.reset_index(drop=True)
 		try:
-			oLts = oLongTsById.get_group(sGroupName)
-			oPred = realtime.oneshot(nWeatherIntvl, start_time, oDf, oLts, loaded_data)
+			if sGroupName in oLongTsById.groups:
+				oLts = oLongTsById.get_group(sGroupName)
+				oLts = oLts.reset_index(drop=True)
+				#oPred = realtime.oneshot(nWeatherIntvl, start_time, oDf, oLts, loaded_data)
+				oPred = realtime.oneshot_new(oDf, start_time, oLts, loaded_data)
+			else:
+				oPred = oDefault
 		except BaseException as oEx:
 			oErrors.append('error with {}: {}'.format(sGroupName, str(oEx)))
 			oPred = oDefault
@@ -136,8 +241,8 @@ def runLongTs(kwds):
 	oDefault = []
 	
 	sTsFormat = '%Y-%m-%d %H:%M'
-	oStartTime = datetime.datetime.strptime(start_time, sTsFormat)
-	oBeginningOfDay = oStartTime - datetime.timedelta(hours=oStartTime.hour + 1)
+	oStartTime = datetime.strptime(start_time, sTsFormat)
+	oBeginningOfDay = oStartTime - timedelta(hours=oStartTime.hour + 1)
 	startt = oBeginningOfDay.strftime(sTsFormat)
 	for i in range(0, 2592):
 		oDefault.append(math.nan)
@@ -147,19 +252,19 @@ def runLongTs(kwds):
 			if len(oDf['Speed'].dropna()) < 5:
 				oPred = oDefault
 			else:
-				oPred = realtime.long_ts_update(startt, oDf, logger)
+				oPred = realtime.long_ts_update(startt, oDf)
 				oPred = np.concatenate([oPred[1728:2016], oPred, oPred[0:288]])
 		except BaseException as oEx:
 			oErrors.append('error with {}: {}'.format(sGroupName, str(oEx)))
 			oPred = oDefault
 		oPredictions.append(oPred)
 	
-	oStartOfForecast = oBeginningOfDay - datetime.timedelta(hours=23, minutes=55)
-	oFiveMinutes = datetime.timedelta(minutes=5)
+	oStartOfForecast = oBeginningOfDay - timedelta(hours=23, minutes=55)
+	oFiveMinutes = timedelta(minutes=5)
 	with open('{}mlp_lts_output.csv'.format(sDir), 'w') as oFile:
 		oFile.write('Id,timestamplist,speed\n')
 		for i in range(0, nIdCount):
-			oTs = datetime.datetime.fromtimestamp(oStartOfForecast.timestamp())
+			oTs = datetime.fromtimestamp(oStartOfForecast.timestamp())
 			sId = idlist[i]
 			for dVal in oPredictions[i]:
 				oFile.write(sId)
@@ -235,7 +340,7 @@ def runHurOnline(kwds):
 	sDir = kwds['dir'][0]
 	dummy_input_lstm = loadData('{}dummy_input_lstm.csv'.format(sDir))
 	link_speed_next7d = loadData('{}link_speed_next7d.csv'.format(sDir))
-	modelpath = kwds['model'][0]
+	modelpath = kwds['model'][0] + 'online_model_{}hour.pth'
 	oGroupsById = link_speed_next7d.groupby('Id')
 	idlist = [sId for sId in oGroupsById.groups.keys()]
 	nIdCount = len(idlist)
@@ -296,9 +401,9 @@ def runHurOneshot(kwds):
 	oneshot_input = loadData('{}hos_input.csv'.format(sDir)) # load features for 7-day congestion status prediction
 	dummy_input_oneshot = loadData('{}dummy_input_oneshot.csv'.format(sDir)) # load dummy input
 	link_speed_past7d = loadData('{}link_speed_past7d.csv'.format(sDir)) # load past 7-day speed for 7-day speed pattern generation
-	modelpath = kwds['model'][0]
+	modelpath = kwds['model'][0] + 'oneshot_model.pth'
 	model_oneshot = huroneshot.MultiClassCongestion(20,3) # initialize the model with 20 inputs features and 3 output labels
-	model_oneshot.load_state_dict(torch.load(modelpath.format('oneshot'), map_location=torch.device('cpu'))) # load the trained model from file
+	model_oneshot.load_state_dict(torch.load(modelpath, map_location=torch.device('cpu'))) # load the trained model from file
 	model_oneshot.eval() # set the model in evaluation mode
 	oneshot_input = oneshot_input[['Id','t_to_lf', 'Direction', 'Lanes', 'lat', 'lon', 'dis_to_lf', 'timeofday', 'spd_mean_past7', 'spd_std_past7', 'category', 'lf_loc']]
 	oOneshotGroupsById = oneshot_input.groupby('Id')
@@ -403,6 +508,8 @@ if __name__ == '__main__':
 	httpd.allow_reuse_address = True
 	logger.info('Server running on port {}'.format(port_listen))
 	handler.port_post = int(sys.argv[2])
+	handler.log_dir = sys.argv[4][:sys.argv[4].rfind('/') + 1]
+	logger.info('this is the dir {}'.format(handler.log_dir))
 	# Start the server
 	httpd.serve_forever()
 	httpd.server_close()
