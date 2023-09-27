@@ -40,7 +40,6 @@ div.divStack div.ui-widget-header{
   transform-origin: 1.3em 1.3em;
   position: relative;
   z-index:-1;
-  top:20px;
 }
 
 
@@ -62,7 +61,7 @@ div.divStack div.ui-widget-header{
 }
 
 .divStack, .divStackLayer{
-  height: 400px;  
+  height: 420px;  
 }
 
 .legend-header{
@@ -85,7 +84,7 @@ li.legend-header select{
 }
 
 li.legend-header.ui-state-active {
-  position: relative;
+  position: absolute;
 }
 
 .divStackDeck {
