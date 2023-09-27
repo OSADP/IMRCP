@@ -3,6 +3,7 @@ package imrcp.collect;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.store.Obs;
+import static imrcp.store.TileObsView.PATHREFCOMP;
 import imrcp.system.Arrays;
 import imrcp.system.FilenameFormatter;
 import imrcp.system.dbf.DbfResultSet;
@@ -26,18 +27,19 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
+import java.util.List;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -153,30 +155,50 @@ public class CAP extends Collector
 		try
 		{
 			ArrayList<ResourceRecord> oRRs = oInfo.m_oRRs;
-			m_oLogger.debug("create files");
 			ResourceRecord oRR = oRRs.get(0);
-			Comparator<int[]> oTileComp = (int[] o1, int[] o2) ->
-			{
-				int nReturn = o1[0] - o2[0];
-				if (nReturn == 0)
-					nReturn = o1[1] - o2[1];
-				
-				return nReturn;
-			};
 			int[] nTile = new int[2];
 			int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
 			Mercator oM = new Mercator(nPPT);
 			int nStringFlag = 0;
 			for (int nIndex = 0; nIndex < m_nStrings; nIndex++)
 				nStringFlag = Obs.addFlag(nStringFlag, nIndex);
+			FilenameFormatter oDataFf = new FilenameFormatter(oRR.getTiledFf());
+			String sEndsWith = oDataFf.getExtension();
+			long[] lDataTimes = new long[3];
 			for (Path oPath : oArchiveFiles)
 			{
-				byte[] yShp = null;
-				byte[] yDbf = null;
-				StringPool oSP = new StringPool();
+				
 				long[] lTimes = new long[3];
 				new FilenameFormatter(oRR.getArchiveFf()).parse(oPath.toString(), lTimes);
 				long lFileRecv = lTimes[FilenameFormatter.VALID];
+				long lDay = lFileRecv / 86400000 * 86400000;
+				
+				Path oDailyDir = oRR.getFilename(lDay, 0, 0, oDataFf).getParent();
+				boolean bCreate = true;
+				if (Files.exists(oDailyDir))
+				{
+					try (DirectoryStream oDir = Files.newDirectoryStream(oDailyDir, (oFilePath -> oFilePath.toString().endsWith(sEndsWith))))
+					{
+						List<Path> oFiles = (List)StreamSupport.stream(oDir.spliterator(), false).sorted(PATHREFCOMP).collect(Collectors.toList());
+						for (int nIndex = 0; nIndex < oFiles.size() && bCreate; nIndex++)
+						{
+							Path oFile = oFiles.get(nIndex);
+							oDataFf.parse(oFile.toString(), lDataTimes);
+							if (lDataTimes[FilenameFormatter.VALID] == lFileRecv)
+							{
+								bCreate = false;
+							}
+						}
+					}
+				}
+				
+				if (!bCreate)
+					continue;
+				
+				m_oLogger.debug("create files");
+				byte[] yShp = null;
+				byte[] yDbf = null;
+				StringPool oSP = new StringPool();
 				m_oLogger.debug(oPath.toString());
 				try (TarArchiveInputStream oTar = new TarArchiveInputStream(new GzipCompressorInputStream(new BufferedInputStream(Files.newInputStream(oPath)))))
 				{
@@ -298,7 +320,7 @@ public class CAP extends Collector
 								{
 									oSearch.m_nX = nTileX;
 									oSearch.m_nY = nTileY;
-
+									
 									int nIndex = Collections.binarySearch(oAllTiles, oSearch);
 									if (nIndex < 0)
 									{
@@ -388,8 +410,9 @@ public class CAP extends Collector
 						oOut.write(oTile.m_yTileData);
 					}
 				}
+				m_oLogger.debug("done");
 			}
-			m_oLogger.debug("done");
+			
 		}
 		catch (Exception oEx)
 		{

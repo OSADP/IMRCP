@@ -37,7 +37,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -173,6 +172,14 @@ public class Traffic extends Collector
 							String sDesc = oIn.isNull(1) ? null : oIn.parseString(1);
 							++nColumn;
 							long lStart = oSdf.parse(oIn.parseString(2)).getTime();
+							if (lStart < lProcessStart)
+							{
+								lStart += 60000;
+								if (lStart < lProcessStart)
+									continue;
+							}
+							if (lStart > lProcessEnd)
+								continue;
 							++nColumn;
 							long lEnd = oSdf.parse(oIn.parseString(3)).getTime();
 							if (lStart >= lEnd)
@@ -402,6 +409,7 @@ public class Traffic extends Collector
 					}
 					FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
 					Path oTiledFile = oRR.getFilename(lFileTime, lStartTime, lEndTime, oFF);
+					m_oLogger.debug("Writing " + oTiledFile.toString());
 					Files.createDirectories(oTiledFile.getParent());
 					try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTiledFile))))
 					{

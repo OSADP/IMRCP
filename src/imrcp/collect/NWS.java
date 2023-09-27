@@ -7,7 +7,6 @@ import imrcp.store.TileObsView;
 import imrcp.system.Arrays;
 import imrcp.system.FilenameFormatter;
 import imrcp.system.Directory;
-import imrcp.system.FileUtil;
 import imrcp.system.JSONUtil;
 import imrcp.system.ObsType;
 import imrcp.system.OneTimeReentrantLock;
@@ -260,6 +259,8 @@ public class NWS extends Collector
 		Pattern oRegEx = Pattern.compile(m_sPattern);
 		int nRange = oResourceRecords.get(0).getRange();
 		int nDelay = oResourceRecords.get(0).getDelay();
+		int nFreq = oResourceRecords.get(0).getArchiveFileFrequency();
+		long lPastProcessLimit = lNow - (nFreq * 2);
 		ArrayDeque<OneTimeReentrantLock> oLocks = new ArrayDeque();
 		try
 		{
@@ -401,7 +402,7 @@ public class NWS extends Collector
 					}
 					lQueueRecv = lRecv;
 					
-					if (lFileStart < lProcessLimit)
+					if (lFileStart < lProcessLimit && lRecv >= lPastProcessLimit)
 					{
 						oLocks.addLast(processRealTime(oResourceRecords, lQueueStart, lQueueEnd, lQueueRecv));
 					}

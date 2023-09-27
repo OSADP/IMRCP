@@ -34,13 +34,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -50,6 +47,9 @@ import java.util.zip.GZIPInputStream;
 public class Events extends Collector
 {
 	private static final String[] TYPES = new String[]{"workzone", "incident", "speed-change"};
+	public static final int ALLLANES = 99;
+	public static final int HALFLANES = 98;
+	
 	@Override
 	public boolean start() throws Exception
 	{
@@ -84,11 +84,9 @@ public class Events extends Collector
 			int[] nTile = new int[2];
 			int nPPT = (int)Math.pow(2, oRRs.get(0).getTileSize()) - 1;
 			
-			int nZoom = oRRs.get(0).getZoom();
 			Mercator oM = new Mercator(nPPT);
 			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 			oSdf.setTimeZone(Directory.m_oUTC);
-			int nFreq = oRRs.get(0).getTileFileFrequency();
 			double dIncident = ObsType.lookup(ObsType.EVT, "incident");
 			double dWorkzone = ObsType.lookup(ObsType.EVT, "workzone");
 			for (Path oPath : oArchiveFiles)
@@ -113,15 +111,7 @@ public class Events extends Collector
 					StringBuilder sLocBuf = new StringBuilder();
 					int nLine = 2;
 					int nColumn = 0;
-					ArrayList<int[]> oTiles = new ArrayList();
-					Comparator<int[]> oComp = (int[] o1, int[] o2) ->
-					{
-						int nReturn = o1[0] - o2[0];
-						if (nReturn == 0)
-							nReturn = o1[1] - o2[1];
-						return nReturn;
-					};
-					
+				
 					while (oIn.readLine() > 0)
 					{
 						++nLine;
@@ -155,12 +145,11 @@ public class Events extends Collector
 							++nColumn;
 							long lUpdate = oSdf.parse(oIn.parseString(5)).getTime();
 							++nColumn;
-							int nLanes = oIn.isNull(6) ? Integer.MIN_VALUE : oIn.parseInt(6);
+							int nLanes = oIn.isNull(6) ? HALFLANES : oIn.parseInt(6);
 							++nColumn;
 							double dSpeedLimit = oIn.isNull(7) ? Double.NaN : oIn.parseDouble(7);
 							++nColumn;
 							oIn.parseString(sLocBuf, 8);
-							oTiles.clear();
 							int nStart = 0;
 							
 							double[] dCoords = Arrays.newDoubleArray();
@@ -242,7 +231,6 @@ public class Events extends Collector
 					}
 				}
 				
-				double[] dPt = new double[2];
 				for (int nTypeIndex = 0; nTypeIndex < oEvents.length; nTypeIndex++)
 				{
 					int nObstype = nTypeIndex == nEvt ? ObsType.EVT : ObsType.VSLLNK;
@@ -300,7 +288,7 @@ public class Events extends Collector
 						oObs.m_lTimeRecv = oRec.m_lStart;
 						oObs.m_dValue = dVal;
 						oObs.m_oGeoArray = Obs.createPoint(oRec.m_nLon, oRec.m_nLat);
-						oObs.m_sStrings = new String[]{oRec.m_sEventId, oRec.m_sEventType, oRec.m_sDesc, oRec.m_nLanesAffected == Integer.MIN_VALUE ? "u" : Integer.toString(oRec.m_nLanesAffected), oRec.m_sDir, null, null, null};
+						oObs.m_sStrings = new String[]{oRec.m_sEventId, oRec.m_sEventType, oRec.m_sDesc, Integer.toString(oRec.m_nLanesAffected), oRec.m_sDir, null, null, null};
 						for (int nSIndex = 0; nSIndex < m_nStrings; nSIndex++)
 						{
 							String sStr = oObs.m_sStrings[nSIndex];

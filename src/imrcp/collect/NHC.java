@@ -392,17 +392,21 @@ public class NHC extends Collector
 		try
 		{
 			ArrayList<ResourceRecord> oRRs = oInfo.m_oRRs;
-			m_oLogger.debug("create files");
+			
 			ResourceRecord oRR = oRRs.get(0);
 			int[] nTile = new int[2];
 			int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
 			Mercator oM = new Mercator(nPPT);
 			long lValid = oInfo.m_lRef / 86400000 * 86400000 + 86400000; // creating daily tile files so the ref time needs to be the start of the next day to get all of the files that could have forecasts for the day
-			long lStart = lValid - 86400000; // start of the day of the file
+			long lStart = oInfo.m_lStart / 86400000 * 86400000; // start of the day of the file
+			long lEndDay = lStart + 86400000;
 			long lFileRecv = lStart;
 			long lEnd = lStart + oRR.getRange();
 			int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
 			TreeSet<Path> oAllValid = TileObsView.getArchiveFiles(lStart, lEnd, lValid, oRR);
+			if (oAllValid.isEmpty())
+				return;
+			m_oLogger.debug("create files");
 			HashMap<Integer, ObsList> oObsMap = new HashMap();
 			for (ResourceRecord oTempRR : oRRs)
 				oObsMap.put(oTempRR.getObsTypeId(), new ObsList());
@@ -464,6 +468,8 @@ public class NHC extends Collector
 					continue;
 				getStormNumber(oPath.toString(), sStormParts);
 				long lStormRecv = oCP.m_lCreated;
+				if (lStormRecv >= lEndDay || lStormRecv < lStart)
+					continue;
 				long lStormStart = oTP.m_lStart;
 				long lStormEnd = oTP.m_lEnd;
 				if (lStormStart < lStart)
