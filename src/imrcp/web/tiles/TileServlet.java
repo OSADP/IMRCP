@@ -635,8 +635,9 @@ public class TileServlet extends SecureBaseBlock
 			oNetworks = WAYS.getNetworks();
 		}
 		
+		boolean bSkipNetworks = java.util.Arrays.binarySearch(m_nSkipNetworkFilter, nRequestType) >= 0;
 		ArrayList<Obs> oObsList = new ArrayList();
-		if (!oNetworks.isEmpty())
+		if (!oNetworks.isEmpty() || bSkipNetworks)
 		{
 			ObsList oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000, // query the stores for data
 				 nLat1, nLat2, nLon1, nLon2, lRefTime);
@@ -645,7 +646,7 @@ public class TileServlet extends SecureBaseBlock
 			{
 				if (oObs.m_yGeoType != Obs.POINT)
 					continue;
-				if (java.util.Arrays.binarySearch(m_nSkipNetworkFilter, oObs.m_nObsTypeId) >= 0)
+				if (bSkipNetworks)
 				{
 					oObsList.add(oObs);
 					continue;

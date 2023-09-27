@@ -50,7 +50,7 @@ public class NotificationServlet extends SecureBaseBlock
 	 * request
 	 * @return HTTP status code to be included in the response.
 	 */
-	public int doNotify(HttpServletRequest iReq, HttpServletResponse iRep, Session oSession)
+	public int doNotify(HttpServletRequest iReq, HttpServletResponse iRep, Session oSession, ClientConfig oClient)
 	{
 		if (!m_bTest)
 		{

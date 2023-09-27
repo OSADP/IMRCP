@@ -49,7 +49,7 @@ public class LaneServlet extends SecureBaseBlock
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	public int doLanes(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession)
+	public int doLanes(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 	   throws IOException, ServletException
 	{
 		String sSeg = oReq.getParameter("seg");

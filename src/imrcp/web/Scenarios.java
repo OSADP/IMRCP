@@ -230,20 +230,19 @@ public class Scenarios extends SecureBaseBlock
 			{
 				double[] dSpeeds = oPreds.get(oId);
 				int[] nTraffic = new int[dSpeeds.length - 2];
-				double dLimit = (double)oProps.getInt("spdlimit");
 				for (int nSpdIndex = 2; nSpdIndex < dSpeeds.length; nSpdIndex++)
 				{
 					if (Double.isNaN(dSpeeds[nSpdIndex]))
 						nTraffic[nSpdIndex - 2] = -1;
 					else
-						nTraffic[nSpdIndex - 2] = (int)Math.round((dSpeeds[nSpdIndex] / dLimit) * 100);
+						nTraffic[nSpdIndex - 2] = (int)Math.round(dSpeeds[nSpdIndex]);
 				}
 
-				oProps.put("trflnk", nTraffic);
+				oProps.put("spdlnk", nTraffic);
 			}
 			else
 			{
-				oProps.put("trflnk", NODATA);
+				oProps.put("spdlnk", NODATA);
 			}
 		}
 		
@@ -351,6 +350,56 @@ public class Scenarios extends SecureBaseBlock
 		return HttpServletResponse.SC_OK;
 	}
 	
+	
+	public int doMetadata(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
+		throws IOException, ServletException
+	{
+		String sName = oReq.getParameter("name");
+		String sWayId = oReq.getParameter("wayid");
+		String sLanes = oReq.getParameter("lanes");
+		String sSpdLimit = oReq.getParameter("spdlimit");
+		JSONObject oResponse = new JSONObject();
+		oRes.setContentType("application/json");
+		if (sWayId == null || sLanes == null || sSpdLimit == null)
+		{
+			oResponse.put("status", "Metadata Save Failed");
+			oResponse.put("msg", "Invalid request");
+			try (PrintWriter oOut = oRes.getWriter())
+			{
+				oResponse.write(oOut);
+			}
+			return HttpServletResponse.SC_BAD_REQUEST;
+		}
+		
+		if (sName != null)
+		{
+			String[] sTemp = new String[]{sName, oSess.m_sName};
+			synchronized (m_oTemplates)
+			{
+				int nIndex = Collections.binarySearch(m_oTemplates, sTemp, TEMPLATECOMP);
+				if (nIndex >= 0) // find the template in the list
+				{
+					sTemp = m_oTemplates.get(nIndex);
+					Scenario oScenario = getScenario(sTemp[2]); 
+					oScenario.m_oUserDefinedMetadata.put(new Id(sWayId), new int[]{Integer.parseInt(sLanes), Integer.parseInt(sSpdLimit)});
+
+					Path oPath = Paths.get(m_sBaseDir + String.format(m_sConfigFf, oScenario.m_sId));
+
+					Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
+					try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8")))
+					{
+						oScenario.toJSONObject(false, true).write(oOut);
+					}
+				}
+			}
+		}
+		
+		try (PrintWriter oOut = oRes.getWriter())
+		{
+			oResponse.write(oOut);
+		}
+		return HttpServletResponse.SC_OK;
+	}
 	
 	/**
 	 * Deletes the Scenario Template defined in the request
@@ -710,7 +759,7 @@ public class Scenarios extends SecureBaseBlock
 								oProps.put("dphsn", NODATADOUBLES);
 							}
 							if (!bWriteProcessed)
-								oProps.put("trflnk", NODATA);
+								oProps.put("spdlnk", NODATA);
 							oProps.put("spdlimit", oMetadata.m_nSpdLimit);
 							oProps.put("lanecount", oMetadata.m_nLanes);
 							oFeature.put("type", "Feature");

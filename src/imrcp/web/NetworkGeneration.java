@@ -6,6 +6,7 @@
 package imrcp.web;
 
 import com.github.aelstad.keccakj.fips202.Shake256;
+import imrcp.forecast.mlp.MLPHurricaneTraining;
 import imrcp.system.FileUtil;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Network;
@@ -49,7 +50,10 @@ import java.util.Map.Entry;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
+import java.util.TimeZone;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -64,9 +68,11 @@ public class NetworkGeneration extends SecureBaseBlock
 	 * Path to the US Census shapefile that contains the definitions of US state
 	 * boundaries.
 	 */
-	private String m_sStateShp;
-
+	private static String g_sStateShp;
 	
+	private static String g_sUSBorderShp;
+
+	private String m_sMLPTrainingDir;
 	/**
 	 * Queue used to process network creation requests
 	 */
@@ -156,7 +162,12 @@ public class NetworkGeneration extends SecureBaseBlock
 	public void reset(JSONObject oBlockConfig)
 	{
 		super.reset(oBlockConfig);
-		m_sStateShp = oBlockConfig.getString("statefile");
+		g_sStateShp = oBlockConfig.getString("statefile");
+		g_sUSBorderShp = oBlockConfig.getString("usborder");
+		m_sMLPTrainingDir = oBlockConfig.getString("mlptraining");
+		if (!m_sMLPTrainingDir.endsWith("/"))
+			m_sMLPTrainingDir += "/";
+		m_sMLPTrainingDir = m_sArchPath + m_sMLPTrainingDir;
 		m_nOffset = oBlockConfig.optInt("offset", 0);
 		m_nPeriod = oBlockConfig.optInt("period", 1800);
 		m_sOsmDownload = oBlockConfig.optString("osm", "http://download.geofabrik.de/north-america/us/%s-latest.osm.bz2");
@@ -170,37 +181,6 @@ public class NetworkGeneration extends SecureBaseBlock
 		m_nConnTimeout = oBlockConfig.optInt("conntimeout", 60000);
 		m_sGeoFileFormat = m_sDataPath + WayNetworks.NETWORKFF;
 		m_nTol = oBlockConfig.optInt("tol", 10);
-	}
-	
-	
-	/**
-	 * Adds a list of all of the networks in the system to the response.
-	 * 
-	 * @param oReq object that contains the request the client has made of the servlet
-	 * @param oRes object that contains the response the servlet sends to the client
-	 * @param oSession object that contains information about the user that made the
-	 * request
-	 * @return HTTP status code to be included in the response.
-	 * @throws ServletException
-	 * @throws IOException
-	 */
-	public int doList(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
-		throws ServletException, IOException
-	{
-		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
-		oRes.setContentType("application/json");
-		ArrayList<Network> oNetworks = oWayNetworks.getAllNetworks();
-		JSONArray oGeoJson = new JSONArray();
-		for (Network oNetwork : oNetworks)
-		{
-			oGeoJson.put(oNetwork.toGeoJsonFeature());
-		}
-		try (PrintWriter oOut = oRes.getWriter())
-		{
-			oGeoJson.write(oOut);
-		}
-		
-		return HttpServletResponse.SC_OK;
 	}
 	
 	
@@ -247,8 +227,8 @@ public class NetworkGeneration extends SecureBaseBlock
 				}
 				if (sFile == null)
 				{
-					DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
-					DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp));
+					DbfResultSet oDbf = new DbfResultSet(g_sStateShp.replace(".shp", ".dbf"));
+					DataInputStream oShp = new DataInputStream(new FileInputStream(g_sStateShp));
 					Header oHeader = new Header(oShp);
 					PolyshapeIterator oIter = null;
 					ArrayList<int[]> oOuters = new ArrayList();
@@ -535,8 +515,8 @@ public class NetworkGeneration extends SecureBaseBlock
 			long lFileTimeout = System.currentTimeMillis() - m_lFileTimeout;
 			ArrayList<String> oStates = new ArrayList();
 			int[] nNetworkGeo = oNetwork.getGeometry();
-			try (DbfResultSet oDbf = new DbfResultSet(m_sStateShp.replace(".shp", ".dbf"));
-				DataInputStream oShp = new DataInputStream(new FileInputStream(m_sStateShp)))
+			try (DbfResultSet oDbf = new DbfResultSet(g_sStateShp.replace(".shp", ".dbf"));
+				DataInputStream oShp = new DataInputStream(new FileInputStream(g_sStateShp)))
 			{
 				Header oHeader = new Header(oShp);
 				PolyshapeIterator oIter = null;
@@ -982,7 +962,32 @@ public class NetworkGeneration extends SecureBaseBlock
 		
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		m_oLogger.debug("publishing " + sNetworkId);
-		oWayNetworks.publishNetwork(sNetworkId, m_sStateShp, m_sOsmDir, bTrafficModel, bRoadWxModel, bExternalPublish);
+		oWayNetworks.publishNetwork(sNetworkId, g_sStateShp, m_sOsmDir, bTrafficModel, bRoadWxModel, bExternalPublish);
+		return HttpServletResponse.SC_OK;
+	}
+	
+	
+	public int doTrain(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
+		throws IOException, ServletException
+	{
+		String sNetworkId = oReq.getParameter("networkid");
+		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd");
+		oSdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+		oRes.setContentType("application/json");
+		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
+		Network oNetwork = oWayNetworks.getNetwork(sNetworkId);
+		if (!oNetwork.isStatus(Network.TRAINING))
+		{
+			oNetwork.addStatus(Network.TRAINING);
+			JSONObject oStatus = oWayNetworks.getHurricaneModelStatus(oNetwork);
+			oWayNetworks.writeHurricaneModelStatus(oNetwork, oStatus.getString("model"), WayNetworks.HURMODEL_TRAINING);
+			Scheduling.getInstance().execute(() -> MLPHurricaneTraining.train(oNetwork, m_sMLPTrainingDir + oNetwork.m_sNetworkId + "/"));
+		}
+		
+		try (PrintWriter oOut = oRes.getWriter())
+		{
+			oOut.append("{}");
+		}
 		return HttpServletResponse.SC_OK;
 	}
 	
@@ -999,6 +1004,12 @@ public class NetworkGeneration extends SecureBaseBlock
 			if (nIndex >= 0)
 				m_oSessionLists.remove(nIndex);
 		}
+	}
+	
+	
+	public static String getUSBorderShp()
+	{
+		return g_sUSBorderShp;
 	}
 	
 	

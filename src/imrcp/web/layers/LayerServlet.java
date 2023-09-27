@@ -17,6 +17,7 @@ package imrcp.web.layers;
 
 import imrcp.geosrv.GeoUtil;
 import imrcp.store.Obs;
+import imrcp.system.Directory;
 import imrcp.system.ObsType;
 import imrcp.system.Units;
 import imrcp.web.ClientConfig;
@@ -300,6 +301,7 @@ public abstract class LayerServlet extends SecureBaseBlock
 		oOutputGenerator.writeStringField("src", Integer.toString(oObs.m_nContribId, 36).toUpperCase());
 		if (oObs.m_nContribId == Integer.valueOf("cap", 36))
 			oOutputGenerator.writeStringField("url", oObs.m_sStrings[1]);
+		oOutputGenerator.writeNumberField("pref", Directory.getResource(oObs.m_nContribId, oObs.m_nObsTypeId).getPreference());
 		oOutputGenerator.writeEndObject();
 	}
 

@@ -404,7 +404,7 @@ public class Subscriptions extends SecureBaseBlock
 	{
 		try
 		{
-			for (Path oPath : Files.walk(Paths.get(m_sBaseDir + String.format(m_sSubFileFormat), sUuid).getParent(), FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
+			for (Path oPath : Files.walk(Paths.get(m_sBaseDir + String.format(m_sSubFileFormat, sUuid)).getParent(), FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
 				Files.delete(oPath);
 			return true;
 		}
@@ -462,6 +462,7 @@ public class Subscriptions extends SecureBaseBlock
 	{
 		try
 		{
+			oRes.setContentType("application/json");
 			listSubscriptions(oReq, oRes, oSession);
 			return HttpServletResponse.SC_OK;
 		}
@@ -469,6 +470,17 @@ public class Subscriptions extends SecureBaseBlock
 		{
 			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
+	}
+	
+	public int doDelete(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
+	   throws ServletException, IOException
+	{
+		String sId = oReq.getParameter("id");
+		oRes.setContentType("application/text");
+		if (deleteSubscription(sId))
+			return HttpServletResponse.SC_OK;
+		else
+			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 	}
 	
 	
@@ -514,6 +526,7 @@ public class Subscriptions extends SecureBaseBlock
 			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 
+		oRes.setContentType("application/json");
 		try (JsonGenerator oGenerator = createJsonGenerator(oRes))
 		{
 			oGenerator.writeStartObject();
@@ -552,6 +565,7 @@ public class Subscriptions extends SecureBaseBlock
 			return HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 		}
 		
+		oRes.setContentType("application/json");
 		try (JsonGenerator oGenerator = createJsonGenerator(oRes))
 		{
 			oGenerator.writeStartArray();

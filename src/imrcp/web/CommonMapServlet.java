@@ -9,6 +9,7 @@ package imrcp.web;
 import imrcp.geosrv.Network;
 import imrcp.geosrv.WayNetworks;
 import imrcp.system.Directory;
+import imrcp.system.Emails;
 import imrcp.system.FileUtil;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -98,7 +99,7 @@ public class CommonMapServlet extends SecureBaseBlock
 		JSONArray oGeoJson = new JSONArray();
 		for (Network oNetwork : oNetworks)
 		{
-			oGeoJson.put(oNetwork.toGeoJsonFeature());
+			oGeoJson.put(oNetwork.toGeoJsonFeature(true));
 		}
 		try (PrintWriter oOut = oRes.getWriter())
 		{
@@ -267,6 +268,40 @@ public class CommonMapServlet extends SecureBaseBlock
 			}
 		}
 
+		try (PrintWriter oOut = oRes.getWriter())
+		{
+			oResponse.write(oOut);
+		}
+		
+		return HttpServletResponse.SC_OK;
+	}
+	
+	public int doBug(HttpServletRequest oReq, HttpServletResponse oRes, Session oSess, ClientConfig oClient)
+		throws IOException, ServletException
+	{
+		oRes.setContentType("application/json");
+		JSONObject oResponse = new JSONObject();
+		String sBug = oReq.getParameter("bug");
+		String sPage = oReq.getParameter("page");
+		String sUser = oSess.m_sName;
+		String sUserEmail = oSess.m_sContact;
+		
+		Emails oEmails = (Emails)Directory.getInstance().lookup("Emails");
+		String sSupportBody = String.format("%s submitted the following bug while on the %s page:\n\n%s", sUser, sPage, sBug);
+		String sUserBody = String.format("Thank you for submitting a bug for review. This is an unmonitored account, do not directly reply to this email address.\n\nBug Description:\n%s", sBug);
+		try
+		{
+			oEmails.send("IMRCP - Bug Notification", sSupportBody, oEmails.getSupportEmail());
+			oEmails.send("IMRCP - Bug Received", sUserBody, sUserEmail);
+			
+		}
+		catch (Exception oEx)
+		{
+			oRes.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+			oResponse.put("status", "Failed to send emails");
+			oResponse.put("msg", oEx.getLocalizedMessage());
+		}
+		
 		try (PrintWriter oOut = oRes.getWriter())
 		{
 			oResponse.write(oOut);

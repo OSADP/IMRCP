@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -81,6 +83,8 @@ public class Scenario
 	public boolean m_bRunTraffic = false;
 	public boolean m_bShare = false;
 	public boolean m_bIsShared = false;
+	
+	public TreeMap<Id, int[]> m_oUserDefinedMetadata = new TreeMap(Id.COMPARATOR);
 	
 	
 	/**
@@ -153,6 +157,15 @@ public class Scenario
 				generateId();
 			else
 				m_sId = oPath.getParent().getFileName().toString();
+		}
+		JSONObject oMetadata = oJson.optJSONObject("metadata");
+		if (oMetadata != null)
+		{
+			for (String sKey : oMetadata.keySet())
+			{
+				JSONArray oArr = oMetadata.getJSONArray(sKey);
+				m_oUserDefinedMetadata.put(new Id(sKey), new int[]{oArr.getInt(0), oArr.getInt(1)});
+			}
 		}
 	}
 	
@@ -254,7 +267,15 @@ public class Scenario
 		}
 		
 		oJson.put("groups", oGroups);
-		
+		JSONObject oMetadata = new JSONObject();
+		for (Entry<Id, int[]> oEntry : m_oUserDefinedMetadata.entrySet())
+		{
+			JSONArray oArr = new JSONArray();
+			oArr.put(oEntry.getValue()[0]);
+			oArr.put(oEntry.getValue()[1]);
+			oMetadata.put(oEntry.getKey().toString(), oArr);
+		}
+		oJson.put("metadata", oMetadata);
 		return oJson;
 	}
 }
