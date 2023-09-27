@@ -20,7 +20,7 @@
 		<script type="text/javascript" src="script/moment.min.js"></script>
 		<script type="text/javascript" src="script/Chart.min.js"></script>
 		<script src="script/summary-map.js" type="module"></script>
-		<script type="text/javascript" src="script/check.js"></script>
+		<script type="module" src="script/check.js"></script>
 	</head>
 	<body>
 		<div id="pageoverlay"><p class="centered-element"></p></div>
@@ -34,22 +34,53 @@
 		<div id="footer" class="w3-bottom w3-fhwa-navy mapfooter">
 			<div style="display:flex; flex-direction: row; flex-wrap: wrap;">
 				<div id="legendDeck">
-					<div id="settingsPane" title="Settings">
-
+					<div id="viewsPane" title="Views">
 						<div>
-						 <!-- <ul class="w3-ul ul-no-border">
-							<li>Show Road Types</li>
-							<li><label><input id="chkShowHighways" type="checkbox" checked="checked"/> Highways</label></li>
-							<li><label><input id="chkShowArterials" type="checkbox"  checked="checked" /> Arterials</label></li>
-						  </ul> -->
-						</div>
-						<div>
-							<ul class="w3-ul ul-no-border">
-								<li>Map Behaviors</li>
-								<li><label><input type="checkbox" checked="checked" id="chkAutoRefresh" /> Auto refresh</label></li>
-								<!--<li><label><input type="checkbox"  checked="checked" id="chkNotifications" /> Notify</label></li>-->
+							<ul class="w3-ul ul-no-border obstype-pane-list">
+								<li><button type="button" class="obs-group-btn">Tropical Storms</button>
+									<ul class="w3-ul ul-no-border" style="margin-left:14px;">
+										<li>Tropical Storm Cone<i class="w3-right fa fa-window-restore clickable" aria-hidden="true"></i></li>
+										<li>Tropical Storm Category<i class="w3-right	fa fa-window-restore clickable" aria-hidden="true"></i></li>
+									</ul>	
+								</li>
+								<li><button type="button" class="obs-group-btn">Winter Storms</button>
+									<ul class="w3-ul ul-no-border" style="margin-left:14px;">
+										<li>Precip Rate and Type<i class="w3-right fa fa-window-restore clickable" aria-hidden="true"></i></li>
+										<li>Pavement State<i class="w3-right fa fa-window-restore clickable" aria-hidden="true"></i></li>
+									</ul>
+								</li>
 							</ul>
 						</div>
+					</div>
+					<div id="settingsPane" title="Settings">
+						<div>
+							<br>
+							<ul class="w3-ul ul-no-border">
+								<li><label><input type="checkbox" id="chkLonLat" /> Show Lon/Lat</label></li><br>
+								<li><label>Auto Refresh</label>
+									<select id="selAutoRefresh">
+										<option value="0">No Refresh</option>
+										<option value="2">2 Minutes</option>
+										<option value="5">5 Minutes</option>
+									</select>
+								</li><br>
+								<li><label>Area Layer Opacity</label>
+									<select id="selOpacity">
+										<option value="10">10%</option>
+										<option value="20">20%</option>
+										<option value="30">30%</option>
+										<option value="40" selected="selected">40%</option>
+										<option value="50">50%</option>
+										<option value="60">60%</option>
+										<option value="70">70%</option>
+										<option value="80">80%</option>
+										<option value="90">90%</option>
+										<option value="100">100%</option>
+									</select>
+								</li>
+							</ul>
+						</div>
+						<br><br><br>
 						<div>
 							<ul class="w3-ul ul-no-border">
 								<li>Selected layers, current map position, zoom, and time slider are also saved</li>
@@ -59,7 +90,6 @@
 					</div>
 				</div>
 				<div style="flex-grow: 1; flex-basis: 1.5%;"></div><!-- comment -->
-<!--				<div class="tooltip" tip="create report/subscription"><input type="button" id="btnReport" class="footer-button"value="Reports"></div>-->
 				
 				<div id="timeslider-container" class="w3-fhwa-navy timeslider-container">
 					<div id="timeslider" class="timeslider">
