@@ -368,16 +368,34 @@
 			{"id":"3_TRSCNE809", "metadata":{"imrcp-range":"Major Hurricane"}, "source-layer":"3_TRSCNE809", "paint":{"fill-color":"#9c52c6"}}
 		]
 	},
-	"Field Sensors":
+	"Flood Sensors":
 	{
 		"group":"Points",
 		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/varies/1/{z}/{x}/{y}"], "minzoom":6},
 		"type":"symbol",
 		"layers":
 		[
-			{"id":"AHPS", "metadata":{"imrcp-range":"Flood", "obstype":"VARIES"}, "source-layer":"AHPS", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"], "icon-halo-width": ["case", ["boolean", ["feature-state", "hover"], false], 0, 0], "icon-halo-color": "#000"}, "layout":{"icon-image":"chevron-sdf", "text-allow-overlap":true, "icon-allow-overlap":true}},
-			{"id":"WxDE", "metadata":{"imrcp-range":"ESS"}, "source-layer":"WXDE", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"]}, "layout":{"icon-image":"hexagon-sdf"}},
-			{"id":"CV", "metadata":{"imrcp-range":"CV Data"}, "source-layer":"CV", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", ["case", ["boolean", ["get", "onlyspeed"], true], "#000", "#f0c"]]}, "layout":{"icon-image":"detector-sdf"}}
+			{"id":"AHPS", "metadata":{"imrcp-range":"Flood", "obstype":"VARIES"}, "source-layer":"AHPS", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"], "icon-halo-width": ["case", ["boolean", ["feature-state", "hover"], false], 0, 0], "icon-halo-color": "#000"}, "layout":{"icon-image":"chevron-sdf", "text-allow-overlap":true, "icon-allow-overlap":true}}
+		]
+	},
+	"Weather Sensors":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/varies/1/{z}/{x}/{y}"], "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"WxDE", "metadata":{"imrcp-range":"ESS", "obstype":"VARIES"}, "source-layer":"WXDE", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", "#000"], "icon-halo-color": "#000"}, "layout":{"icon-image":"hexagon-sdf", "text-allow-overlap":true, "icon-allow-overlap":true}}
+		]
+	},
+	"Mobile Sensors":
+	{
+		"group":"Points",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/varies/1/{z}/{x}/{y}"], "minzoom":6},
+		"type":"symbol",
+		"layers":
+		[
+			{"id":"CV", "metadata":{"imrcp-range":"CV Data", "obstype":"VARIES"}, "source-layer":"CV", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", ["case", ["boolean", ["get", "onlyspeed"], true], "#000", "#f0c"]], "icon-halo-color": "#000"}, "layout":{"icon-image":"detector-sdf", "text-allow-overlap":true, "icon-allow-overlap":true}}
 		]
 	},
 	"#Traffic Alerts":
