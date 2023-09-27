@@ -19,13 +19,9 @@
           center: {lat,lng}
         },
         layers: $('.obstype-pane-list input[type="checkbox"]:checked').map((idx,el) => $(el).val()).get(),
-        roadTypes: {
-          arterials: $('#chkShowArterials').prop('checked'),
-          highways: $('#chkShowHighways').prop('checked')
-        },
-//        notify: $('#chkNotifications').prop('checked'),
-		notify: false,
-        refresh: $('#chkAutoRefresh').prop('checked')
+		lonlat: $('#chkLonLat').prop('checked'),
+        refresh: $('#selAutoRefresh').val(),
+		opacity: $('#selOpacity').val()
       };
       
       var saveRequest = $.ajax('api/settings/saveMapSettings', {
@@ -60,8 +56,9 @@ const loadSettings = $.Deferred(defer => {
   const defaultSettings = {
     layers: [],
     map: DEFAULT_MAP_VIEW,
-    notify: false,
-    refresh: true
+	lonlat: false,
+	refresh: "0",
+	opacity: "40"
   };
 
   $.getJSON('api/settings/MapSettings')
@@ -72,6 +69,11 @@ const loadSettings = $.Deferred(defer => {
         const [lat,lng] = settings.map.center;
         settings.map.center = {lat,lng};
       }
+		if (settings.refresh === true)
+			settings.refresh = "2";
+		if (settings.refresh === false || settings.refresh === undefined)
+			settings.refresh = "0";
+	  
       return defer.resolveWith(null, [Object.assign({userHasProfile}, defaultSettings, settings)]);
     })
     .fail(() => defer.resolveWith(null, [defaultSettings]));

@@ -30,7 +30,7 @@ const generateFillLegendContent = legendEntries =>
       if (legendEntry.color === "#ffffff")// if the color is white, then use a black background with a white rounded square inside it
         legendEntryHtml += '<li><i class="fa fa-square-o" style="color: #000"></i> ';
       else
-        legendEntryHtml += `<li><i class="fa fa-stop " style="color: ${legendEntry.color}; opacity: ${legendEntry.opacity}"></i>`;
+        legendEntryHtml += `<li><i class="fa fa-stop " style="color: ${legendEntry.color}; opacity: 1.0"></i>`;
 
       legendEntryHtml += legendEntry.label + '</li>';
     }
@@ -104,16 +104,19 @@ const setupObstypeLegendDivs = sources =>
     $(div).find('i')
       .each((idx, icon) => {
         const obstypeListItem = $(icon).parents(('li'));
-        const sourceId = obstypeListItem.find('input').val();
-        const source = sources.get(sourceId);
+        let sourceId = obstypeListItem.find('input').val();
+        let source = sources.get(sourceId);
+		if (source === undefined)
+		{
+			sourceId = obstypeListItem[0].textContent;
+			source = sources.get(sourceId);
+		}
 
         if (source && source.legendElements.length > 0)
         {
           $(icon).data('source-id', sourceId);
-          $(icon).data('obstype-label', obstypeListItem.text());
+          $(icon).data('obstype-label', sourceId);
         }
-        else
-          $(icon.remove());
       });
 
     $(div).find('i')
@@ -125,18 +128,20 @@ const setupObstypeLegendDivs = sources =>
 
 const buildPaneSourceInputs = (map, sources, initialLayers,addSourceAndLayersFn, sLastLayer) => {
   const initialSources = new Set(initialLayers);
-  const groupDivs = new Map();
+  const groupMap = new Map();
   const settingsDiv = $('#settingsPane');
-  groupDivs.set('Settings', settingsDiv);
+  const viewPane = $('#viewsPane');
+  groupMap.set('Groups', viewPane);
+  groupMap.set('Settings', settingsDiv);
 
   sources.forEach(source => {
 
     const {group, mapboxSource, id} = source;
 
-    if (!groupDivs.has(group))
-      groupDivs.set(group, $('<div title="' + group + '"><ul class="w3-ul ul-no-border obstype-pane-list"></ul></div>').insertBefore(settingsDiv));
+    if (!groupMap.has(group))
+      groupMap.set(group, $('<div title="' + group + '"><ul class="w3-ul ul-no-border obstype-pane-list"></ul></div>').insertBefore(viewPane));
 
-    const groupDiv = groupDivs.get(group);
+    const groupDiv = groupMap.get(group);
     const groupUl = groupDiv.find('ul.obstype-pane-list');
     const sourceLi = $(`<li><label><input id="${source.layers[0].metadata.obstype}" type="checkbox" value="${id}"/>${id}</label><i class="w3-right	fa fa-window-restore clickable" aria-hidden="true"></i></li>`).appendTo(groupUl);
 

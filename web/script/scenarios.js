@@ -2,7 +2,8 @@ import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly, getLineSt
 	isFeatureInsidePolygonFeature, pointToPaddedBounds, mapOffBoundFn, addStyleRule} from './map-util.js';
 import {minutesToHHmm, minutesToHH} from './common.js';
 import {loadSettings} from './map-settings.js';
-import {getNetworksAjax, getProfileAjax, ignoreInput, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus} from './map-common.js';
+import {getNetworksAjax, getProfileAjax, ignoreInput, initCommonMap, ASSEMBLING,
+	WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus, showPageoverlay, timeoutPageoverlay} from './map-common.js';
 import './jquery/jquery.datetimepicker.full.js';
 
 window.g_oRequirements = {'groups': 'imrcp-user;imrcp-admin'};
@@ -41,14 +42,17 @@ let SELECTNETWORK = 4;
 let STATE;
 let g_bRoadWx = true;
 let g_bTraffic = true;
-
+let g_oMetadataPopup;
+let g_oMetadata;
+let g_sCurrentScenarioName;
+let g_oOriginalMetadata;
 
 
 
 async function initialize()
 {
-	$('#pageoverlay').html(`<p class="centered-element">Initializing...</p>`).css({'opacity': 0.5, 'font-size': 'x-large'}).show();
-	$(document).prop('title', 'IMRCP Scenario Creation - ' + sessionStorage.uname);
+	showPageoverlay('Initializing...');
+	$(document).prop('title', 'IMRCP Create Scenario');
 	let pNetworks = getNetworksAjax().promise();
 	let pProfile = getProfileAjax().promise();
 	let pScenarios = $.ajax(
@@ -63,7 +67,7 @@ async function initialize()
 	
 	g_oMap.on('load', async function() 
 	{
-		
+		g_oMetadataPopup = new mapboxgl.Popup({closeButton: false, closeOnClick: false, anchor: 'bottom', offset: [0, -25], maxwidth: 'none'});
 		$('#dlgStatus').dialog({autoOpen: false, position: {my: "center", at: "center", of: "#map-container"}, modal: true, draggable: false, resizable: false, width: 400});
 		buildInstructionDialog();	
 		buildDtp();
@@ -76,6 +80,7 @@ async function initialize()
 		buildConfirmOverwrite();
 		buildValues();
 		buildGroupListDialog();
+		buildUserMetadata();
 		
 		g_oScenarios = await pScenarios;
 		let oAllNetworks = await pNetworks;
@@ -152,6 +157,12 @@ async function initialize()
 }
 
 
+function updateMetadataPos(oEvent)
+{
+	g_oMetadataPopup.setLngLat(oEvent.lngLat);
+}
+
+
 function selectANetwork()
 {
 	switchState(SELECTNETWORK);
@@ -212,7 +223,7 @@ function loadANetwork(oEvent)
 	}
 	else
 	{
-		$('#pageoverlay').html(`<p class="centered-element">Loading network: ${oNetwork.properties.label}</p>`).css({'opacity': 0.5, 'font-size': 'x-large'}).show();
+		showPageoverlay(`Loading network: ${oNetwork.properties.label}`);
 		$.ajax(
 		{
 			'url': 'api/generatenetwork/geo',
@@ -222,7 +233,7 @@ function loadANetwork(oEvent)
 			'data': {'token': sessionStorage.token, 'networkid': oNetwork.properties.networkid, 'published': 'true'}
 		}).done(geoSuccess).fail(function() 
 		{
-			$('#pageoverlay').html(`<p class="centered-element">Failed to retrieve network: "${oNetwork.properties.label}"<br>Try again later.</p>`);
+			showPageoverlay(`Failed to retrieve network: "${oNetwork.properties.label}"<br>Try again later.`);
 			if (g_nNetworks > 1)
 				selectANetwork();
 		});
@@ -270,9 +281,10 @@ function hoverHighlight(oEvent)
 		let oFeature = oEvent.features[0];
 		let bInclude = g_oMap.getFeatureState(oFeature).include;
 		let bBanned = false;
+		let oMetadata = getLanesAndSpeed(oFeature);
 		if (bInclude === undefined || STATE === SELECTEDIT)
 			$(g_oMap.getCanvas()).addClass('clickable');
-		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oFeature.properties.spdlimit || g_oCurrentGroup.lanecount !== oFeature.properties.lanecount))
+		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
 		{
 			$(g_oMap.getCanvas()).addClass('bancursor');
 			bBanned = true;
@@ -286,12 +298,19 @@ function hoverHighlight(oEvent)
 		{
 			g_oMap.setFeatureState(oHover, {'hover': false});
 		}
+		if (oFeature.layer.id === 'geo-lines-scenario')
+		{
+			g_oMetadataPopup.setHTML(`Lanes: ${oMetadata.lanes}<br>Speed Limit: ${oMetadata.spdlimit}<br>Right-click: Edit lanes and speed limit`);
+			if (!g_oMetadataPopup.isOpen())
+				g_oMetadataPopup.addTo(g_oMap);
+			g_oMap.on('contextmenu', startSaveMetadata);
+		}
 		g_oHovers[oFeature.layer.id] = oFeature;
 		g_oMap.on('mousemove', oFeature.layer.id, updateHighlight);
 		g_oMap.on('mousemove', unHighlight.bind({'layer': oFeature.layer.id}));
 		g_oMap.setFeatureState(oFeature, {'hover': true});
 		if (bBanned)
-			$('#instructions-error').html(`Cannot add to group:<br>Group has ${g_oCurrentGroup.lanecount} lanes and speed limit ${g_oCurrentGroup.spdlimit}<br>Segment has ${oFeature.properties.lanecount} lanes and speed limit ${oFeature.properties.spdlimit}`);
+			$('#instructions-error').html(`Cannot add to group:<br>Group has ${g_oCurrentGroup.lanecount} lanes and speed limit ${g_oCurrentGroup.spdlimit}<br>Segment has ${oMetadata.lanes} lanes and speed limit ${oMetadata.spdlimit}`);
 		else
 			$('#instructions-error').html('');
 	}
@@ -305,6 +324,7 @@ function updateHighlight(oEvent)
 		let oFeature = oEvent.features[0];
 		let oHover = g_oHovers[oFeature.layer.id];
 		let bBanned = false;
+		let oMetadata = getLanesAndSpeed(oFeature);
 		if (oHover !== undefined)
 		{
 			g_oMap.setFeatureState(oHover, {'hover': false});
@@ -313,7 +333,7 @@ function updateHighlight(oEvent)
 		let bInclude = g_oMap.getFeatureState(oFeature).include;
 		if (bInclude === undefined || STATE === SELECTEDIT)
 			$(g_oMap.getCanvas()).addClass('clickable');
-		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oFeature.properties.spdlimit || g_oCurrentGroup.lanecount !== oFeature.properties.lanecount))
+		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
 		{
 			$(g_oMap.getCanvas()).addClass('bancursor');
 			bBanned = true;
@@ -322,11 +342,17 @@ function updateHighlight(oEvent)
 			$(g_oMap.getCanvas()).addClass('minuscursor');
 		else
 			$(g_oMap.getCanvas()).addClass('pluscursor');
+		if (oFeature.layer.id === 'geo-lines-scenario')
+		{
+			g_oMetadataPopup.setHTML(`Lanes: ${oMetadata.lanes}<br>Speed Limit: ${oMetadata.spdlimit}<br>Right-click: Edit lanes and speed limit`);
+			if (!g_oMetadataPopup.isOpen())
+				g_oMetadataPopup.addTo(g_oMap);
+		}
 		g_oHovers[oFeature.layer.id] = oFeature;
 		g_oMap.setFeatureState(oFeature, {'hover': true});
 		
 		if (bBanned)
-			$('#instructions-error').html(`Cannot add to group:<br>Group has ${g_oCurrentGroup.lanecount} lanes and speed limit ${g_oCurrentGroup.spdlimit}<br>Segment has ${oFeature.properties.lanecount} lanes and speed limit ${oFeature.properties.spdlimit}`);
+			$('#instructions-error').html(`Cannot add to group:<br>Group has ${g_oCurrentGroup.lanecount} lanes and speed limit ${g_oCurrentGroup.spdlimit}<br>Segment has ${oMetadata.lanes} lanes and speed limit ${oMetadata.spdlimit}`);
 		else
 			$('#instructions-error').html('');
 	}
@@ -347,6 +373,11 @@ function unHighlight(oEvent)
 	g_oMap.off('mousemove', this.layer, updateHighlight);
 	mapOffBoundFn(g_oMap, 'mousemove', unHighlight.name);
 	$(g_oMap.getCanvas()).removeClass('clickable minuscursor pluscursor bancursor');
+	if (this.layer === 'geo-lines-scenario')
+	{
+		g_oMetadataPopup.remove();
+		g_oMap.off('contextmenu', startSaveMetadata);
+	}
 }
 
 
@@ -364,8 +395,21 @@ function toggleInclude(oEvent)
 				break;
 			}
 		}
-		if (oTemp === undefined || (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oTemp.properties.spdlimit || g_oCurrentGroup.lanecount !== oTemp.properties.lanecount)))
+		if (!g_oMap.getFeatureState(oTemp).include && isSegmentInGroup(oTemp.properties.imrcpid))
+		{
+			$('#instructions-error').html('Cannot add a segment into multiple groups');
 			return;
+		}
+		let oMetadata;
+		if (oTemp !== undefined)
+		{
+			oMetadata = getLanesAndSpeed(oTemp);
+			if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
+				return;
+		}
+		else
+			return;
+
 
 		let sColor = '#000';
 		if (g_oMap.getFeatureState(oTemp).include)
@@ -385,8 +429,8 @@ function toggleInclude(oEvent)
 			sColor = g_nColors[g_oCurrentGroup.index % g_nColors.length];
 			if (Object.keys(g_oCurrentGroup.segments).length === 1)
 			{
-				g_oCurrentGroup.spdlimit = oTemp.properties.spdlimit;
-				g_oCurrentGroup.lanecount = oTemp.properties.lanecount;
+				g_oCurrentGroup.spdlimit = oMetadata.spdlimit;
+				g_oCurrentGroup.lanecount = oMetadata.lanes;
 			}
 		}
 		g_oMap.setFeatureState(oTemp, {'include': !g_oMap.getFeatureState(oTemp).include, 'color': sColor});
@@ -411,7 +455,7 @@ function finishedStyling(oEvent)
 	let oFeatures = g_oMap.getSource('geo-lines')._data.features;
 	for (let nIndex = 0; nIndex < oFeatures.length; nIndex++) 
 		g_oMap.setFeatureState({'id': nIndex, 'source': 'geo-lines'}, {'preview': false, 'include': false, 'color': '#000'});
-	$('#pageoverlay').hide();
+	timeoutPageoverlay(1000);
 
 	if (g_oMap.getLayer('network-polygons-report') !== undefined)
 		g_oMap.removeLayer('network-polygons-report');
@@ -446,7 +490,7 @@ function buildInstructionDialog()
 function buildGroupListDialog()
 {
 	let oDialog = $('#dlgGroupList');
-	oDialog.dialog({autoOpen: false, position: {my: "right top", at: "right-45 top+8", of: "#map-container"}, draggable: true, resizable: false, width: 450, height: 'auto',
+	oDialog.dialog({autoOpen: false, position: {my: "right top", at: "right-45 top+8", of: "#map-container"}, draggable: true, resizable: false, width: 475, height: 'auto', 'maxHeight': $('.mapboxgl-canvas')[0].offsetHeight,
 					buttons: [
 					{text: 'Load', id: 'loadScenario', disabled: false, click: function() 
 					{
@@ -493,7 +537,7 @@ function buildGroupListDialog()
 				</select></div><div class="flex1 flexbox"><div class="flex1" style="width:120px; white-space:nowrap"><label for="checkboxShare" class="flex1">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div></div></div>
 				<div class="flexbox marginbottom12"><div class="flex3"><input id="groupname" type="text" placeholder="Enter name of new group"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="btnNewGroup" style="width:120px; white-space:nowrap">Add Group</button></div></div>
-				<ul id="grouplist"></ul>`;
+				<ul id="grouplist" style="overflow-x:visible;"></ul>`;
 	
 	oDialog.html(sHtml);
 	$('#btnNewGroup').addClass('ui-button-disabled ui-state-disabled');
@@ -565,7 +609,7 @@ function changeModelOptions(oEvent)
 function setModelFlags()
 {
 	let sSelect = $('#modelstorun').val();
-	if (sSelect === 'both')
+	if (sSelect === 'Both')
 	{
 		g_bTraffic = g_bRoadWx = true;
 	}
@@ -609,10 +653,11 @@ function addGroup(oSaved, sGroup)
 			let oFeature = oFeatures[nIndex];
 			if (oFeature === undefined)
 				continue;
+			let oMetadata = getLanesAndSpeed(oFeature);
 			if (nSpdLimit === Number.MIN_SAFE_INTEGER)
 			{
-				nSpdLimit = oFeature.properties.spdlimit;
-				nLaneCount = oFeature.properties.lanecount;
+				nSpdLimit = oMetadata.spdlimit;
+				nLaneCount = oMetadata.lanes;
 			}
 			
 			oSegments[sId] = oFeature;
@@ -822,6 +867,7 @@ function switchState(nNewState, nFallback = ERRORSTATE)
 		{
 			g_oMap.off('click', toggleInclude);
 			g_oMap.off('mouseenter', 'geo-lines-scenario', hoverHighlight);
+			g_oMap.off('mousemove', updateMetadataPos);
 			let sLabel = g_oCurrentGroup.label.replaceAll(' ', '\\ ');
 			$('#group_' + sLabel + ' #icons').show();
 			$('#group_' + sLabel + ' #done').hide();
@@ -855,6 +901,7 @@ function switchState(nNewState, nFallback = ERRORSTATE)
 			$('#dlgInstructions').dialog('option', 'title', 'Add/Remove Segment');
 			g_oMap.on('click', toggleInclude);
 			g_oMap.on('mouseenter', 'geo-lines-scenario', hoverHighlight);
+			g_oMap.on('mousemove', updateMetadataPos);
 			let sLabel = g_oCurrentGroup.label.replaceAll(' ', '\\ ');
 			$('#group_' + sLabel + ' #icons').hide();
 			$('#group_' + sLabel + ' #done').show();
@@ -943,6 +990,8 @@ function restart(bSkipNetwork)
 	$('#grouplist > li').remove();
 	g_aGroups = [];
 	$('#scenarioName').val('');
+	g_sCurrentScenarioName = undefined;
+	g_oMetadata = {};
 	$('#saveScenario').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 	$('#runScenario').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 	g_bSaveInstructions = g_bRunInstructions = false;
@@ -955,7 +1004,7 @@ function restart(bSkipNetwork)
 	g_oMap.off('mouseenter', 'geo-lines-scenario', hoverHighlight);
 	g_oMap.off('mousemove', 'geo-lines-scenario', updateHighlight);
 	mapOffBoundFn(g_oMap, 'mousemove', unHighlight.name);
-	if (bSkipNetwork && !bSkipNetwork.type)
+	if ((bSkipNetwork && !bSkipNetwork.type) || g_nNetworks === 1)
 	{
 		loadANetwork(g_oMap.getSource('network-polygons')._data);
 	}
@@ -965,6 +1014,36 @@ function restart(bSkipNetwork)
 	}
 }
 
+
+function forceTwoDigits(oEvent)
+{
+	let sText = oEvent.originalEvent.key || oEvent.originalEvent.clipboardData.getData('text');
+	let oThis = $(this);
+	if ((oThis.val().length === 2 && oThis[0].selectionEnd - oThis[0].selectionStart == 0) || (oThis.val().length === 0 && sText === '0') || !/^[0-9]$/.exec(sText))
+	{
+		addPopup(oThis, 'Invalid Input');
+		oEvent.preventDefault();
+		return false;
+	}
+}
+
+
+function addPopup(oJqEl, sMsg)
+{
+	let oPopuptext = $(`<span class="show">${sMsg}</span>`);
+	if (oJqEl.parent()[0].getBoundingClientRect().top < 70)
+		oPopuptext.addClass('popuptextbelow');
+	else
+		oPopuptext.addClass('popuptextabove');
+
+	oJqEl.parent().addClass('popup').append(oPopuptext);
+
+	setTimeout(function()
+	{
+		oJqEl.removeClass('popup');
+		oPopuptext.remove();
+	}, 1500);
+}
 
 function buildConfirmDelete()
 {
@@ -1167,8 +1246,12 @@ function loadScenario()
 	$('#runScenario').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 	g_bRunInstructions = false;
 	let oScenario = g_oScenarios[g_nSelectedScenario];
+	if (Object.hasOwn(oScenario, 'metadata'))
+		g_oMetadata = oScenario.metadata;
+	else
+		g_oMetadata = {};
 	setModelOptions();
-	
+	$('#btnNewGroup').removeClass('ui-button-disabled ui-state-disabled');
 	if (oScenario.roadwxmodel && oScenario.trafficmodel)
 	{
 		$('#modelstorun').val('Both');
@@ -1188,6 +1271,7 @@ function loadScenario()
 	$('#btnTime').val(oTime.utc().valueOf()).html(oTime.local().format("YYYY/MM/DD HH:mm"));
 	$('#dlgGroupList').dialog('option', 'title', 'Scenario Settings');
 	$('#scenarioName').val(oScenario.name);
+	g_sCurrentScenarioName = oScenario.name;
 	for (let oGroup of oScenario.groups.values())
 	{
 		addGroup(oGroup, oGroup.label);
@@ -1252,6 +1336,118 @@ function buildConfirmDeleteTemplate()
 	});
 }
 
+function getLanesAndSpeed(oFeature)
+{
+	let nLanes;
+	let nSpdLimit;
+	if (g_oMetadata !== undefined && Object.hasOwn(g_oMetadata, oFeature.properties.imrcpid))
+	{
+		let oMeta = g_oMetadata[oFeature.properties.imrcpid];
+		nLanes = oMeta[0];
+		nSpdLimit = oMeta[1];
+	}
+	else
+	{
+		nLanes = oFeature.properties.lanecount;
+		nSpdLimit = oFeature.properties.spdlimit;
+	}
+	
+	return {'lanes': Number(nLanes), 'spdlimit': Number(nSpdLimit)};
+}
+
+
+function startSaveMetadata(oEvent)
+{
+	let oFeatures = g_oMap.queryRenderedFeatures(pointToPaddedBounds(oEvent.point), {'layers': ['geo-lines-scenario']});
+	if (oFeatures.length > 0)
+	{
+		let oTemp;
+		for (let oFeature of oFeatures.values())
+		{
+			if (oFeature.id === g_oHovers['geo-lines-scenario'].id)
+			{
+				oTemp = oFeature;
+				break;
+			}
+		}
+		if (oTemp === undefined)
+			return;
+		
+		if (isSegmentInGroup(oTemp.properties.imrcpid))
+		{
+			$('#instructions-error').html('Cannot edit metadata of a segment that is already in a group');
+			return;
+		}
+		
+		let oMetadata = getLanesAndSpeed(oTemp);
+		g_oOriginalMetadata = [oMetadata.lanes, oMetadata.spdlimit];
+		$('#metadata_lanes').val(oMetadata.lanes);
+		$('#metadata_spdlimit').val(oMetadata.spdlimit);
+		$('#metadata_wayid').val(oTemp.properties.imrcpid);
+		$('#dlgUserMetadata').dialog('open');
+	}
+}
+
+
+function isSegmentInGroup(sImrcpId)
+{
+	for (let oGroup of g_aGroups.values())
+	{
+		if (Object.hasOwn(oGroup.segments, sImrcpId))
+			return true;
+	}
+	
+	return false;
+}
+function saveMetadata()
+{
+	let sWayId = $('#metadata_wayid').val();
+	let sLanes = $('#metadata_lanes').val();
+	let sSpdLimit = $('#metadata_spdlimit').val();
+	if (sLanes == g_oOriginalMetadata[0] && sSpdLimit == g_oOriginalMetadata[1])
+	{
+		$('#dlgUserMetadata').dialog('close');
+		return;
+	}
+	if (sLanes.length === 0 || sLanes == 0)
+	{
+		let oLanes = $('#metadata_lanes');
+		$('#metadata_lanes').focus();
+		addPopup(oLanes, 'Input cannot be empty or zero');
+		return;
+	}
+	if (sSpdLimit.length === 0 || sSpdLimit == 0)
+	{
+		let oSpdLimit = $('#metadata_spdlimit');
+		$('#metadata_spdlimit').focus();
+		addPopup(oSpdLimit, 'Input cannot be empty or zero');
+		return;
+	}
+	let oSearch = {'name': g_sCurrentScenarioName};
+	let nIndex = binarySearch(g_oScenarios, oSearch, (a,b) => a.name.localeCompare(b.name));
+	let oScenario = g_oScenarios[nIndex];
+	let oData = {'token': sessionStorage.token, 'wayid': sWayId, 'lanes': sLanes, 'spdlimit': sSpdLimit};
+	if (oScenario !== undefined)
+		oData['name'] = oScenario.name;
+	showPageoverlay(`Saving metadata...`);
+	$.ajax(
+	{
+		'url': 'api/scenarios/metadata',
+		'method': 'POST',
+		'dataType': 'json',
+		'data': oData
+	}).done(function()
+	{
+		showPageoverlay(`Successfully saved metadata...`);
+		if (g_oMetadata === undefined)
+			g_oMetadata = {};
+		g_oMetadata[sWayId] = [sLanes, sSpdLimit];
+	}).always(function(oRes)
+	{
+		$('#dlgUserMetadata').dialog('close');
+		timeoutPageoverlay();
+	});
+}
 
 function deleteTemplate()
 {
@@ -1364,7 +1560,7 @@ function buildRun()
 
 function runScenario()
 {
-	let oScenario = {'name': $('#scenarioName').val()};
+	let oScenario = {'name': g_sCurrentScenarioName};
 	let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
 	oScenario = g_oScenarios[nIndex];
 	let oData = {'token': sessionStorage.token, 'starttime': $('#dtpicker').datetimepicker('getValue').valueOf(), 'name': $('#scenarioRun').val(), 'template': oScenario.name, 'user': oScenario.user};
@@ -1404,6 +1600,8 @@ function saveScenario(bOverwrite)
 			oScenario.trafficmodel = false;
 			oScenario.roadwxmodel = true;
 		}
+		if (g_oMetadata !== undefined)
+			oScenario.metadata = g_oMetadata;
 		
 		let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
 		let bIsShared = false;
@@ -1447,6 +1645,7 @@ function saveScenario(bOverwrite)
 			}
 		}
 		oData['scenario'] = JSON.stringify(oData['scenario']);
+		g_sCurrentScenarioName = oScenario.name;
 		$.ajax(
 		{
 			'url': 'api/scenarios/save',
@@ -1489,6 +1688,30 @@ function saveScenario(bOverwrite)
 	}
 }
 
+
+function buildUserMetadata()
+{
+	let oDialog = ($('#dlgUserMetadata'));
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#map-container"}, modal: true, draggable: false, resizable: false, width: 300,
+		title: 'Edit Segment Metadata',
+		open: function()
+		{
+			oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#map-container"});
+		},
+		buttons: [
+			{text: 'Save Values', id: 'btnSaveMetadata', click: function() 
+				{
+					saveMetadata();
+				}}
+		]});
+	
+	oDialog.html('<label style="float:left;" for="metadata_lanes">Lanes:</label><div style="position:absolute; right:20px;"><input style="width:40px;" type="text" id="metadata_lanes"></div><br><label style="float:left;" for="metadata_">Speed limit (mph):</label><div style="position:absolute; right:20px;"><input style="width:40px;" type="text" id="metadata_spdlimit"></div><br><input type="text" style="display:none;" id="metadata_wayid">');
+	$(window).resize(function()
+	{
+		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#map-container"});
+	});
+	$('#metadata_lanes,#metadata_spdlimit').on('keypress', forceTwoDigits).on('paste', forceTwoDigits);
+}
 
 function buildConfirmOverwrite()
 {

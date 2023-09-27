@@ -1,5 +1,5 @@
 import {g_oMap, g_oDialogs, g_oInstructions, instructions, submitNetwork, cancelNetwork, toggleDialog, turnOffAddRemove, turnOffDelete,
-	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess, closeNetworkSelect, confirmDeleteNetwork, confirmPublishNetwork, confirmLoadNetwork} from './network.js';
+	turnOffMerge, turnOffSplit, startSelectNetwork, cancelReprocess, confirmReprocess, closeNetworkSelect, confirmDeleteNetwork, confirmPublishNetwork, confirmTrainingNetwork, confirmLoadNetwork} from './network.js';
 import {toggleDetectorEdit, nextDetector, saveDetector, revertDetector, exitDetectorEdit, detChange, startDetector, selectFile} from './detectors.js';
 import {g_oLayers, removeSource} from './map-util.js';
 
@@ -145,7 +145,7 @@ function buildNetworkLegendDialog()
 	g_oDialogs['networklegend'] = '#dlgNetworkLegend';
 	
 	oDialog.dialog({autoOpen: false, position: {my: "right bottom", at: "right-8 bottom-8", of: "#mapid"}, resizable: false, width: 220, draggable: false});
-	let oTypes = {'Assembling': 'rgba(128, 128, 128, 0.6)', 'Work In Progress': 'rgba(0, 100 ,0 , 0.6)', 'Publishing': 'rgba(147, 112, 219, 0.6)', 'Published': 'rgba(144, 238, 144, 0.6)', 'Error': 'rgba(255, 51, 51, 0.6)'};
+	let oTypes = {'Assembling': 'rgba(128, 128, 128, 0.6)', 'Work In Progress': 'rgba(0, 100 ,0 , 0.6)', 'Publishing': 'rgba(147, 112, 219, 0.6)', 'Published': 'rgba(144, 238, 144, 0.6)', 'Training': 'rgba(0, 255, 255, 0.6)', 'Error': 'rgba(255, 51, 51, 0.6)'};
 	
 	let sHtml = "<ul class='road-legend'>";
 	for (let [sType, sColor] of Object.entries(oTypes))
@@ -320,6 +320,19 @@ function buildPublishConfirmDialog()
 }
 
 
+function buildTrainingConfirmDialog() 
+{
+	let oDialog = $('#dlgTrainingConfirm');
+	g_oDialogs['trainingconfirm'] = '#dlgTrainingConfirm';
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#mapid"}, resizable: false, modal:true, width: 400, draggable: false,
+				buttons: [{text: 'Cancel', click: function(){$(this).dialog('close');}},
+						  {text: 'Train', click: function(){$(this).dialog('close'); confirmTrainingNetwork();}}]});
+	
+	let sHtml = 'Training the Hurricane Traffic Model requires historic National Hurricane Center forecast files and historic speed data in the IMRCP speed data adapter file format. Ensure these data sets exist before attempting to train the model.';
+	oDialog.html(sHtml);
+}
+
+
 function buildEditPublishConfirmDialog()
 {
 	let oDialog = $('#dlgEditPublishConfirm');
@@ -372,6 +385,7 @@ export {buildNetworkDialog,
 		buildReprocessDialog,
 		buildDeleteConfirmDialog,
 		buildPublishConfirmDialog,
+		buildTrainingConfirmDialog,
 		buildEditPublishConfirmDialog,
 		buildOverwritePublishConfirmDialog,
 		buildNetworkSelectDialog};

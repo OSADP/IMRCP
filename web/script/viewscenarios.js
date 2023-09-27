@@ -56,20 +56,20 @@ let g_oGeoJsonSrcs =
 		'line-width': ['let', 'add', ['case', ['boolean', ['feature-state', 'hover'], false], 3.0, 0.0], ['interpolate', ['exponential', 2], ['zoom'], 0.0, ['+', ['var', 'add'], 1.0], 10.0, ['+', ['var', 'add'], 4.0], 24.0, ['+', ['var', 'add'], 12.0]]]}}
 	},
 	{
-		'name': 'trflnk',
-		'label': 'Traffic',
+		'name': 'spdlnk',
+		'label': 'Traffic Speed',
 		'datasrc': 'MLP',
 		'ranges': 
 		[
-			['Slow', "#8c1515", 0, 20],
-			['', "#f00", 20, 40],
-			['', "#ff751a", 40, 60],
-			['', "#ffc700", 60, 80],
-			['Fast', "#00af20", 80, Number.MAX_SAFE_INTEGER]
+			['0 - 15', "#8c1515", 0, 15],
+			['15 - 30', "#f00", 15, 30],
+			['30 - 45', "#ff751a", 30, 45],
+			['45 - 60', "#ffc700", 45, 60],
+			['Above 60', "#00af20", 60, Number.MAX_SAFE_INTEGER]
 		],
 		features:[],
 		'layer': 
-		{'id': 'trflnk', 'type': 'line', 'source': 'trflnk', 'layout':{'line-cap':'round', 'line-join':'round'}, 'paint':{'line-opacity': ['feature-state', 'opacity'], 'line-color': ['feature-state', 'color'], 
+		{'id': 'spdlnk', 'type': 'line', 'source': 'spdlnk', 'layout':{'line-cap':'round', 'line-join':'round'}, 'paint':{'line-opacity': ['feature-state', 'opacity'], 'line-color': ['feature-state', 'color'], 
 		'line-width': ['let', 'add', ['case', ['boolean', ['feature-state', 'hover'], false], 3.0, 0.0], ['interpolate', ['exponential', 2], ['zoom'], 0.0, ['+', ['var', 'add'], 1.0], 10.0, ['+', ['var', 'add'], 4.0], 24.0, ['+', ['var', 'add'], 12.0]]]}}
 	}
 ];
@@ -129,7 +129,7 @@ async function getScenarios()
 
 async function initialize()
 {
-	$(document).prop('title', 'IMRCP View Scenario - ' + sessionStorage.uname);
+	$(document).prop('title', 'IMRCP View Scenarios');
 	getScenarios();
 	setInterval(getScenarios, 60000);
 	g_oStartTime = moment().minute(0).second(0).millisecond(0);

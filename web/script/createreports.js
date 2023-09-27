@@ -20,7 +20,7 @@ let g_nNetworks;
 async function initialize()
 {
 	$('#pageoverlay').html(`<p class="centered-element">Initializing...</p>`).css({'opacity': 0.5, 'font-size': 'x-large'}).show();
-	$(document).prop('title', 'IMRCP Network Creation - ' + sessionStorage.uname);
+	$(document).prop('title', 'IMRCP Create Report');
 	let pNetworks = getNetworksAjax().promise();
 	
 	let pProfile = getProfileAjax().promise();

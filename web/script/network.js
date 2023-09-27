@@ -1,11 +1,11 @@
 import {buildNetworkDialog, buildRoadLegendDialog, buildCancelDialog, buildNetworkLegendDialog, buildInstructionDialog, buildDetectorDialog,
 		buildDetectorEditDialog, buildDetectorStatusDialog, buildUploadConfirmDialog, buildNetworkMetadataDialog, buildReprocessDialog,
-		buildDeleteConfirmDialog, buildPublishConfirmDialog, buildEditPublishConfirmDialog, buildOverwritePublishConfirmDialog, buildNetworkSelectDialog} from './dialogs.js';
+		buildDeleteConfirmDialog, buildPublishConfirmDialog, buildTrainingConfirmDialog, buildEditPublishConfirmDialog, buildOverwritePublishConfirmDialog, buildNetworkSelectDialog} from './dialogs.js';
 	
 import {switchToDetector, leaveDetectors, checkDetectorFile, uploadFile} from './detectors.js';
 
 import {g_oLayers, removeSource, getPolygonBoundingBox, startDrawPoly} from './map-util.js';
-import {getNetworksAjax, MapControlIcons, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus} from './map-common.js';
+import {getNetworksAjax, MapControlIcons, initCommonMap, ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, TRAINING, isStatus} from './map-common.js';
 
 let g_oMap;
 let g_nHoverId;
@@ -54,10 +54,10 @@ window.g_oRequirements = {'groups': 'imrcp-admin'};
 
 async function initialize()
 {
-	$(document).prop('title', 'IMRCP Network Creation - ' + sessionStorage.uname);
+	$(document).prop('title', 'IMRCP Manage Roads');
 	g_oMap = initCommonMap('mapid', -98.585522, 39.8333333, 4, 4, 24);
 	let oMainControl = new MapControlIcons([{t:'Create Network', i:'drawpoly'}, {t:'Delete Network', i:'delete'}, {t:'Reprocess Network', i:'reload'}, {t:'Toggle Network Legend', i:'toggle'}], 'main-control');
-	let oEditControl = new MapControlIcons([{t:'Add/Remove Road', i:'add'}, {t:'Save Changes', i:'save'}, {t:'Publish Network', i:'check'}, {t:'Toggle Road Legend', i:'toggle'}, {t:'Go Back', i:'cancel'}], 'edit-control');
+	let oEditControl = new MapControlIcons([{t:'Add/Remove Road', i:'add'}, {t:'Save Changes', i:'save'}, {t:'Publish Network', i:'check'}, {t:'Train Hurricane Traffic Model', fa:'fa fa-train fa-lg'}, {t:'Toggle Road Legend', i:'toggle'}, {t:'Go Back', i:'cancel'}], 'edit-control');
 	let oTileControl = new MapControlIcons([{t:'Toggle Satellite Background', i:'satellite'}, {t:'Toggle Instructions', i:'instruction'}, {t:'Toggle Metadata', i:'metadata'}]);
 	let oDetectorControl = new MapControlIcons([{t:'Upload File', i:'file'}, {t:'Edit Detectors', i:'edit'}, {t:'Toggle Detector Legend', i:'toggle'}, {t:'Back To Network Edit', i:'cancel'}], 'detector-control');
 
@@ -88,6 +88,7 @@ async function initialize()
 	$("button[title|='Toggle Metadata']").click({'dialog': 'networkmetadata'}, toggleDialog).hide();
 	$("button[title|='Upload File']").click(checkDetectorFile);
 	$("button[title|='Publish Network']").click(publishNetwork);
+	$("button[title|='Train Hurricane Traffic Model']").click(trainHurricane);
 	$('#detectorFile').on('change', uploadFile);
 	
 	g_oMap.on('load', async function() {
@@ -104,12 +105,41 @@ async function initialize()
 		buildReprocessDialog();
 		buildDeleteConfirmDialog();
 		buildPublishConfirmDialog();
+		buildTrainingConfirmDialog();
 		buildEditPublishConfirmDialog();
 		buildOverwritePublishConfirmDialog();
 		buildNetworkSelectDialog();
 		instructions(g_oInstructions['select']);
 		startSelectNetwork();
 		g_oPopup = new mapboxgl.Popup({closeButton: false, closeOnClick: false, anchor: 'bottom', offset: [0, -25]});
+	});
+}
+
+
+function trainHurricane()
+{
+	$(g_oDialogs['trainingconfirm']).dialog('open');
+	document.activeElement.blur();
+}
+
+
+function confirmTrainingNetwork()
+{
+	$.ajax(
+	{
+		'url': 'api/generatenetwork/train',
+		'method': 'POST',
+		'data': {'networkid': g_sCurNetwork, 'token': sessionStorage.token}
+	}).done(function() 
+	{
+		g_sCursor = '';
+		g_oMap.getCanvas().style.cursor = g_sCursor;
+		instructions(g_oInstructions['select'], 'Network successfully queued to train');;
+		switchToMain();
+	}).fail(function() 
+	{
+		$('#instructions-error').html('Failed to queue network to train.');
+		g_oMap.getCanvas().style.cursor = g_sCursor;
 	});
 }
 
@@ -191,19 +221,24 @@ function networksSuccess(data, textStatus, jqXHR)
 	let oGeoJson = {};
 	oGeoJson.type = 'FeatureCollection';
 	oGeoJson.features = [];
+	$("button[title|='Train Hurricane Traffic Model']").prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 	for (let value of data.values())
 	{
 		let nStatus = value.properties.status;
 		let nDisplayStatus = 4;
-		if (isStatus(nStatus, ASSEMBLING))
+		if (isStatus(nStatus, ERROR))
+			nDisplayStatus = 4;
+		else if (isStatus(nStatus, ASSEMBLING))
 			nDisplayStatus = 0;
 		else if (isStatus(nStatus, WORKINPROGRESS))
 			nDisplayStatus = 1;
 		else if (isStatus(nStatus, PUBLISHING))
 			nDisplayStatus = 2;
+		else if (isStatus(nStatus, TRAINING))
+			nDisplayStatus = 5;
 		else if (isStatus(nStatus, PUBLISHED))
 			nDisplayStatus = 3;
-
+	
 		value.properties.displaystatus = nDisplayStatus;
 		oGeoJson.features.push(value);
 		
@@ -305,7 +340,7 @@ function clickNetwork(oEvent)
 
 function closeNetworkSelect()
 {
-	if (g_oClickedNetworks !== undefined)
+	if (Array.isArray(g_oClickedNetworks))
 		startSelectNetwork(true);
 }
 
@@ -335,14 +370,20 @@ function loadNetwork(nId)
 		$('#instructions-error').html('Network publishing still in progress');
 		return;
 	}
+	else if (isStatus(oFeature.properties.status, TRAINING))
+	{
+		$('#instructions-error').html('Hurricane traffic model training still in progress');
+		//return;
+	}
 	else if (isStatus(oFeature.properties.status, PUBLISHED))
 	{
+		$("button[title|='Train Hurricane Traffic Model']").prop('disabled', false).removeClass('ui-button-disabled ui-state-disabled');
 		$(g_oDialogs['editpublishconfirm']).dialog('open');
 		return;
 	}
 	else if (isStatus(oFeature.properties.status, ERROR))
 	{
-		$('#instructions-error').html('Error occured while assembling or publishing network.');
+		$('#instructions-error').html('Error occured while assembling, publishing, or training network.');
 		return;
 	}
 	
@@ -494,11 +535,29 @@ function mousemoveNetworkPolygons(oEvent)
 	let oTemp = g_oNetworkHover;
 	g_oNetworkHover = {};
 	let oFeatures = g_oMap.queryRenderedFeatures([[oEvent.point.x - 2, oEvent.point.y + 2], [oEvent.point.x + 2, oEvent.point.y - 2]], {'layers': ['network-polygons']});
+	let oTempFeatures = {};
+	for (let oFeature of oFeatures.values())
+	{
+		let sImrcpId = g_oMap.getSource(oFeature.source)._data.features[oFeature.id].properties.networkid;
+		if (!Object.hasOwn(oTempFeatures, sImrcpId))
+			oTempFeatures[sImrcpId] = oFeature;
+	}
 	
+	oFeatures = Object.values(oTempFeatures);
 	if (Object.keys(oTemp).length === 0 && oFeatures.length > 0)
 	{
 		if (oFeatures.length === 1)
-			g_oPopup.setLngLat(oEvent.lngLat).setHTML(`<p>${g_oMap.getSource(oFeatures[0].source)._data.features[oFeatures[0].id].properties.label}</p>`).addTo(g_oMap);
+		{
+			let oFeature = g_oMap.getSource(oFeatures[0].source)._data.features[oFeatures[0].id];
+			let sHtml = `<p>${oFeature.properties.label}</p>`;
+			if (oFeature.properties.msg)
+			{
+				sHtml += '<br>';
+				sHtml += oFeature.properties.msg;
+			}
+
+			g_oPopup.setLngLat(oEvent.lngLat).setHTML(sHtml).addTo(g_oMap);
+		}
 		else
 			g_oPopup.setLngLat(oEvent.lngLat).setHTML('<p>Left-click<br>to select</p>').addTo(g_oMap);
 		g_oMap.getCanvas().style.cursor = 'pointer';
@@ -507,7 +566,17 @@ function mousemoveNetworkPolygons(oEvent)
 	else if (oFeatures.length > 0)
 	{
 		if (oFeatures.length === 1)
-			g_oPopup.setHTML(`<p>${g_oMap.getSource(oFeatures[0].source)._data.features[oFeatures[0].id].properties.label}</p>`);
+		{
+			let oFeature = g_oMap.getSource(oFeatures[0].source)._data.features[oFeatures[0].id];
+			let sHtml = `<p>${oFeature.properties.label}</p>`;
+			if (oFeature.properties.msg)
+			{
+				sHtml += '<br>';
+				sHtml += oFeature.properties.msg;
+			}
+
+			g_oPopup.setLngLat(oEvent.lngLat).setHTML(sHtml).addTo(g_oMap);
+		}
 		else
 			g_oPopup.setHTML('<p>Left-click<br>to select</p>');
 	}
@@ -1079,7 +1148,7 @@ function confirmPublishNetwork()
 	{
 		g_sCursor = '';
 		g_oMap.getCanvas().style.cursor = g_sCursor;
-		instructions(g_oInstructions['select'], 'Network successfully queue to publish');;
+		instructions(g_oInstructions['select'], 'Network successfully queued to publish');;
 		switchToMain();
 	}).fail(function() 
 	{
@@ -1829,4 +1898,4 @@ $(document).on('initPage', initialize);
 export {g_oMap, g_sCurNetwork, g_oCurBounds, g_oDialogs, g_sCursor, g_oInstructions, instructions, unHighlightPoint,
 		hoverHighlightPoint, hoverHighlight, unHighlight, updateHighlight, updateHighlightPoint, submitNetwork, cancelNetwork, toggleDialog,
 		turnOffAddRemove, turnOffMerge, turnOffSplit, startSelectNetwork, setCursor, cancelReprocess, confirmReprocess, closeNetworkSelect,
-		confirmDeleteNetwork, confirmPublishNetwork, confirmLoadNetwork, turnOffDelete};
+		confirmDeleteNetwork, confirmPublishNetwork, confirmTrainingNetwork, confirmLoadNetwork, turnOffDelete};

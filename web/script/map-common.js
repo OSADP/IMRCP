@@ -16,6 +16,7 @@ let WORKINPROGRESS = 0b10;
 let PUBLISHING = 0b100;
 let PUBLISHED = 0b1000;
 let ERROR = 0b10000;
+let TRAINING = 0b100000;
 
 function getNetworksAjax()
 {
@@ -55,7 +56,7 @@ function initCommonMap(sContainer, dLng, dLat, nZoom, nMinZoom, nMaxZoom)
 	oMap.addControl(new TextControl('', 'imrcp-zoom-display'));
 	addGeojsonToolbar();
 	g_oPopup = new mapboxgl.Popup({closeButton: false, closeOnClick: false, anchor: 'bottom', offset: [0, -25], maxwidth: 'none'});
-	
+
 	oMap.on('zoom', () => {$('#imrcp-zoom-display').html(oMap.getZoom().toFixed(1));});
 	oMap.on('zoomend', () => {$('#imrcp-zoom-display').html(oMap.getZoom().toFixed(1));});
 	oMap.on('mousemove', updatePopupPos);
@@ -78,7 +79,7 @@ function addIcons()
 		{
 			g_oMap.addImage(sIcon, image, {'sdf': sIcon.indexOf("-sdf") >= 0});
 		});
-		
+
 }
 
 function addGeojsonToolbar()
@@ -89,7 +90,7 @@ function addGeojsonToolbar()
 	buildStatusDialog();
 	buildViewGeojsonDialog();
 	buildConfirmDeleteGeojson();
-	
+
 	let oFileInput = $('<input type="file" id="imrcp_geojsonfileinput" title="Upload GeoJSON">').css({'opacity': 0, 'filter':'alpha(opacity=0)', width: 29, height: 29, 'cursor': 'pointer', 'position': 'absolute', 'z-index': -1});
 	$('#geojson-control').prepend(oFileInput);
 	$("button[title|='Upload GeoJSON']").css('pointer-events', 'none');
@@ -102,7 +103,7 @@ function addGeojsonToolbar()
 		'method': 'POST',
 		'dataType': 'json',
 		'data': {'token': sessionStorage.token}
-	}).done(function(oData) 
+	}).done(function(oData)
 	{
 		if (oData.geojsons.length > 0)
 			enableViewGeojson();
@@ -137,11 +138,11 @@ function buildUploadGeojsonDialog()
 			{text: 'Upload', click: uploadGeojson, id: 'upload_geojson'},
 			{text: 'Cancel', click: function() {$(this).dialog('close');}}
 		],
-		open:function() 
+		open:function()
 		{
 			oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#" + g_oMap._container.id});
 		}});
-	
+
 	$(window).resize(function()
 	{
 		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#" + g_oMap._container.id});
@@ -151,7 +152,7 @@ function buildUploadGeojsonDialog()
 	let sHtml = '<div class="flexbox"><div class="flex3"><input id="geojson_label" type="text" placeholder="Enter label for geojson file"/></div>';
 	oDialog.html(sHtml);
 	$('#upload_geojson').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
-	$('#geojson_label').on('keypress', ignoreInput).on('paste', ignoreInput).on('keydown keyup', checkLabel).on('paste', checkLabel);
+	$('#geojson_label').on('keypress', ignoreInput).on('paste', ignoreInput).on('keydown keyup', {'btnSel': '#upload_geojson'}, checkLabel).on('paste', {'btnSel': '#upload_geojson'}, checkLabel);
 }
 
 
@@ -163,7 +164,7 @@ function buildStatusDialog()
 	}
 	let oDialog = $('#dlgStatus');
 	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#" + g_oMap._container.id}, modal: true, draggable: false, resizable: false, width: 400,
-		open:function() 
+		open:function()
 		{
 			oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#" + g_oMap._container.id});
 		}});
@@ -182,7 +183,7 @@ function buildViewGeojsonDialog()
 	}
 	let oDialog = $('#dlgViewGeojson');
 	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#" + g_oMap._container.id}, modal: true, draggable: false, resizable: false, width: 'auto',
-	open:function() 
+	open:function()
 	{
 		setViewGeojsonHtml();
 		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#" + g_oMap._container.id});
@@ -204,18 +205,18 @@ function buildConfirmDeleteGeojson()
 	let oDialog = $('#dlgConfirmDeleteGeojson');
 	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "#" + g_oMap._container.id}, modal: true, draggable: false, resizable: false, width: 400,
 		buttons: [
-			{text: 'Go Back', click: function() 
+			{text: 'Go Back', click: function()
 				{
 					g_sGeojson = undefined;
 					oDialog.dialog('close');
 				}},
 			{text: 'Confirm Delete', id: 'btnDeleteGeojson', click: deleteGeojson}
 		],
-		open:function() 
+		open:function()
 		{
 			oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#" + g_oMap._container.id});
 		}});
-	
+
 	oDialog.html('Deleting a geojson file is permanent. Confirm you would like to delete this file.');
 	$(window).resize(function()
 	{
@@ -239,7 +240,7 @@ function updateGeojsonSourceAndLayers(sLabel, oGeojson)
 		else if (sType.indexOf('polygon') >= 0)
 			aFeatureList[2].push(oFeature);
 	}
-	
+
 	let nIndex = aFeatureList.length;
 	while (nIndex-- > 0)
 	{
@@ -268,15 +269,15 @@ function getLayerObject(sSrc, nType)
 {
 	if (nType === 0) // point
 	{
-		return {'id': sSrc, 'type': 'circle', 'source': sSrc, 'paint': {'circle-radius': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'circle-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'circle-opacity': ['case', ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}};
+		return {'id': sSrc, 'type': 'circle', 'source': sSrc, 'paint': {'circle-radius': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'circle-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'circle-opacity': ['case', ['feature-state', 'hidden'], 0, ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}};
 	}
 	else if (nType === 1) // line
 	{
-		return {'id': sSrc, 'type': 'line', 'source': sSrc, 'paint': {'line-width': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'line-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'line-opacity': ['case', ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}, 'layout':{'line-cap':'round', 'line-join':'round'}};
+		return {'id': sSrc, 'type': 'line', 'source': sSrc, 'paint': {'line-width': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'line-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'line-opacity': ['case', ['feature-state', 'hidden'], 0, ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}, 'layout':{'line-cap':'round', 'line-join':'round'}};
 	}
 	else if (nType === 2) // poly
 	{
-		return {'id': sSrc, 'type': 'fill', 'source': sSrc, 'paint': {'fill-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'fill-opacity': ['case', ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]], 'fill-antialias': false}};
+		return {'id': sSrc, 'type': 'fill', 'source': sSrc, 'paint': {'fill-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'fill-opacity': ['case', ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]], 'fill-antialias': true}};
 	}
 }
 
@@ -310,7 +311,7 @@ function setViewGeojsonHtml()
 		}
 		sHtml += `</ul><div>Left-click the checkboxes to toggle the display on the map.<br>Left-click <i class="fa fa-times"></i> to delete a file.</div>`;
 	}
-	
+
 	$('#dlgViewGeojson').html(sHtml);
 	$('#selectGeojson > li .delete').on('click', function()
 	{
@@ -320,7 +321,7 @@ function setViewGeojsonHtml()
 		$('#dlgConfirmDeleteGeojson').dialog('open');
 	});
 
-	$('#selectGeojson :checkbox').on('change', function() 
+	$('#selectGeojson :checkbox').on('change', function()
 	{
 		let sGeojson = $(this).prop('id').substring('check_'.length);
 		if (this.checked) // now checked
@@ -332,7 +333,7 @@ function setViewGeojsonHtml()
 			turnOffGeojson(sGeojson);
 		}
 	});
-	
+
 	for (let sCheckThis of aCheckThese.values())
 	{
 		$('#' + sCheckThis).click();
@@ -359,7 +360,7 @@ function turnOffGeojson(sGeojson)
 		{
 			if (g_oMap.getLayer(oLayer.id))
 				g_oMap.removeLayer(oLayer.id);
-			
+
 			let nIndex = g_aQueryLayers.indexOf(oLayer.id);
 			if (nIndex >= 0)
 				g_aQueryLayers.splice(nIndex, 1);
@@ -386,7 +387,7 @@ function selectGeojson()
 			openUploadDialog();
 			return;
 		}
-		
+
 		nRecv += value.length;
 		sContents += new TextDecoder("utf-8").decode(value);
 		return oIn.read().then(processText);
@@ -437,7 +438,7 @@ function openGeojsonDialog()
 
 function setFilePosition()
 {
-	
+
 }
 
 function uploadGeojson()
@@ -463,7 +464,7 @@ function uploadGeojson()
 		let oCheckbox = $('#check_' + sLabel);
 		if (oCheckbox[0].checked)
 			oCheckbox.click(); // uncheck the box
-			
+
 		oCheckbox.click();
 	}).fail(function(jqXHR)
 	{
@@ -512,7 +513,7 @@ function deleteGeojson()
 		timeoutPageoverlay();
 		$('#dlgConfirmDeleteGeojson').dialog('close');
 	});
-	
+
 }
 
 
@@ -523,7 +524,7 @@ class MapControlIcons
 		this.oHtml = oHtml;
 		this.sId = sId;
 	}
-	
+
 	onAdd(map)
 	{
 		this._map = map;
@@ -531,7 +532,7 @@ class MapControlIcons
 		this._container.setAttribute('id', this.sId);
 		this._container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group six-button-control';
 
-		
+
 		this._container.innerHTML = this.oHtml.reduce(function(accum, opts)
 		{
 			let sHtml = accum;
@@ -543,7 +544,7 @@ class MapControlIcons
 			sHtml += `</button>`;
 			return sHtml;
 		}, '');
-		
+
 
 		return this._container;
 	}
@@ -571,7 +572,7 @@ class TextControl
 		this._container.innerHTML = `<button class="mapboxgl-ctrl-icon" title="Current Zoom" disabled type="button" id="${this.sId}">${map.getZoom().toFixed(1)}</button>`;
 		return this._container;
 	}
-	
+
 	onRemove()
 	{
 		this._container.parentNode.removeChild(this._container);
@@ -591,7 +592,7 @@ function ignoreInput(oEvent)
 			oPopuptext.addClass('popuptextabove');
 
 		$(this).parent().addClass('popup').append(oPopuptext);
-		
+
 		setTimeout(function()
 		{
 			$(this).removeClass('popup');
@@ -603,12 +604,13 @@ function ignoreInput(oEvent)
 }
 
 
-function checkLabel()
+function checkLabel(oEvent)
 {
-	if ($('#geojson_label').val().length === 0)
-		$('#upload_geojson').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
+	let sButtonSelector = oEvent.data.btnSel;
+	if ($(oEvent.currentTarget).val().length === 0)
+		$(sButtonSelector).prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 	else
-		$('#upload_geojson').prop('disabled', false).removeClass('ui-button-disabled ui-state-disabled');
+		$(sButtonSelector).prop('disabled', false).removeClass('ui-button-disabled ui-state-disabled');
 }
 
 
@@ -651,7 +653,7 @@ function labelGeojson(oEvent)
 		g_oPopup.remove();
 		return;
 	}
-	
+
 	let sHtml = '';
 	let oSources = {};
 	for (let oFeature of oFeatures.values())
@@ -674,7 +676,7 @@ function labelGeojson(oEvent)
 				{
 					if (sKey === 'color' || sKey === 'opacity' || sKey === 'width')
 						continue;
-					
+
 					bAdd = true;
 					sList += `<li><strong>${sKey}</strong>: ${sValue}</li>`;
 				}
@@ -683,10 +685,10 @@ function labelGeojson(oEvent)
 					sList += '</ul><br>';
 					sHtml += sList;
 				}
-			}			
+			}
 		}
 	}
-	
+
 	if (sHtml.length > 0)
 	{
 		sHtml = sHtml.substring(0, sHtml.length - 4); // remove last <br>
@@ -694,8 +696,8 @@ function labelGeojson(oEvent)
 		if (!g_oPopup.isOpen())
 			g_oPopup.addTo(g_oMap);
 	}
-	
-	
+
+
 }
 
 function isStatus(nStatus, nStatusToCheck)
@@ -704,5 +706,119 @@ function isStatus(nStatus, nStatusToCheck)
 }
 
 
+function buildSubmitBugDialog()
+{
+	if (!document.getElementById('dlgSubmitBug'))
+	{
+		$('body').append('<div id="dlgSubmitBug"></div>');
+	}
+	else
+		return;
+	let oDialog = $('#dlgSubmitBug');
+	oDialog.dialog({autoOpen: false, position: {my: "center", at: "center", of: "body"}, modal: true, draggable: false, resizable: false, width: 600,
+		buttons: [
+			{text: 'Submit', click: submitBug, id: 'btnSubmitBug'},
+			{text: 'Cancel', click: function() {$(this).dialog('close');}}
+		],
+		open:function()
+		{
+			oDialog.dialog('option', 'position', {my: "center", at: "center", of: "body"});
+		}});
+
+	$(window).resize(function()
+	{
+		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "body"});
+	});
+	oDialog.dialog('option', 'title', 'Submit Bug');
+	oDialog.siblings().children('.ui-dialog-titlebar-close').remove();
+	let sHtml = `<textarea id="bugText" maxlength="360" placeholder="Enter a brief description of the bug you encountered" style="resize:none; height:150px; width:550px"></textarea><div id="charCountdown" style="font-size:small;">360 characters remaining</div>`;
+	oDialog.html(sHtml);
+	$('#bugText').on('input', function()
+	{
+		let nSize = $(this).val().length;
+		let nLeft = 360 - nSize;
+		$('#charCountdown').html(`${nLeft} characters remaining`);
+		if (nSize === 0)
+			$('#btnSubmitBug').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
+		else
+			$('#btnSubmitBug').prop('disabled', false).removeClass('ui-button-disabled ui-state-disabled');
+	});
+	$('#btnSubmitBug').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
+}
+
+
+function submitBug()
+{
+	showPageoverlay("Submiting bug...");
+	$.ajax(
+	{
+		'url': 'api/map/bug',
+		'method': 'POST',
+		'dataType': 'json',
+		'data': {'token': sessionStorage.token, 'bug': $('#bugText').val(), 'page': document.location.pathname.substring(1)}
+	}).done(function()
+	{
+		showPageoverlay("Bug submit successfully!");
+	}).fail(function()
+	{
+		showPageoverlay("Bug failed to submit. Try again later.");		
+	}).always(function()
+	{
+		timeoutPageoverlay();
+		$('#bugText').val('');
+		$('#dlgSubmitBug').dialog('close');
+	});
+}
+
+
+function startSubmitBug()
+{
+	buildSubmitBugDialog();
+	$('#dlgSubmitBug').dialog('open');
+}
+window.startSubmitBug = startSubmitBug;
+
+function createMenu()
+{
+	let sThisPage = document.location.pathname.substring(1);
+	let oMenu = $("#navbar");
+	let sGroup = sessionStorage.groups;
+	let sStartUserHtml = `<li><a href="map.html"><i class="fa fa-globe"></i>&nbsp;&nbsp;View Map</a></li>`;
+	sStartUserHtml +=  `<li class="w3-dropdown-hover"><a href="#">Scenarios&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
+							<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
+								<a href="scenarios.html"><i class="fa fa-book"></i>&nbsp;&nbsp;Create Scenario</a>
+								<a href="viewscenarios.html"><i class="fa fa-eye"></i>&nbsp;&nbsp;View Scenarios</a>
+							</div>
+						</li>`;
+	sStartUserHtml += `<li class="w3-dropdown-hover"><a href="#">Reports&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
+							<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
+								<a href="createreports.html"><i class="fa fa-plus-circle"></i>&nbsp;&nbsp;Create Report</a>
+								<a href="reports.html"><i class="fa fa-newspaper-o"></i>&nbsp;&nbsp;View Reports</a>
+							</div>
+						</li>`;
+	
+	let sAdminHtml = `<li class="w3-dropdown-hover"><a href="#">Admin&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
+							<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
+								<a href="network.html">&nbsp;<i class="fa fa-code-fork"></i>&nbsp;&nbsp;Manage Roads</a>
+								<a href="useradmin.html"><i class="fa fa-cog"></i>&nbsp;&nbsp;Manage Users</a>
+							</div>
+						</li>`;
+
+	let sEndUserHtml = `<li class="w3-dropdown-hover"><a href="#">Help&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
+							<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
+								<a href="#" onclick="startSubmitBug()"><i class="fa fa-bug"></i>&nbsp;&nbsp;Submit Bug</a>
+								<a href="IMRCP-help.pdf" target="_blank"><i class="fa fa-life-ring"></i>&nbsp;&nbsp;User Guide</a>
+							</div>
+						</li>`;
+	sEndUserHtml += `<li><a href="./"><i class="fa fa-sign-out"></i>&nbsp;&nbsp;Logoff</a></li>`;
+
+	let sHtml = sStartUserHtml;
+	if (sGroup.indexOf('imrcp-admin') >= 0)
+		sHtml += sAdminHtml;
+	sHtml += sEndUserHtml;
+	oMenu.html(sHtml.replace(sThisPage, '#'));;
+}
+
+
 export {getNetworksAjax, getProfileAjax, MapControlIcons, addGeojsonToolbar, ignoreInput, initCommonMap, showPageoverlay, timeoutPageoverlay, getLastLayer,
-		ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, isStatus}
+		ASSEMBLING, WORKINPROGRESS, PUBLISHING, PUBLISHED, ERROR, TRAINING, isStatus, startSubmitBug, createMenu, updateGeojsonSourceAndLayers, turnOnGeojson}

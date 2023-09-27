@@ -2,7 +2,7 @@ import {polylineMidpoint} from './map-util.js';
 
 const POINTTOL = 0.0000001;
 const CLOSE_BUTTON_HTML = '<button type="button" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-icon-only no-title-form ui-dialog-titlebar-close" role="button" title="Close"><span class="ui-button-icon-primary ui-icon ui-icon-closethick"></span><span class="ui-button-text">Close</span></button>';
-const obsTimeFormat = 'MM-DD HH:mm';
+const obsTimeFormat = 'MM-DD-YY HH:mm';
 const MAXLONG = Math.pow(2, 63) - 1;
 
 const getBoundsForPoint = (lngLat, m, tol) => 
@@ -37,70 +37,56 @@ class FeatureDetailsWindow
     this.selectedTimeStartFunction = selectedTimeStartFunction;
     this.selectedTimeEndFunction = selectedTimeEndFunction;
     this.sources = sources;
-    const dialogDivHtml = `
-<div id="dialog-form" style="display:none;">
-      <div id="chart-container" style="display: none;">
-        <i class="close-chart fa fa-list" aria-hidden="true"></i>
-        <canvas id="obs-chart"></canvas>
-      </div>
-      <table id="obs-data" class = "pure-table pure-table-bordered">
-      <thead class="obs-table">   
-        <tr class="w3-sand">     
-          <td>ObsType</td>
-          <td>Source</td>
-          <td>Start Time</td>
-          <td>End Time</td>
-          <td>Value</td> 
-          <td>Units</td> 
-          </tr>
-        </thead>
+	const dialogDivHtml = `<div id="obs-header" class="obs-detail-row w3-sand"><div class="obs-detail-item" style="width:28px;">&nbsp;</div><div class="obs-detail-item">ObsType</div><div class="obs-detail-item" style="width:75px;">Source</div><div class="obs-detail-item">Start Time</div><div class="obs-detail-item">End Time</div><div class="obs-detail-item">Value</div><div class="obs-detail-item" style="width:50px;">Units</div></div><div id="obs-loading" class="obs-detail-row">Loading data...</div><div id="obs-timeout" class="obs-detail-row">Timeout loading data. Try again.</div><div id="obs-error" class="obs-detail-row">Error loading data.</div><div id="obs-no-data" class="obs-detail-row">No data.</div><div id="obs-detail"></div>`;
+    /*const dialogDivHtml = `<div id="obs-header" class="obs-detail-row w3-sand">
+					<div class="obs-detail-item" style="width:28px;">&nbsp;</div>
+					<div class="obs-detail-item">ObsType</div>
+					<div class="obs-detail-item" style="width:75px;">Source</div>
+					<div class="obs-detail-item">Start Time</div>
+					<div class="obs-detail-item">End Time</div>
+					<div class="obs-detail-item">Value</div>
+					<div class="obs-detail-item" style="width:50px;">Units</div>
+				</div>
+				<div id="obs-loading" class="obs-detail-row">Loading data...</div>
+				<div id="obs-timeout" class="obs-detail-row">Timeout loading data. Try again.</div>
+				<div id="obs-error" class="obs-detail-row">Error loading data.</div>
+				<div id="obs-no-data" class="obs-detail-row">No data.</div>
+				<div id="obs-detail"></div>`;*/
 
-    <tbody class="obs-table pure-table-striped">
-    </tbody></table>
-      
-    </div>`;
-
-    const dialogDiv = this.dialogDiv = $(dialogDivHtml).prependTo('body');
-
-
+	if (!document.getElementById('dlgObsDetail'))
+	{
+		$('body').append('<div id="dlgObsDetail"></div>');
+	}
+    const dialogDiv = this.dialogDiv = $('#dlgObsDetail').prependTo('body');
+	
+	
     const dialog = this.dialog = dialogDiv.dialog({
       autoOpen: false,
       resizable: true,
       draggable: true,
-      width: 'auto',
+      width: 950,
       modal: true,
-      //  dialogClass: "no-title-form",
-      position: {my: "center", at: "center", of: mapSelector},
+      position: {my: "center", at: "center center-120", of: mapSelector},
       minHeight: 380,
-      maxHeight: 600
+      maxHeight: 550
     });
-
+	
+	dialog.html(dialogDivHtml);
     this.dialogTitleDiv = dialogDiv.parent().find('.ui-dialog-title');
-    this.platformObsChart = dialogDiv.find('#obs-chart');
-    this.platformObsTable = dialogDiv.find('#obs-data');
   }
 
   showFeatureDetails(feature, clickLatLng, mbMap)
   {
     let detailsContent = `${CLOSE_BUTTON_HTML} Loading...`;
 
-    const {dialogTitleDiv, dialog, platformObsTable: obsTable, platformObsChart, sources} = this;
+    const {dialogTitleDiv, dialog, sources} = this;
     dialogTitleDiv.html(detailsContent);
     const closeDialog = () => dialog.dialog("close");
     dialogTitleDiv.find('.ui-dialog-titlebar-close').click(closeDialog);
-
-    obsTable.show();
-    obsTable.find('tbody > tr').remove();
-    obsTable.find('tbody:last-child').append('<tr><td>Loading data...</td></tr>');
-
-
-//    var platformObsChart = $(platformDetailsWindow.platformObsChart);
-//    var obsTable = $(platformDetailsWindow.platformObsTable);
-    const chartContainer = platformObsChart.parent();
-
+	$('#obs-loading').show();
+	$('#obs-timeout,#obs-error,#obs-no-data,#obs-detail').hide();
+    
     const featureType = sources.get(feature.source).type;
-
-
     const startTime = this.selectedTimeStart();
     const featureHandler = featureTypeHandlers.get(featureType);
     const bounds = featureHandler.getFeatureBounds(feature, clickLatLng, mbMap);
@@ -111,21 +97,6 @@ class FeatureDetailsWindow
       .map(d => d.toFixed(7))
       .join('/');
 
-    let chart;
-
-    const closeChart = () =>
-    {
-      chartContainer.hide();
-      obsTable.show();
-
-      if (chart)
-        chart.destroy();
-
-      chart = null;
-    };
-    closeChart();
-
-    chartContainer.find('.close-chart').click(closeChart);
 
 	$('#pageoverlay').show();
     const load = $.ajax({
@@ -135,21 +106,20 @@ class FeatureDetailsWindow
       timeout: 25000
     });
 
-    const chartUrlTemplate = `${featureHandler.baseUrl}/chartObs`
-      + `/obsstypeId/${startTime}/${startTime - 1 * 60 * 60 * 1000}/${startTime + 1 * 60 * 60 * 1000}`
-      + `/${urlBoundarySubPath}?src=srcId`;
 
     load.fail((jqXHR, textStatus) => 
 	{
-		obsTable.find('tbody > tr').remove();
+		$('.obs-detail-data').remove();
 		if (textStatus === 'timeout')
 		{
-			obsTable.find('tbody:last-child').append('<tr><td>Timeout loading data. Try again.</td></tr>');
+			$('#obs-timeout').show();
+			$('#obs-loading,#obs-error').hide();
 			dialogTitleDiv.html(`${CLOSE_BUTTON_HTML} Timeout loading data`);  
 		}
 		else
 		{
-			obsTable.find('tbody:last-child').append('<tr><td>Error loading data</td></tr>');
+			$('#obs-error').show();
+			$('#obs-timeout,#obs-loading').hide();
 			dialogTitleDiv.html(`${CLOSE_BUTTON_HTML} Error loading data`);
 		}
 		$('#pageoverlay').hide();
@@ -178,138 +148,77 @@ class FeatureDetailsWindow
 			detailsContent += ' Elevation: ' + additionalDetails.tel;
 		dialogTitleDiv.html(detailsContent);
 		dialogTitleDiv.find('.ui-dialog-titlebar-close').click(closeDialog);
-		obsTable.find('tbody > tr').remove();
+		$('.obs-detail-data').remove();
+		$('#obs-loading').hide();
 
-		if (true)
+		let obsList = additionalDetails.obs;
+		if (!obsList || obsList.length === 0)
 		{
-			var obsList = additionalDetails.obs;
-			if (!obsList || obsList.length === 0)
-			{
-				obsTable.find('tbody:last-child').append('<tr><td>No data</td></tr>');
-			}
-			else
-			{
-				var newRows = '';
-				for (let iObs of obsList)
-				{
-					const unit = iObs.eu;
-					newRows += '<tr>';
-
-					const chartUrl = chartUrlTemplate.replace("obsstypeId", iObs.oi).replace("srcId", iObs.src);
-
-					newRows += "<td class=\"obsType\">" + iObs.od;
-					if (unit)
-					{
-						newRows += `<i class="chart-link fa fa-line-chart clickable" 
-						  data-unit="${unit}" 
-						  data-obstype="${iObs.od}" 
-						  data-url="${chartUrl}" ></i>`;
-					}
-
-					newRows += `</td>
-						<td class="obsType">${iObs.src}</td>
-						<td class="timestamp">${moment(iObs.ts1).format(obsTimeFormat)}</td>
-						<td class="timestamp">${iObs.ts2 !== MAXLONG ? moment(iObs.ts2).format(obsTimeFormat) : ''}</td>`;
-					
-					if (iObs.url)
-					{
-						newRows += `<td class="td-value-link"><a href="${iObs.url}" style="color: blue;">${iObs.ev}</a></td>`;
-					}
-					else
-					{
-						newRows+= `<td class="td-value">${iObs.ev}</td>`;
-					}
-						
-					newRows += `<td class="unit">`;
-
-					if (unit)
-						newRows += unit;
-					newRows += '</td></tr>';
-				}
-				if (window.location.toString().indexOf("testimrcp") >= 0)
-					newRows += `<tr><td class="obsType">${additionalDetails.imrcpid}</td></tr>`;
-
-				$(newRows).appendTo(obsTable.find('tbody:last-child')).find('i.chart-link').click(e => 
-				{
-					const chartObstype = $(e.target).data("obstype");
-					const chartObsUnit = $(e.target).data("unit");
-
-					const icon = $(e.target);
-					icon.removeClass('fa-line-chart').addClass('fa-spinner fa-spin');
-					$.getJSON($(e.target).data("url"))
-					.always(() => icon.removeClass('fa-spinner fa-spin '))
-					.done(data => 
-					{
-						icon.addClass('fa-line-chart');
-						let max = 0;
-						let min = 0;
-						for (let i = 0; i < data.length; ++i)
-						{
-							max = Math.max(max, data[i].y);
-							min = Math.min(min, data[i].y);
-						}
-
-						const step = 10;
-						if (max !== 0) // if max is not 0, then it is above 0
-							max += (step - max % step);
-
-						if (min !== 0) // if min is not 0, then it is less than 0
-							min -= (step + min % step);
-
-						let config = {
-							type: 'line', 
-							data: {datasets:[{label: chartObstype, fill: false, data: data, borderColor: 'black'}]},
-							options: {title: {text: chartObstype}, scales: {
-							  xAxes: [{type: 'time', time: {unit: 'hour', tooltipFormat: obsTimeFormat,  displayFormats: {}}}, 
-									  {type: 'time',time: {unit: 'day', tooltipFormat: obsTimeFormat, displayFormats: {}}}],
-							  yAxes: [{scaleLabel: {display: true,labelString: chartObsUnit},ticks: {min: min, max: max, stepSize: step}}]},
-							animation: {onComplete: () =>
-							{
-								obsTable.hide();
-								dialog.dialog("option", "position", {my: "center", at: "center", of: '#map-container'});
-							}}}};
-
-						chart = new Chart(platformObsChart.get(0), config);
-						chartContainer.show();
-
-					}).fail(() => 
-					{
-						icon.addClass('fa-exclamation-circle');
-						setTimeout(() => icon.addClass('fa-line-chart').removeClass('fa-exclamation-circle'), "3000");
-					});
-				});
-
-			}
+			$('#obs-no-data').show();
 		}
 		else
 		{
-			var sensorList = additionalDetails.sl;
-			if (!sensorList || sensorList.length === 0)
+			let oObsByType = {};
+			for (let oObs of obsList)
 			{
-				obsTable.find('tbody:last-child').append('<tr><td>No data</td></tr>');
+				if (Object.hasOwn(oObsByType, oObs.oi))
+					oObsByType[oObs.oi].push(oObs);
+				else
+					oObsByType[oObs.oi] = [oObs];
 			}
-			else
+			let oAccordians = [];
+			let sHtml = '';
+			for (let oObsTypeList of Object.values(oObsByType))
 			{
-				let newRows = '';
-				for (let rowIndex = 0; rowIndex < sensorList.length; ++rowIndex)
-				{
-					var iSensor = sensorList[rowIndex];
-					newRows += '<tr>\n';
-					newRows += '<td class="obsType">' + iSensor.ot + '</td>\n';
-					newRows += '<td class="sensorIndex">' + iSensor.idx + '</td>\n';
-					newRows += '<td class="sensorMake">' + iSensor.mfr + '</td>\n';
-					newRows += '<td class="sensorModel">' + iSensor.model + '</td>\n';
-					newRows += '</tr>\n';
-				}
-				obsTable.find('tbody:last-child').append(newRows);
-			}
-		}
+				oObsTypeList.sort((a, b) => a.pref - b.pref);
 
+				for (let nIndex = 0; nIndex < oObsTypeList.length; nIndex++)
+				{
+					let oObs = oObsTypeList[nIndex];
+					let sEnd = '</div>';
+					if (nIndex === 0)
+					{
+						if (oObsTypeList.length > 1)
+						{
+							sHtml += `<div id="obs-${oObs.oi}" class="obs-detail-data"><h3>`;
+							sEnd = '</h3>';
+							oAccordians.push(`#obs-${oObs.oi}`);
+						}
+						else
+						{
+							sHtml += `<div id="obs-${oObs.oi}" class="obs-detail-row obs-detail-data"><div class="obs-detail-item" style="width:28px;">&nbsp;</div>`;
+						}
+					}
+					else
+					{
+						if (nIndex === 1)
+							sHtml += '<div>';
+						if (nIndex < oObsTypeList.length - 1)
+							sEnd = '<br><br>';
+						else
+							sEnd = '</div></div>';
+					}
+
+					sHtml += `<div class="obs-detail-item">${oObs.od}</div>`;
+					sHtml += `<div class="obs-detail-item" style="width:75px;">${oObs.src}</div>`;
+					sHtml += `<div class="obs-detail-item">${moment(oObs.ts1).format(obsTimeFormat)}</div>`;
+					sHtml += `<div class="obs-detail-item">${oObs.ts2 !== MAXLONG ? moment(oObs.ts2).format(obsTimeFormat) : ''}</div>`;
+					sHtml += `<div class="obs-detail-item">${oObs.url ? '<a href="' + oObs.url + '" target="_blank" style="color: blue;">' + oObs.ev + '</a>' : oObs.ev}</div>`;
+					sHtml += `<div class="obs-detail-item" style="width:50px;">${oObs.eu ? oObs.eu : ''}</div>`;
+
+					sHtml += sEnd;
+				}
+			}
+			$('#obs-detail').html(sHtml);
+			for (let sAccordian of oAccordians.values())
+				$(sAccordian).accordion({collapsible:true, heightStyle: "content", active: false});
+			$('#obs-detail').show();
+		}
+		
 		dialog.resize();
-		dialog.dialog("option", "position", "center");
+//		dialog.dialog("option", "position", "center");
 		$('#pageoverlay').hide();
     });
-
 
     dialog.dialog("open");
   }

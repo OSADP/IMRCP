@@ -6,7 +6,7 @@ import {timeoutPageoverlay, showPageoverlay} from './map-common.js';
   window.g_oRequirements = {'groups': 'imrcp-user;imrcp-admin'};
   $(document).on('initPage', function ()
   {
-	$(document).prop('title', 'IMRCP Reports - ' + sessionStorage.uname);
+	$(document).prop('title', 'IMRCP View Reports');
 	$('#dlgDelete').dialog({autoOpen: false, position: {my: 'center', at: 'center', of: 'body'}, width: 400, modal: true, resizable: false, draggable: false, buttons:
 			[
 				{text: 'Go Back', click: function() {sDeleteId = undefined; $(this).dialog('close');}},

@@ -17,10 +17,12 @@ let bRefreshMap = false;
 let nLastSliderVal;
 let nImrcpReqs = 0;
 let sLastMapboxLayer;
+let OFFSET = 30;
+
 const mapMouseMoveHandler = (sources, spriteDef) => 
 {
 	let lastHoverFeature;
-	const hoverablePointLayers = new Set(["Field Sensors"]);
+	const hoverablePointLayers = new Set(["Flood Sensors", "Weather Sensors", "Mobile Sensors"]);
 	return ({target:map, point}) => 
 	{
 
@@ -110,10 +112,6 @@ const buildSourceMap = (sourceData, spriteDef) =>
 				fullLayer.paint['line-width'] = ["let", "extra",
 				["case", ["boolean", ["feature-state", "hover"], false], 2, ["boolean", ["feature-state", "clicked"], false], 2, 0],
 				["interpolate", ["exponential", 2], ["zoom"], 10.0, ["+", ["var", "extra"], 2.0], 16.0, ["+", ["var", "extra"], 8.0], 22.0, ["+", ["var", "extra"], 12.0]]];
-	  //	["case",
-	  //	["boolean", ["feature-state", "hover"], false], 4,
-	  //	["boolean", ["feature-state", "clicked"], false], 4, 
-	  //	1];
 		}
 
 		const fullSource = {group, type, legendElements, layers: fullLayerDefinitions, id: sourceId, mapboxSource: Object.assign({}, source, {tiles: source.tiles})};
@@ -136,13 +134,16 @@ const refreshMap = (map, sources) =>
 	});
 };
 
-const scheduleEvenMinuteTimeout = (callback) => 
+const scheduleOffsetMinuteTimeout = (nOffset, callback) => 
 {
   //set the refresh method to run at the start of the next minute, and
   //then set it to run every minute after that.
 	let now = moment();
 	let currentMillis = now.valueOf();
-	now.seconds(0).milliseconds(0).add(1, 'minute');
+	let nAdd = nOffset;
+	if (now.seconds() >= nOffset)
+		nAdd += 60;
+	now.seconds(0).milliseconds(0).add(nAdd, 'seconds');
 	setTimeout(function ()
 	{
 		callback();
@@ -156,11 +157,28 @@ const layerCheckHandler = (map, sources) => ({target}) =>
     const jqEl = $(target);
     const sourceId = jqEl.val();
     const source = sources.get(sourceId);
-    if (jqEl.prop('checked'))
+
+	if (jqEl.prop('checked'))
 		addSourceAndLayers(map, source, sLastMapboxLayer);
-    else
+	else
 		removeSourceAndLayers(map, source);
+
 };
+
+function setObsGroupView()
+{
+	$('#legendDeck').find('.obstype-pane-list li input:checked').each(function(idx, el) 
+	{
+		$(el).trigger('click');
+	});
+	$(this).siblings().find('li').each(function(idx, el) 
+	{
+		let sName = $(el).text().trim();
+		let sSelector = `input[value="${sName}"]`;
+		$(sSelector).trigger('click');
+	});
+		
+}
 
 
 const displayZoom = ({target}) => $('#txtLocationLookup').text(('' + target.getZoom()).substring(0, 3));
@@ -180,14 +198,22 @@ function setTimeStep()
 	let oSlider = $('#dateslider');
 	let nVal = oSlider.labeledSlider('value');
 	let nStep = 1;
-	if (nVal > 2)
-		nStep = 180;
-	else if (nVal >= 1)
+	if (nVal > 0)
 		nStep = 60;
+
 	$('#timeslider').labeledSlider('option', 'step', nStep);
 	return nStep;
 }
 
+
+function getNowTime()
+{
+	let oNow = moment().milliseconds(0);
+	if (oNow.seconds() < OFFSET)
+		oNow.add(-1, 'minute');
+	
+	return oNow.seconds(0);
+}
 
 const setRefCookie = moment => document.cookie = `rtime=${moment.valueOf()};path=/`;
 const setTimeCookie = moment => document.cookie = `ttime=${moment.valueOf()};path=/`;
@@ -198,49 +224,22 @@ const obstypesPromise = $.getJSON('obstypes.json').promise();
 
 async function initialize()
 {
-	$(document).prop('title', 'IMRCP Map - ' + sessionStorage.uname);
-	let pNetworks = getNetworksAjax().promise();
-	let pProfile = getProfileAjax().promise();
+	$(document).prop('title', 'IMRCP View Map');
 	
 	const settings = await loadSettings;
 	const map = initCommonMap('mapid', settings.map.center.lng, settings.map.center.lat, settings.map.zoom, 4, 22);
-	
-	
 	const sources = buildSourceMap(await sourceLayersPromise, await spriteDefinitionPromise);
-
+	let oLonLat = new mapboxgl.Popup({closeButton: false, closeOnClick: false, anchor: 'bottom', offset: [0, -25], maxwidth: 'none'});
+	function updateLonLatPos(oEvent)
+	{
+		oLonLat.setLngLat(oEvent.lngLat);
+		oLonLat.setHTML(`${oEvent.lngLat.lng.toFixed(7)}, ${oEvent.lngLat.lat.toFixed(7)}<br>Right-click to copy`);
+	}
+	
 	map.on('load', async function ()
 	{
 		sLastMapboxLayer = getLastLayer(map);
-//		$('#navbar').append('<li><div id="loadingTiles" style="display:inline-block" class="w3-navitem">Loading data tiles...</div></li>');
-//		$('#loadingTiles').hide();
-//		map.on('sourcedataloading', function(oEvent) 
-//		{
-//			if (oEvent.source.type !== 'vector' || oEvent.source.tiles === undefined || oEvent.source.tiles[0].indexOf('imrcp') < 0)
-//				return;
-//			let oEl = $('#loadingTiles');
-//			if (nImrcpReqs++ === 0)
-//				oEl.show();
-//			oEl.html(nImrcpReqs);
-//			
-//		});
-//		map.on('sourcedata', function(oEvent)
-//		{
-//			if (oEvent.source.type !== 'vector' || oEvent.source.tiles === undefined || oEvent.source.tiles[0].indexOf('imrcp') < 0)
-//				return;
-//			--nImrcpReqs;
-//			let oEl = $('#loadingTiles');
-//			oEl.html(nImrcpReqs);
-//			if (nImrcpReqs === 0)
-//				oEl.hide();
-////			setTimeout(function() 
-////			{
-////				if (map.loaded())
-////					$('#loadingTiles').hide();
-////			}, 1000);
-//		});
 		const legendDeckContainer = $('#legendDeck');
-		if (false) // imrcp-admin group
-			$('#navbar').append('<li><div style="display:inline-block" class="w3-navitem"><input value="zip city county state" type="text" id="txtLocationLookup"/></div></li>');
 		buildPaneSourceInputs(map, sources, settings.layers, addSourceAndLayers, sLastMapboxLayer);
 		if (sessionStorage.uname === 'cherneya')
 		{
@@ -252,28 +251,10 @@ async function initialize()
 			});
 		}
 		legendDeckContainer.find('.obstype-pane-list li input').change(layerCheckHandler(map, sources));
-		
+		let oObsGroupBtns = $('.obs-group-btn');
+		oObsGroupBtns.on('click', setObsGroupView);
 		var legendDivStack = legendDeckContainer.divStack({});
 		setupObstypeLegendDivs(sources);
-		
-		let oAllNetworks = await pNetworks;
-		let oProfile = await pProfile;
-//		let oNetworks = {'type': 'geojson', 'maxzoom': 9, 'data': {'type': 'FeatureCollection', 'features': []}};
-//		
-//		for (let oNetwork of oAllNetworks.values())
-//		{
-//			for (let oProfileNetwork of oProfile.networks.values())
-//			{
-//				if (oProfileNetwork.id === oNetwork.properties.networkid)
-//				{
-//					let oFeature = {'type': 'Feature', 'properties': oNetwork.properties, 'geometry': {'type': 'LineString', 'coordinates': oNetwork.geometry.coordinates[0]}};
-//					oNetworks.data.features.push(oFeature);
-//				}
-//			}
-//		}
-//		
-//		map.addSource('network-outlines', oNetworks);
-//		map.addLayer(g_oLayers['network-outlines']);
 	});
 
 	const refreshMyMap = () => refreshMap(map, sources);
@@ -283,15 +264,16 @@ async function initialize()
 	displayZoom({target: map});
 
 	map.on("mousemove", mapMouseMoveHandler(sources, await spriteDefinitionPromise));
+	map.on('mousemove', updateLonLatPos);
+	map.on('contextmenu', function(oEvent)
+	{
+		if (oLonLat.isOpen())
+			navigator.clipboard.writeText(`${oEvent.lngLat.lng.toFixed(7)}, ${oEvent.lngLat.lat.toFixed(7)}`);
+	});
 
-
-	let oQueryTime = moment().seconds(0).milliseconds(0);
-	let oRefTime = moment().seconds(0).milliseconds(0);
+	let oQueryTime = getNowTime();
+	let oRefTime = moment(oQueryTime);
 	let oTimeForLabel = moment().hours(0).minutes(0).seconds(0).milliseconds(0);
-	oRefTime.add(10 - (oRefTime.minutes() % 10), 'minutes');
-
-	const loadNotifications = () => $.getJSON("api/notify/" + (oRefTime.valueOf()) + "/" + (oRefTime.valueOf() + mapTimeSlider.labeledSlider('value') * 60 * 1000))
-		.done((data) => $('#divNotificationDialog').notificationDialog("processNotifications", data));
 	
 	let nMin = -5;
 	let nMax = 5;
@@ -337,7 +319,6 @@ async function initialize()
 		tickValues: aTicks,
 		stop: function (event, ui)
 		{
-			setTimeStep();
 			let nStep = setTimeStep();
 			let oTimeslider = $('#timeslider');
 			oTimeslider.labeledSlider('option', 'step', nStep);
@@ -347,7 +328,6 @@ async function initialize()
 			updateQueryTime(oSelectedTime);
 			
 			refreshMyMap();
-//			loadNotifications();
 		}
 	});
 	
@@ -378,44 +358,6 @@ async function initialize()
 		{
 			let oUpdateTime = moment(oRefTime).add(ui.value, 'minutes').subtract(oRefTime.hour(), 'hours').subtract(oRefTime.minute(), 'minutes');
 			updateTimeSlider(oUpdateTime);
-//			if (ui.value <= nTenMinThresh)
-//			{
-//				let nAdjust = nLastSliderVal > ui.value ? -10 : 10;
-//				displaySelectedTime(moment(oRefTime).add((mapTimeSlider.labeledSlider('value') + nAdjust), 'minutes'));
-//				nLastSliderVal = ui.value;
-//			}
-//			else
-//			{
-//				let nVal;
-//				let nAdjust = 0;
-//				
-//				if (ui.value < nHourThresh)
-//				{
-//					nVal = Math.floor(ui.value / 60) * 60;
-//					nAdjust = 60;
-//				}
-//				else
-//				{
-//					nVal = Math.floor(ui.value / 180) * 180;
-//					nAdjust = 180;
-//				}
-//				if (ui.value < nLastSliderVal)
-//					nAdjust = 0;
-//				
-//				
-//				if (event.originalEvent.type === 'keydown')
-//				{
-//					displaySelectedTime(moment(oRefTime).add(nVal + nAdjust, 'minutes'));
-//					nLastSliderVal = nVal + nAdjust;
-//					mapTimeSlider.labeledSlider('value', nVal + nAdjust);
-//					return false;
-//				}
-//				else
-//				{
-//					displaySelectedTime(moment(oRefTime).add(nVal, 'minutes'));
-//					nLastSliderVal = nVal;
-//				}
-//			}
 		},
 		labelPosition: 'on',
 		min: nMin,
@@ -462,7 +404,6 @@ async function initialize()
 			updateQueryTime(oSelectedTime);
 			refreshMyMap();
 			nLastSliderVal = nLast;
-//			loadNotifications();
 		}
 	});
 	nLastSliderVal = mapTimeSlider.labeledSlider('value');
@@ -492,15 +433,12 @@ async function initialize()
 		$('#dateslider .label-on').each(function(index, el) {
 			$(el).html($('#dateslider').labeledSlider('option').defaultLabelFn(index - nLabelDaysBack));
 		});
-//		mapDateSlider.labeledSlider('value', 0);
-//		updateDateSlider(oRefTime);
 		$('#btnTime').val(oNewTime.format("YYYY/MM/DD HH:mm"));
 		
 		if (document.visibilityState === 'visible')
 		{
 			bRefreshMap = false;
 			refreshMyMap();
-//			loadNotifications();
 		}
 		else
 		{
@@ -533,45 +471,65 @@ async function initialize()
 		{
 			bRefreshMap = false;
 			refreshMyMap();
-//			loadNotifications();
 		}
 		else
 		{
 			bRefreshMap = true;
 		}
 	}
+	
+	function updateAreaOpacity()
+	{
+		let dOpacity = Number($('#selOpacity').val()) / 100.0;
+		sources.forEach(source => 
+		{
+			if (source.group === 'Area')
+			{
+				for (let oLegendEl of source.legendElements.values())
+				{
+					oLegendEl.opacity = dOpacity;
+				}
+
+				for (let oLayer of source.layers.values())
+				{
+					oLayer.paint['fill-opacity'] = dOpacity;
+					if (map.getLayer(oLayer.id) !== undefined)
+						map.setPaintProperty(oLayer.id, 'fill-opacity', dOpacity);
+				}
+			}
+		});
+	}
 
 	const autoRefresh = () => 
 	{
-		if ($('#chkAutoRefresh').prop('checked'))
+		let nInterval = Number($('#selAutoRefresh').val());
+		if (nInterval > 0)
 		{
-			let oNow = moment();
+			let oNow = moment().seconds(0).milliseconds(0);
 			let nStep = mapTimeSlider.labeledSlider('option', 'step');
-			if (oNow.minutes() % nStep === 0)
+			if (oNow.minutes() % nInterval === 0)
 			{
-				let nHours = oQueryTime.hours();
-				let oNewTime = moment(oQueryTime).hours(0).minutes(0).add(oQueryTime.hours() * 60 + oQueryTime.minutes() + nStep, 'minutes');
-				updateQueryTime(oNewTime);
-				if (oNewTime.hours() != nHours)
+				if (Math.abs(oNow.diff(oRefTime, 'minutes')) <= nStep)
 				{
-					let nAdd = 1;
-					if (nStep > 60)
-						nAdd = Math.floor(nStep / 60);
-					updateRefTime(moment(oRefTime).add(nAdd, 'hours'));
+					updateRefTime(getNowTime());
+					if (oNow.minutes() % nStep === 0)
+					{
+						let oNewTime = moment(oQueryTime).hours(0).minutes(0).add(oQueryTime.hours() * 60 + (Math.floor(oQueryTime.minutes() / nInterval) * nInterval) + Math.max(nInterval, nStep), 'minutes');
+						updateQueryTime(oNewTime);
+					}
 				}
+				
 			}
 		}
-//			updateNowTime(oRefTime.add(1, 'minute'), mapTimeSlider.labeledSlider('value'));
 	};
 
-	scheduleEvenMinuteTimeout(autoRefresh);
+	scheduleOffsetMinuteTimeout(OFFSET, autoRefresh);
 	document.addEventListener('visibilitychange', () => 
 	{
 		if (document.visibilityState === 'visible' && bRefreshMap)
 		{
 			bRefreshMap = false;
 			refreshMyMap();
-//			loadNotifications();
 		}
 	});
 	var minuteInterval = 10;
@@ -604,60 +562,24 @@ async function initialize()
 			//If the newly selected time is within a minute of the current time, re-enable auto-refresh
 			$('#chkAutoRefresh').prop('checked', Math.abs(newTime.valueOf() - new Date().getTime()) < 60000);
 			mapTimeSlider.labeledSlider('option', 'step', 1);
-		},
+		}
 	});
 
 	$('.xdsoft_today_button').click(function() 
 	{
-		let oTime = moment().seconds(0).milliseconds(0);
-		let oNextInterval = moment().seconds(0).milliseconds(0);
-		oNextInterval.add(10 - (oNextInterval.minutes() % 10), 'minutes');
+		let oTime = getNowTime();
+		let oRefTime = moment(oTime);
 		
-		$('#txtTime').datetimepicker({value: oNextInterval});
+		
+		$('#txtTime').datetimepicker({value: oRefTime});
 		$('#txtTime').datetimepicker('hide');
-		updateRefTime(oNextInterval);
+		updateRefTime(oRefTime);
 		updateQueryTime(oTime);
 		mapTimeSlider.labeledSlider('option', 'step', 1);
 	});
 
 	updateQueryTime(oQueryTime);
 	updateRefTime(oRefTime);
-
-//	const reportManager = new ReportSelectionManager(
-//	{
-//		refTimeMax: maxTime,
-//		refTimeInterval: minuteInterval,
-//		refTimeInitial: startDate,
-//		obstypes: await obstypesPromise,
-//		map,
-//		sources,
-//		spriteDef: await spriteDefinitionPromise,
-//
-//		beforeSelection: function ()
-//		{
-//			map.off('click', mapClickHandler);
-//			$('#legendDeck').hide();
-//			$('#legendDeck .obstype-pane-list li input, #chkAutoRefresh,#chkNotifications').each(function ()
-//			{
-//				const chk = $(this);
-//				if (chk.prop("checked"))
-//					chk.data("prevValue", true).prop("checked", false).change();
-//				chk.prop("disabled", true);
-//			});
-//		},
-//		afterSelection: function ()
-//		{
-//			map.on('click', mapClickHandler);
-//			$('#legendDeck').show();
-//			$('#legendDeck .obstype-pane-list li input, #chkAutoRefresh,#chkNotifications').each(function ()
-//			{
-//				const chk = $(this);
-//				chk.prop("disabled", false);
-//				if (chk.data("prevValue"))
-//					chk.prop("checked", true).change();
-//			});
-//		}
-//	});
 
 	let autoCenteredDialogs = $("#divReportDialog, #dialog-form, #divNotificationDialog");
 	$(window).resize(function ()
@@ -678,18 +600,33 @@ async function initialize()
 	};
 
 	$('#dialog-form').on('dialogdragstart', dialogDrag);
-
-	if (settings.roadTypes)
+	function toggleLonLat()
 	{
-		if (settings.roadTypes.arterials === false)
-			$('#chkShowArterials').prop('checked', false);
-
-		if (settings.roadTypes.highways === false)
-			$('#chkShowHighways').prop('checked', false);
+		if ($('#chkLonLat').prop('checked'))
+			oLonLat.addTo(map);
+		else
+			oLonLat.remove();
 	}
-
-	$('#chkNotifications').prop('checked', settings.notify);
-	$('#chkAutoRefresh').prop('checked', settings.refresh);
+	
+	$('#chkLonLat').on('change', toggleLonLat);
+	$('#chkLonLat').prop('checked', settings.lonlat);
+	toggleLonLat();
+	$('#selAutoRefresh').val(settings.refresh);
+	let sLastVal = settings.refresh;
+	$('#selAutoRefresh').on('change', function(oEvent)
+	{
+		let sNewVal = $('#selAutoRefresh').val();
+		if (Number(sNewVal) > 0)
+		{
+			if (Number(sLastVal) === 0)
+				$('.xdsoft_today_button').trigger('click');
+		}
+		sLastVal = sNewVal;
+	});
+	$('#selOpacity').on('change', updateAreaOpacity);
+	
+	$('#selOpacity').val(settings.opacity);
+	$('#selOpacity').trigger('change');
 
 	const notificationsDialog = $('#divNotificationDialog').notificationDialog(
 	{
@@ -698,11 +635,6 @@ async function initialize()
 		displayOnNewAlerts: () => $('#chkNotifications').prop('checked')
 	});
 
-	$('#chkNotifications').click(function (e)
-	{
-		if (this.checked)
-			notificationsDialog.notificationDialog("open");
-	});
 
 	$("#save-user-view").click(saveSettings(map));
 	$('#btnTime').click(() =>

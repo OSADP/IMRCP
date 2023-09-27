@@ -8,6 +8,7 @@ let nDelayId;
 
 async function initialize()
 {
+	$(document).prop('title', 'IMRCP Manage Users');
 	oTable = $("#usertable").DataTable(
 	{
 		scrollY:"600px",
