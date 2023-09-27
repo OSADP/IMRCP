@@ -94,7 +94,7 @@ public class Obs
 	public static int BBSTART = 2;
 	public static int POINTSTART = 6;
 	
-	public String[] m_sStrings = null; // [detail, url, externalid, lanes, type, direction, unused, jsonprops]
+	public String[] m_sStrings = null;
 	public int m_nObsFlag;
 	
 	/**
