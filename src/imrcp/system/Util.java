@@ -21,11 +21,6 @@ public class Util
 	 */
 	private static final float[] SHORT_FLOAT = new float[65536];
 
-	public static void main(String[] sArgs)
-		throws Exception
-	{
-		System.out.println(getLastLinesOfFile("C:/Users/aaron.cherney/Documents/IMRCP5/testlog.log", 4));
-	}
 	
 	static
 	{

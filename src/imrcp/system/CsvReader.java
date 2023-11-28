@@ -167,7 +167,11 @@ public class CsvReader extends BufferedInStream
 					{
 						m_nState = WHITESPACE;
 						if (nChar == m_cDelimiter || nChar == '\n')
+						{
 							addCol();
+							if (nChar == '\n')
+								bGo = false;
+						}
 					}
 					break;
 				}
