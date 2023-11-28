@@ -51,7 +51,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TimeZone;
@@ -86,22 +85,34 @@ public class MLPHurricaneTraining
 		{
 			Files.deleteIfExists(Paths.get(sStatusLog));
 			Files.createDirectories(oBaseDir, FileUtil.DIRPERS);
-			statuslog("Started to find traffic speeds", sStatusLog);
-			long lTrainingStart = findTrainingStart();
-			statuslog("Finished finding traffic speeds", sStatusLog);
-			statuslog("Started to find hurricanes", sStatusLog);
-			ArrayList<HurricaneForecastList> oHurricanesToTrain = findHurricanes(oNetwork, lTrainingStart);
-			statuslog("Finished finding hurricanes", sStatusLog);
 			SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 			oSdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-			LOGGER.debug(oSdf.format(lTrainingStart));
+			statuslog("Started to find traffic speeds", sStatusLog);
+			long lTrainingStart = findTrainingStart();
+			LOGGER.debug(String.format("Training start - %s", oSdf.format(lTrainingStart)));
+			statuslog(String.format("Finished finding traffic speeds - earliest time: %s", oSdf.format(lTrainingStart)), sStatusLog);
+			statuslog("Started to find hurricanes", sStatusLog);
+			ArrayList<HurricaneForecastList> oHurricanesToTrain = findHurricanes(oNetwork, lTrainingStart);
+			statuslog(String.format("Finished finding hurricanes - storms found: %d", oHurricanesToTrain.size()), sStatusLog);
+			for (HurricaneForecastList oStorm : oHurricanesToTrain)
+			{
+				LOGGER.debug(String.format("%s - %s", oStorm.m_sStormId, oSdf.format(oStorm.m_lLandfallTime)));
+			}
+			
 			JSONObject oMetadata = new JSONObject();
 			JSONObject oStats = new JSONObject();
-			statuslog("Started to create input files for python code", sStatusLog);
+			if (oHurricanesToTrain.isEmpty())
+			{
+				oNetwork.removeStatus(Network.TRAINING);
+				LOGGER.info("Failed to train " + oNetwork.m_sNetworkId + " no hurricanes intersected the network when there was traffic data");
+				oWays.writeHurricaneModelStatus(oNetwork, oStatus.getString("model"), WayNetworks.HURMODEL_NOTTRAINED);
+				return;
+			}
 			String sMetadataFile = createMetadata(oMetadata, oNetwork, sBaseDir, sStatusLog, oStatus, oHurricanesToTrain);
 			for (HurricaneForecastList oStorm : oHurricanesToTrain)
 			{
-				createSpeedFiles(oNetwork, oStorm, sBaseDir);
+				statuslog(String.format("Creating files for storm %s", oStorm.m_sStormId), sStatusLog);
+				createSpeedFiles(oNetwork, oStorm, sBaseDir, sStatusLog);
 				JSONObject oStormStats = new JSONObject();
 				for (Entry<String, double[]> oEntry : oStorm.m_oStats.entrySet())
 				{
@@ -117,7 +128,7 @@ public class MLPHurricaneTraining
 			{
 				oOut.write(oMetadata.toString(3));
 			}
-			statuslog("Finished creating input files for python code", sStatusLog);
+			statuslog("Finished creating input files for MLP", sStatusLog);
 			SimpleDateFormat oReqSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 			oReqSdf.setTimeZone(Directory.m_oUTC);
 			String sUrl = "http://127.0.0.1:" + ((MLPHurricane)Directory.getInstance().lookup("MLPHurricane")).getPort();
@@ -137,13 +148,11 @@ public class MLPHurricaneTraining
 		{
 			LOGGER.info("Failed to train " + oNetwork.m_sNetworkId);
 			statuslog("Error occured", sStatusLog);
-			oNetwork.addStatus(Network.ERROR);
 			oWays.writeHurricaneModelStatus(oNetwork, oStatus.getString("model"), WayNetworks.HURMODEL_ERROR);
 			LOGGER.error(oEx, oEx);
 		}
-		LOGGER.info("Finished creating input files for training. Request sent to python");
-		statuslog("Request sent to python", sStatusLog);
-		
+		LOGGER.info("Finished creating input files for training. Request sent to MLP");
+		statuslog("Request sent to MLP", sStatusLog);
 	}
 	
 	
@@ -178,11 +187,26 @@ public class MLPHurricaneTraining
 		String sFileExt = oFf.getExtension();
 		Path oDir = Paths.get(sBaseDir);
 		List<Path> oFiles = Files.walk(oDir, FileVisitOption.FOLLOW_LINKS).filter(Files::isRegularFile).filter(oPath -> oPath.toString().endsWith(sFileExt)).collect(Collectors.toList());
-		if (oFiles.isEmpty())
-			return Long.MAX_VALUE;
-		Introsort.usort(oFiles, TileObsView.PATHREFCOMP);
+		List<Path> oProcess = new ArrayList(oFiles.size());
 		long[] lTimes = new long[3];
-		oFf.parse(oFiles.get(oFiles.size() - 1).toString(), lTimes);
+		int nIndex = oFiles.size();
+		while (nIndex-- > 0)
+		{
+			try
+			{
+				Path oFile = oFiles.get(nIndex);
+				oFf.parse(oFile.toString(), lTimes);
+				oProcess.add(oFile);
+			}
+			catch (Exception oEx) // have the wrong file name format so skip
+			{
+			}
+		}
+		if (oProcess.isEmpty())
+			return Long.MAX_VALUE;
+		Introsort.usort(oProcess, TileObsView.PATHREFCOMP);
+		
+		oFf.parse(oProcess.get(oProcess.size() - 1).toString(), lTimes);
 		return Math.min(lTimes[FilenameFormatter.VALID], lTimes[FilenameFormatter.START]);
 	}
 	
@@ -298,26 +322,36 @@ public class MLPHurricaneTraining
 			LOGGER.debug(oStorm.m_sStormId);
 			oStorm.m_lLandfallTime = Long.MIN_VALUE;
 			boolean bInNetwork = false;
+			boolean bPreviousOnLand = false;
+			Landfall oLf = new Landfall();
+			ArrayList<Landfall> oLfs = new ArrayList();
 			for (int nIndex = 0; nIndex < oStorm.size(); nIndex++)
 			{
+				boolean bCurrentOnLand = false;
 				HurricaneForecast oForecast = oStorm.get(nIndex);
 				Introsort.usort(oForecast.m_oCats, Obs.g_oCompObsByTime);
 				Obs oCat = oForecast.m_oCats.get(0);
 				int[] nPt = oCat.m_oGeoArray;
-				if (GeoUtil.isInsideRingAndHoles(oNetwork.getGeometry(), Obs.POINT, nPt))
+				if (!bInNetwork && GeoUtil.isInsideRingAndHoles(oNetwork.getGeometry(), Obs.POINT, nPt))
 					bInNetwork = true;
 				for (int[] nBorder : oBorders)
 				{
-					if (GeoUtil.isInsideRingAndHoles(nBorder, Obs.POINT, nPt) && oStorm.m_lLandfallTime < 0)
+					if (GeoUtil.isInsideRingAndHoles(nBorder, Obs.POINT, nPt))
 					{
-						oStorm.m_lLandfallTime = oCat.m_lObsTime1;
-						oStorm.m_dLandfallLon = GeoUtil.fromIntDeg(oCat.m_oGeoArray[1]);
-						oStorm.m_dLandfallLat = GeoUtil.fromIntDeg(oCat.m_oGeoArray[2]);
-						oStorm.m_nLfZone = dCentroid[0] > oStorm.m_dLandfallLon ? 0 : 1;
+						bCurrentOnLand = true;
+						if (!bPreviousOnLand)
+						{
+							oLf.m_lTime = oCat.m_lObsTime1;
+							oLf.m_dLon = GeoUtil.fromIntDeg(oCat.m_oGeoArray[1]);
+							oLf.m_dLat = GeoUtil.fromIntDeg(oCat.m_oGeoArray[2]);
+							oLf.m_nZone = dCentroid[0] > oLf.m_dLon ? 0 : 1;
+							oLf.m_dDistToNetwork = GeoUtil.distanceFromLatLon(dCentroid[1], dCentroid[0], oLf.m_dLat, oLf.m_dLon);
+						}
 						break;
 					}
 				}
 				
+				int nCat = 0;
 				ObsList oWinds = oOv.getData(ObsType.GSTWND, oCat.m_lObsTime1, oCat.m_lObsTime1 + 1, oCat.m_oGeoArray[2], oCat.m_oGeoArray[2] + 1, oCat.m_oGeoArray[1], oCat.m_oGeoArray[1] + 1, oCat.m_lTimeRecv, nNHC);
 				for (Obs oWind : oWinds)
 				{
@@ -326,10 +360,25 @@ public class MLPHurricaneTraining
 					int nSSHWS = NHC.getSSHWS(oWind.m_dValue, false);
 					if (nSSHWS > oStorm.m_nHurCat)
 						oStorm.m_nHurCat = nSSHWS;
+					nCat = nSSHWS;
 				}
+				if (nCat > 0 && !bPreviousOnLand && bCurrentOnLand)
+				{
+					oLfs.add(new Landfall(oLf));
 			}
-			if (oStorm.m_lLandfallTime > 0 && bInNetwork && oStorm.m_nHurCat > 0) // train for storms that make landfall, intersect the network, and are hurricanes
+				bPreviousOnLand = bCurrentOnLand;
+			}
+			if (!oLfs.isEmpty() && bInNetwork && oStorm.m_nHurCat > 0) // train for storms that make landfall, intersect the network, and are hurricanes
+			{
+				LOGGER.debug(String.format("%s has %d landfalls", oStorm.m_sStormId, oLfs.size()));
+				Introsort.usort(oLfs, (Landfall o1, Landfall o2) -> Double.compare(o1.m_dDistToNetwork, o2.m_dDistToNetwork));
+				oLf = oLfs.get(0); // get closest to network
+				oStorm.m_dLandfallLat = oLf.m_dLat;
+				oStorm.m_dLandfallLon = oLf.m_dLon;
+				oStorm.m_lLandfallTime = oLf.m_lTime;
+				oStorm.m_nLfZone = oLf.m_nZone;
 				oStormsToTrain.add(oStorm);
+			}
 		}
 
 		LOGGER.debug("Done searching for hurricanes");
@@ -402,7 +451,7 @@ public class MLPHurricaneTraining
 		return sBaseDir + "hurricane_data.json";
 	}
 
-	private static void createSpeedFiles(Network oNetwork, HurricaneForecastList oStorm, String sBaseDir)
+	private static void createSpeedFiles(Network oNetwork, HurricaneForecastList oStorm, String sBaseDir, String sStatusLog)
 		throws IOException
 	{
 		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(ObsType.SPDLNK);
@@ -509,7 +558,10 @@ public class MLPHurricaneTraining
 		{
 			oCal.setTimeInMillis(lCurTime);
 			if (lCurTime % 86400000 == 0)
+			{
 				LOGGER.info("Processing " + oDaySdf.format(lCurTime));
+				statuslog(String.format("Processing %s for storm %s", oDaySdf.format(lCurTime), oStorm.m_sStormId), sStatusLog);
+			}
 			boolean bAddForStats = lCurTime < lSevenDayCutoff;
 			long lQueryEnd = lCurTime + 300000; // speeds are saved in 5 minute time ranges
 			for (Entry<String, Calendar> oEntry : oCals.entrySet())
@@ -547,56 +599,34 @@ public class MLPHurricaneTraining
 		oStorm.m_oStats = new HashMap();
 		double[] dMean = new double[1];
 		int nRecIndex = oSpeedRecs.size();
-		String[] sNaNFails = new String[]{"04fd2e7b944942b016facb188baf76e2", "04ee3b28ebd0eaf5cff0f845669ebe53", "04d823b3a73105ae80ff0a94c1142770", "04b53205f43ddb4eb9ad242afa3c5de6", "04abfab456ef2849d8e4d2e2fde77811", "049dcb49e41f466c0fb736cfa5d938a6", "04851b8b380460ac8a6c468a81ef5716", "0484db2c6e524496b0ed887097e7dd50", "0482f78f41697336c096f88e5ca508fe", "0454d07f581f105b7cb7fe4adfdaf6c2", "0446c6ca226bc009e8383c7bd3da5c5d"};
-		java.util.Arrays.sort(sNaNFails);
-		try (BufferedWriter oOut = Files.newBufferedWriter(Paths.get("/home/cherneya/fails.csv")))
+
+
+		while (nRecIndex-- > 0)
 		{
-			while (nRecIndex-- > 0)
+			SpeedRecord oRec = oSpeedRecs.get(nRecIndex);
+			if (oRec.m_nCount == 0)
 			{
-				SpeedRecord oRec = oSpeedRecs.get(nRecIndex);
-				if (oRec.m_nCount == 0)
+				oSpeedRecs.remove(nRecIndex);
+				continue;
+			}
+
+
+			if (MathUtil.interpolate(oRec.m_dSpeedsForStats, 72) && MathUtil.interpolate(oRec.m_dAllSpeeds, 72))
+			{
+				dMean[0] = Double.NaN;
+				double dStd = MathUtil.standardDeviation(oRec.m_dSpeedsForStats, dMean);
+				if (Double.isNaN(dStd) || Double.isNaN(dMean[0]))
 				{
 					oSpeedRecs.remove(nRecIndex);
+					nFails++;
 					continue;
 				}
-				if (java.util.Arrays.binarySearch(sNaNFails, oRec.m_sId) >= 0)
-				{
-					System.currentTimeMillis();
-				}
-
-				if (MathUtil.interpolate(oRec.m_dSpeedsForStats, 72) && MathUtil.interpolate(oRec.m_dAllSpeeds, 72))
-				{
-					dMean[0] = Double.NaN;
-					double dStd = MathUtil.standardDeviation(oRec.m_dSpeedsForStats, dMean);
-					if (Double.isNaN(dStd) || Double.isNaN(dMean[0]))
-					{
-						oSpeedRecs.remove(nRecIndex);
-						nFails++;
-						oOut.append(oRec.m_sId).append('\n');
-						Iterator<double[]> oIt = Arrays.iterator(oRec.m_dSpeedsForStats, new double[1], 1, 1);
-						while (oIt.hasNext())
-						{
-							oOut.append(String.format("%.2f,", oIt.next()[0]));
-						}
-						oOut.append('\n');
-
-						oIt = Arrays.iterator(oRec.m_dAllSpeeds, new double[1], 1, 1);
-						while (oIt.hasNext())
-						{
-							oOut.append(String.format("%.2f,", oIt.next()[0]));
-						}
-						oOut.append('\n');
-						continue;
-					}
-					oStorm.m_oStats.put(oRec.m_sId + oStorm.m_sStormId, new double[]{dMean[0], dStd});
-				}
-				else // too much missing values so flag to not write data
-				{
-					
-					
-					oSpeedRecs.remove(nRecIndex);
-					++nFails;
-				}
+				oStorm.m_oStats.put(oRec.m_sId + oStorm.m_sStormId, new double[]{dMean[0], dStd});
+			}
+			else // too much missing values so flag to not write data
+			{
+				oSpeedRecs.remove(nRecIndex);
+				++nFails;
 			}
 		}
 		
@@ -672,6 +702,43 @@ public class MLPHurricaneTraining
 			throws IOException
 		{
 			oOut.append(String.format("%s,%s,%d,%d,%d,%.2f\n", oSdf.format(m_lTimestamp), m_sId, m_nDir, m_nDayOfWeek, m_nLanes, m_dSpeed));
+		}
+	}
+	
+	
+	private static class Landfall
+	{
+		long m_lTime;
+		int m_nHurCat;
+		double m_dLon;
+		double m_dLat;
+		int m_nZone;
+		double m_dDistToNetwork;
+		
+		Landfall()
+		{
+		}
+		
+		
+		Landfall(Landfall oLf)
+		{
+			m_lTime = oLf.m_lTime;
+			m_nHurCat = oLf.m_nHurCat;
+			m_dLon = oLf.m_dLon;
+			m_dLat = oLf.m_dLat;
+			m_nZone = oLf.m_nZone;
+			m_dDistToNetwork = oLf.m_dDistToNetwork;
+		}
+		
+		
+		Landfall(long lTime, int nHurCat, double dLon, double dLat, int nZone, double dDistToNetwork)
+		{
+			m_lTime = lTime;
+			m_nHurCat = nHurCat;
+			m_dLon = dLon;
+			m_dLat = dLat;
+			m_nZone = nZone;
+			m_dDistToNetwork = dDistToNetwork;
 		}
 	}
 	

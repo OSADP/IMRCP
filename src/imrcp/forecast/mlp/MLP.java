@@ -83,6 +83,7 @@ public class MLP extends TileFileWriter
 	private final HashMap<String, ArrayList<MLPSession>> m_oActiveRequestsByRun = new HashMap();
 	private int m_nPort;
 	private double m_dExtendDistTol;
+	private int m_nInterpolateLimit;
 	
 	@Override
 	public void reset(JSONObject oBlockConfig)
@@ -90,6 +91,7 @@ public class MLP extends TileFileWriter
 		super.reset(oBlockConfig);
 		m_nPort = oBlockConfig.optInt("port", 8000);
 		m_dExtendDistTol = oBlockConfig.optDouble("disttol", 480000);
+		m_nInterpolateLimit = oBlockConfig.optInt("interpolate", 72);
 	}
 	
 	
@@ -1127,9 +1129,7 @@ public class MLP extends TileFileWriter
 				{
 					oOut.append(RealTimeRecord.HEADER);
 					String sPrevId = oRTRecords.get(0).m_sId;
-					int nVals = 0;
-					int nSegsWithData = 0;
-					StringBuilder sBuf = new StringBuilder();
+					ArrayList<RealTimeRecord> oBuffer = new ArrayList(336); // 26 hours at 5 minute intervals is 336 records for a single id
 					int nLast = oRTRecords.size() - 1;
 					for (int nRTIndex = 0; nRTIndex <= nLast; nRTIndex++)
 					{
@@ -1138,22 +1138,17 @@ public class MLP extends TileFileWriter
 						{
 							if (nRTIndex == nLast)
 							{
-								sBuf.append(oRTRecord.format(oSdf)).append('\n');
-								if (Double.isFinite(oRTRecord.m_dSpeed))
-									++nVals;
+								oBuffer.add(oRTRecord);
 							}
-							if (nVals > 5)
+							if (interpolate(oBuffer, 288, m_nInterpolateLimit)) // only do the first 288 records because the last 48 are two hours of weather forecast with no speeds
 							{
-								oOut.append(sBuf);
-								++nSegsWithData;
+								for (RealTimeRecord oRec : oBuffer)
+									oOut.append(oRec.format(oSdf)).append('\n');
 							}
-							sBuf.setLength(0);
-							nVals = 0;
+							oBuffer.clear();
 						}
-						sBuf.append(oRTRecord.format(oSdf)).append('\n');
+						oBuffer.add(oRTRecord);
 						sPrevId = oRTRecord.m_sId;
-						if (Double.isFinite(oRTRecord.m_dSpeed))
-							++nVals;
 					}
 				}
 			}
@@ -1162,8 +1157,78 @@ public class MLP extends TileFileWriter
 				m_oLogger.error(oEx, oEx);
 			}
 		}
+	}
+	
+	public static boolean interpolate(ArrayList<RealTimeRecord> oRecords, int nListLimit, int nInterpolateLimit)
+	{
+		int nLimit = nListLimit;
+		int nCurIndex = 0;
+		int nPrevIndex = -1;
+		double dPrevVal = Double.NaN;
+		while (nCurIndex < nLimit)
+		{
+			double dCurVal = oRecords.get(nCurIndex++).m_dSpeed;
+			if (!Double.isNaN(dCurVal))
+			{
+				dPrevVal = dCurVal;
+				nPrevIndex = nCurIndex - 1;
+				continue;
+			}
 
+			if (nPrevIndex >= 0) 
+			{
+				if (nCurIndex < nLimit)
+					dCurVal = oRecords.get(nCurIndex++).m_dSpeed;
+				while (Double.isNaN(dCurVal) && nCurIndex - nPrevIndex < nInterpolateLimit + 2 && nCurIndex < nLimit)
+				{
+					dCurVal = oRecords.get(nCurIndex++).m_dSpeed;
+				}
+				if (Double.isNaN(dCurVal))
+				{
+					if (nCurIndex == nLimit) // the last speed record is NaN
+					{
+						if (nCurIndex - nPrevIndex < nInterpolateLimit)
+						{
+							while (nCurIndex-- > nPrevIndex)
+								oRecords.get(nCurIndex).m_dSpeed = dPrevVal;
+
+							return true;
+						}
+					}
+					else
+						return false; // not enough valids speed to interpolate
+				}
+
+				int nSteps = nCurIndex - nPrevIndex - 1;
+				double dRange = dCurVal - dPrevVal;
+				double dStep = dRange / nSteps;
+
+				for (int nIntIndex = nPrevIndex + 1; nIntIndex < nCurIndex - 1; nIntIndex++)
+				{
+					dPrevVal += dStep;
+					oRecords.get(nIntIndex).m_dSpeed = dPrevVal;
+				}
+				
+				nPrevIndex = nCurIndex - 1;
+				dPrevVal = dCurVal;
+			}
+			else // first speed is NaN so look ahead to try and find a non NaN value
+			{
+				for (int nLookAhead = 1; nLookAhead < nInterpolateLimit + 1; nLookAhead++)
+				{
+					double dVal = oRecords.get(nLookAhead).m_dSpeed;;
+					if (!Double.isNaN(dVal))
+					{
+						while (nLookAhead-- > 1)
+							oRecords.get(nLookAhead).m_dSpeed = dVal;
+
+						break;
+					}
+				}
+			}
+		}
 		
+		return nPrevIndex != -1; // if -1 then all values are NaN
 	}
 	
 	
