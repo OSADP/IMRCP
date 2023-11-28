@@ -1018,6 +1018,7 @@ public class WayNetworks extends BaseBlock
 			boolean bRewrite = false;
 			for (Network oNetwork : m_oNetworks)
 			{
+				oReturn.add(oNetwork);
 				if (oNetwork.isStatus(Network.TRAINING))
 				{
 					JSONObject oStatus = getHurricaneModelStatus(oNetwork);
@@ -1056,7 +1057,7 @@ public class WayNetworks extends BaseBlock
 				}
 				else
 					oNetwork.m_sMsg = "";
-				oReturn.add(oNetwork);
+				
 			}
 			if (bRewrite)
 			{
