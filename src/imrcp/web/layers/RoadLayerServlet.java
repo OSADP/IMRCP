@@ -84,9 +84,8 @@ public class RoadLayerServlet extends LayerServlet
 	protected void buildObsResponseContent(JsonGenerator oOutputGenerator, ObsRequest oObsRequest, Session oSession, ClientConfig oClient) throws Exception
 	{
 		oOutputGenerator.writeStartObject();
-		Mercator oM = new Mercator((int)Math.pow(2, 16) - 1);
 		
-		int nRoadBoundaryPadding = (int)Math.round(oM.RES[9] * 100);
+		int nRoadBoundaryPadding = 100;
 		int nElevation = Integer.MIN_VALUE;
 
 		DecimalFormat oNumberFormatter = new DecimalFormat("0.##");
