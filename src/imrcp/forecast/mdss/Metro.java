@@ -43,6 +43,7 @@ import ucar.unidata.geoloc.projection.LambertConformal;
 import ucar.unidata.geoloc.projection.LatLonProjection;
 import imrcp.system.TileFileWriter;
 import imrcp.system.XzBuffer;
+import java.util.TimeZone;
 
 /**
  * Manages running the METRo model in real-time or can be configured to process 
@@ -198,7 +199,10 @@ public class Metro extends BaseBlock
 		m_nPeriod = oBlockConfig.optInt("period", 3600);
 		m_nRunsPerPeriod = oBlockConfig.optInt("runs", 4);
 		m_nMaxQueue = oBlockConfig.optInt("maxqueue", 504);
-		m_sQueueFile = oBlockConfig.optString("queuefile", "/dev/shm/imrcp-prod/metroqueue.txt");
+		m_sQueueFile = oBlockConfig.optString("queuefile", "metroqueue.txt");
+		if (m_sQueueFile.startsWith("/"))
+			m_sQueueFile.substring(1);
+		m_sQueueFile = m_sArchPath + m_sQueueFile;
 		m_bRealTime = oBlockConfig.optBoolean("realtime", true);
 		m_sWaysBlock = oBlockConfig.optString("way", "WayNetworks");
 		m_sLogFf = oBlockConfig.optString("logff", "");
@@ -441,14 +445,22 @@ public class Metro extends BaseBlock
 			oObsSet.getData(nBB, lRunTime);
 			for (MetroTile oTile : oTiles)
 				oTile.m_oAllObs = oObsSet;
-			long[] lStartTimes = new long[getObservationCount()];
+			long[] lStartTimes = new long[getObservationCount(m_nForecastHours)];
 			lStartTimes[0] = lRunTime;
 			for (int nIndex = 1; nIndex < 30; nIndex++) // the first hour of values are 2 minutes apart
 				lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 120000;
-			lStartTimes[30] = lRunTime + 3600000;
-			for (int nIndex = 31; nIndex < lStartTimes.length; nIndex++) // the rest of the values are 20 minutes apart
-				lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 1200000;
-
+			if (lStartTimes.length > 30)
+			{
+				lStartTimes[30] = lRunTime + 3600000;
+				int nTwentyMinLimit = 63; // 30 2 minute values and 33 20 minute values
+				int nLimit = Math.min(nTwentyMinLimit, lStartTimes.length);
+				for (int nIndex = 31; nIndex < nLimit; nIndex++) // the rest of the values are 20 minutes apart
+					lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 1200000;
+				if (nTwentyMinLimit < lStartTimes.length)
+					lStartTimes[nTwentyMinLimit] = lStartTimes[nTwentyMinLimit - 1] + 1200000;
+				for (int nIndex = nTwentyMinLimit + 1; nIndex < lStartTimes.length; nIndex++)
+					lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 3600000;
+			}
 
 			m_oThreadPool.invokeAll(oTiles); // and run them all
 
@@ -485,7 +497,10 @@ public class Metro extends BaseBlock
 					}
 					else
 					{
-						oOut.writeByte(lStartTimes.length);
+						if (lStartTimes.length > Byte.MAX_VALUE)
+							oOut.writeShort(-lStartTimes.length);
+						else
+							oOut.writeByte(lStartTimes.length);
 						oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from the received time for the first value
 						for (int nIndex = 1; nIndex < lStartTimes.length; nIndex++) // the rest are offset from the previous value
 							oOut.writeInt((int)((lStartTimes[nIndex] - lStartTimes[nIndex - 1]) / 1000 ));
@@ -517,9 +532,15 @@ public class Metro extends BaseBlock
 	}
 
 	
-	public int getObservationCount()
+	public static int getObservationCount(int nForecastHours)
 	{
-		return (m_nForecastHours - 3) * 3 + 30;
+		int nTwoMin = 30;
+		int nTwentyCount = Math.min(11, nForecastHours - 3);
+		int nTwentyMin = nTwentyCount * 3;
+		int nHour = nForecastHours - 14;
+		if (nHour < 0)
+			nHour = 0;
+		return nTwoMin + nTwentyMin + nHour;
 	}
 
 	
@@ -856,7 +877,7 @@ public class Metro extends BaseBlock
 				m_yDatas = new byte[7][];
 				ByteArrayOutputStream[] oRawStreams = new ByteArrayOutputStream[]{new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192)};
 				DataOutputStream[] oRawDataStreams = new DataOutputStream[]{new DataOutputStream(oRawStreams[0]), new DataOutputStream(oRawStreams[1]), new DataOutputStream(oRawStreams[2]), new DataOutputStream(oRawStreams[3]), new DataOutputStream(oRawStreams[4]), new DataOutputStream(oRawStreams[5]), new DataOutputStream(oRawStreams[6])};
-				int nObsCount = getObservationCount();
+				int nObsCount = getObservationCount(m_nForecastHours);
 				int nZoom = m_oRRs.get(0).getZoom();
 				for (RoadcastData oRD : m_oResult)
 				{

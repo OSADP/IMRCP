@@ -679,7 +679,7 @@ public class DoMetroWrapper implements Runnable
 	 */
 	public void saveRoadcast(int nLon, int nLat, long lStartTime)
 	{
-		int nObsPerType = (m_nForecastHrs - 3) * 3 + 30;
+		int nObsPerType = Metro.getObservationCount(m_nForecastHrs);
 		RoadcastData oRD = new RoadcastData(nObsPerType, nLon, nLat);
 		int nRoadcastIndex = 0;
 //		long lFirstValue = lStartTime - 3600000; // substract an hour since outputs from METRo start at the time of the most recent observations
@@ -704,7 +704,7 @@ public class DoMetroWrapper implements Runnable
 					fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 				}
 			}
-			else // for all other forecast hours save values for every 20 minutes
+			else if (i < 12) // up to 12 hours save values for every 20 minutes
 			{
 				for (int j = 0; j < 3; j++)
 				{
@@ -715,6 +715,15 @@ public class DoMetroWrapper implements Runnable
 					fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
 					fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 				}
+			}
+			else // for all other forecast hours save values for every 1 hour
+			{
+				int nIndex = (i + 1) * 120;
+				fStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]);
+				fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
+				fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
+				fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+				fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 			}
 		}
 		m_oOutput = oRD;

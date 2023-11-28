@@ -281,8 +281,8 @@ public class MetroProcess
 					float[] oMetroTpvt = oMetro.m_oOutput.m_oDataArrays.get(ObsType.TPVT);
 					float[] oMetroDphsn = oMetro.m_oOutput.m_oDataArrays.get(ObsType.DPHSN);
 					nStPvt[i] = (int)oMetroStpvt[nMetroForecastIndex];
-					dTPvt[i] = GeoUtil.round(oUnits.convert("C", "F", oMetroTpvt[nMetroForecastIndex]), 2);
-					dDphsn[i] = GeoUtil.round(Math.round(oUnits.convert("mmle", "in", oMetroDphsn[nMetroForecastIndex])), 2);
+					dTPvt[i] = oUnits.convert("C", "F", oMetroTpvt[nMetroForecastIndex]);
+					dDphsn[i] = oUnits.convert("mmle", "in", oMetroDphsn[nMetroForecastIndex]);
 					double dPlowedSnow = 0;
 					if (m_bPlowing[nIndex - 1])
 					{
@@ -306,9 +306,13 @@ public class MetroProcess
 				{
 					if (!Double.isFinite(dTPvt[nTpvtIndex]))
 						dTPvt[nTpvtIndex] = -999.0;
+					else
+						dTPvt[nTpvtIndex] = GeoUtil.round(dTPvt[nTpvtIndex], 2);
 					
 					if (!Double.isFinite(dDphsn[nTpvtIndex]))
 						dDphsn[nTpvtIndex] = -999.0;
+					else
+						dDphsn[nTpvtIndex] = GeoUtil.round(dDphsn[nTpvtIndex], 2);
 					
 					if (nStPvt[nTpvtIndex] <= 0)
 						nStPvt[nTpvtIndex] = -1;
