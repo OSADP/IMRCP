@@ -567,6 +567,8 @@ public class Scenarios extends SecureBaseBlock
 			JSONObject oJson = oScenario.toJSONObject(false, true);
 			oJson.put("name", sName);
 			oJson.put("run", true);
+			oJson.put("trafficmodel", Boolean.parseBoolean(oReq.getParameter("trafficmodel")));
+			oJson.put("roadwxmodel", Boolean.parseBoolean(oReq.getParameter("roadwxmodel")));
 			try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.WRITE, FileUtil.FILEPERS), "UTF-8"))) // write the configuration file for this Scenario run
 			{
 				oJson.write(oOut);
