@@ -1,4 +1,4 @@
-import {polylineMidpoint} from './map-util.js';
+import {fromIntDeg} from './map-util.js';
 
 const POINTTOL = 0.0000001;
 const CLOSE_BUTTON_HTML = '<button type="button" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-icon-only no-title-form ui-dialog-titlebar-close" role="button" title="Close"><span class="ui-button-icon-primary ui-icon ui-icon-closethick"></span><span class="ui-button-text">Close</span></button>';
@@ -20,7 +20,7 @@ const featureTypeHandlers = new Map([
     }
   ],
   ['line', {baseUrl: 'api/road',
-      getFeatureBounds: (f, c, m) => getBoundsForPoint(polylineMidpoint(f.geometry.coordinates), m, 0)
+      getFeatureBounds: (f, c, m) => getBoundsForPoint([fromIntDeg(f.properties.lon), fromIntDeg(f.properties.lat)], m, 0)
     }
   ],
   ['fill', {baseUrl: 'api/area',

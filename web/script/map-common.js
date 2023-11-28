@@ -627,6 +627,7 @@ function timeoutPageoverlay(nMillis = 1500)
 {
 	window.setTimeout(function()
 	{
+		$('#pageoverlay p').html('');
 		$('#pageoverlay').hide();
 	}, nMillis);
 }

@@ -40,8 +40,6 @@ let SELECTEDIT = 2;
 let VIEWGROUPS = 3;
 let SELECTNETWORK = 4;
 let STATE;
-let g_bRoadWx = true;
-let g_bTraffic = true;
 let g_oMetadataPopup;
 let g_oMetadata;
 let g_sCurrentScenarioName;
@@ -284,7 +282,7 @@ function hoverHighlight(oEvent)
 		let oMetadata = getLanesAndSpeed(oFeature);
 		if (bInclude === undefined || STATE === SELECTEDIT)
 			$(g_oMap.getCanvas()).addClass('clickable');
-		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
+		else if (Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
 		{
 			$(g_oMap.getCanvas()).addClass('bancursor');
 			bBanned = true;
@@ -333,7 +331,7 @@ function updateHighlight(oEvent)
 		let bInclude = g_oMap.getFeatureState(oFeature).include;
 		if (bInclude === undefined || STATE === SELECTEDIT)
 			$(g_oMap.getCanvas()).addClass('clickable');
-		else if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
+		else if (Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
 		{
 			$(g_oMap.getCanvas()).addClass('bancursor');
 			bBanned = true;
@@ -404,7 +402,7 @@ function toggleInclude(oEvent)
 		if (oTemp !== undefined)
 		{
 			oMetadata = getLanesAndSpeed(oTemp);
-			if (g_bTraffic && Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
+			if (Object.keys(g_oCurrentGroup.segments).length > 0 && (g_oCurrentGroup.spdlimit !== oMetadata.spdlimit || g_oCurrentGroup.lanecount !== oMetadata.lanes))
 				return;
 		}
 		else
@@ -526,21 +524,18 @@ function buildGroupListDialog()
 		{
 			oDialog.dialog('option', 'position', {my: "right top", at: "right-45 top+8", of: "#map-container"});
 			setModelOptions();
-			setModelFlags();
 		}});
 	
 	oDialog.dialog('option', 'title', 'Scenario Settings');
 	oDialog.siblings().children('.ui-dialog-titlebar-close').remove();
 	let sHtml = `<div class="flexbox marginbottom12"><div class="flex3"><input id="scenarioName" type="text" placeholder="Enter name of scenario"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="saveScenario" style="width:120px; white-space:nowrap">Save</button></div></div>
-				<div class="flexbox marginbottom12"><div class="flex3"><select style="width: 95%;" id="modelstorun">
-				</select></div><div class="flex1 flexbox"><div class="flex1" style="width:120px; white-space:nowrap"><label for="checkboxShare" class="flex1">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div></div></div>
+				<div class="flexbox marginbottom12" style="direction: rtl;"><div class="flex1 flexbox"><div class="flex1" style="white-space:nowrap"><label for="checkboxShare" class="flex1" style="margin-right:10px;">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div></div></div>
 				<div class="flexbox marginbottom12"><div class="flex3"><input id="groupname" type="text" placeholder="Enter name of new group"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="btnNewGroup" style="width:120px; white-space:nowrap">Add Group</button></div></div>
 				<ul id="grouplist" style="overflow-x:visible;"></ul>`;
 	
 	oDialog.html(sHtml);
-	$('#btnNewGroup').addClass('ui-button-disabled ui-state-disabled');
 	$('#scenarioName').on('keypress', ignoreInput).on('paste', ignoreInput);
 	$('#groupname').on('keypress', ignoreInput).on('paste', ignoreInput);
 	$('#saveScenario').on('click', function()
@@ -559,7 +554,6 @@ function buildGroupListDialog()
 	});
 	
 	$('#btnNewGroup').click(addGroup);
-	$('#modelstorun').change(changeModelOptions);
 	$('#btnStartOver').click(function()
 	{
 		$('#dlgConfirmRestart').dialog('open');
@@ -573,6 +567,7 @@ function setModelOptions()
 	let oNetwork = g_oMap.getSource('network-polygons')._data.features.filter(oN => oN.properties.networkid === g_sLoadedNetwork)[0];
 	let aOptions = [];
 	let sOptions;
+	let oModels = $('#modelstorun');
 	if (oNetwork.properties.canrunroadwx)
 		aOptions.push('Road Weather Model');
 	if (oNetwork.properties.canruntraffic)
@@ -581,7 +576,7 @@ function setModelOptions()
 	{
 		sOptions = '<option disabled value="select">Select forecast model...</option>';
 		sOptions += `<option selected value="${aOptions[0]}">${aOptions[0]}</option>`;
-		$('#btnNewGroup').removeClass('ui-button-disabled ui-state-disabled');
+		$('#modelrow').hide();
 	}
 	else
 	{
@@ -589,41 +584,12 @@ function setModelOptions()
 		for (let sOpt of aOptions.values())
 			sOptions += `<option value="${sOpt}">${sOpt}</option>`;
 		sOptions += '<option value="Both">Both</option>';
-		$('#btnNewGroup').addClass('ui-button-disabled ui-state-disabled');
+		$('#modelrow').show();
 	}
-	let oModels = $('#modelstorun');
 	oModels.children('option').remove();
 	oModels.append(sOptions);
-	oModels.prop('disabled', false);
 }
 
-
-function changeModelOptions(oEvent)
-{
-	$('#modelstorun option[value="select"]').prop('disabled', true);
-	$('#btnNewGroup').removeClass('ui-button-disabled ui-state-disabled');
-	setModelFlags();
-}
-
-
-function setModelFlags()
-{
-	let sSelect = $('#modelstorun').val();
-	if (sSelect === 'Both')
-	{
-		g_bTraffic = g_bRoadWx = true;
-	}
-	else if (sSelect === 'Traffic Model')
-	{
-		g_bTraffic = true;
-		g_bRoadWx = false;
-	}
-	else
-	{
-		g_bTraffic = false;
-		g_bRoadWx = true;
-	}
-}
 
 
 function addGroup(oSaved, sGroup)
@@ -731,7 +697,6 @@ function addGroup(oSaved, sGroup)
 	resetValues();
 	saveValues(oSaved);
 	g_oCurrentGroup = undefined;
-	$('#modelstorun').prop('disabled', true);
 }
 
 
@@ -1070,7 +1035,6 @@ function buildConfirmDelete()
 					g_oCurrentGroup = undefined;
 					if (g_aGroups.length === 0)
 					{
-						$('#modelstorun').prop('disabled', false);
 						$('#saveScenario').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
 						g_bSaveInstructions = false;
 					}
@@ -1114,7 +1078,6 @@ function buildDtp()
 		}});
 	oDialog.html('<div id="dtpicker" style="width:0px; position:absolute; bottom:25px;"></div>');
 	let oNow = moment().minutes(0).seconds(0).milliseconds(0);
-	let oStart = new Date();
 
 	
 	$('#dtpicker').datetimepicker(
@@ -1123,7 +1086,7 @@ function buildDtp()
 		value: oNow.toDate(),
 		formatTime: 'H:i',
 		format: 'Y/m/d H:i',
-		yearStart: oNow.year(),
+		yearStart: 1970,
 		yearEnd: oNow.year() + 1,
 		closeOnWithoutClick: false,
 		onSelectTime: function()
@@ -1252,21 +1215,7 @@ function loadScenario()
 		g_oMetadata = {};
 	setModelOptions();
 	$('#btnNewGroup').removeClass('ui-button-disabled ui-state-disabled');
-	if (oScenario.roadwxmodel && oScenario.trafficmodel)
-	{
-		$('#modelstorun').val('Both');
-	}
-	else if (oScenario.trafficmodel)
-	{
-		$('#modelstorun').val('Traffic Model');
-	}
-	else
-	{
-		$('#modelstorun').val('Road Weather Model');
-	}
-	if ($('#modelstorun').val() === null)
-		$('#modelstorun').val('Road Weather Model');
-	setModelFlags();
+
 	let oTime = moment(oScenario.starttime);
 	$('#btnTime').val(oTime.utc().valueOf()).html(oTime.local().format("YYYY/MM/DD HH:mm"));
 	$('#dlgGroupList').dialog('option', 'title', 'Scenario Settings');
@@ -1534,7 +1483,8 @@ function buildRun()
 		oDialog.dialog('option', 'position', {my: "center", at: "center", of: "#map-container"});
 	});
 	let sHtml = `<div class="flexbox marginbottom12"><label class="flex2">Start Time</label><div class="flex2 flexbox"><button style="white-space:nowrap" class="ui-button ui-corner-all flex3" id="btnTime" value="0000/00/00">yyyy/MM/dd HH:mm</button></div></div>
-<div class="flexbox marginbottom12" style="height:35px;"><label for="scenarioRun" class="flex1">Name</label><div class="flex3"><input style="width:100%;"type="text" id="scenarioRun" /></div></div>`;
+<div class="flexbox marginbottom12" style="height:35px;"><label for="scenarioRun" class="flex1">Name</label><div class="flex3"><input style="width:100%;" type="text" id="scenarioRun" /></div></div>
+<div class="flexbox marginbottom12" id="modelrow"><label for="modelstorun" class="flex1">Model</label><div class="flex3"><select style="width: 100%;" id="modelstorun"></select></div></div>`;
 	sHtml += `<br>Click "Run Scenario" button to submit the scenario to be processed. Scenarios can be viewed on the "View Scenarios" page by name.`;
 	oDialog.html(sHtml);
 	let oNow = moment().minutes(0).seconds(0).milliseconds(0);
@@ -1548,13 +1498,18 @@ function buildRun()
 		}
 		$('#dlgDtp').dialog('open');
 	});
-	$('#scenarioRun').on('input', function ()
-	{
-		if ($(this).val().length === 0)
-			$('#btnRunScenario').addClass('ui-button-disabled ui-state-disabled').prop('disabled', true);
-		else
-			$('#btnRunScenario').removeClass('ui-button-disabled ui-state-disabled').prop('disabled', false);
-	});
+	$('#scenarioRun').on('input', validateRun);
+	$('#modelstorun').on('input', validateRun);
+}
+
+
+function validateRun()
+{
+	let sText = $('#scenarioRun').val();
+	if (sText.length > 0 && /^[a-zA-Z0-9\-_@\.]+$/.exec(sText) && $('#modelstorun').val() !== 'select')
+		$('#btnRunScenario').removeClass('ui-button-disabled ui-state-disabled').prop('disabled', false);
+	else
+		$('#btnRunScenario').addClass('ui-button-disabled ui-state-disabled').prop('disabled', true);
 }
 
 
@@ -1563,7 +1518,14 @@ function runScenario()
 	let oScenario = {'name': g_sCurrentScenarioName};
 	let nIndex = binarySearch(g_oScenarios, oScenario, (a,b) => a.name.localeCompare(b.name));
 	oScenario = g_oScenarios[nIndex];
-	let oData = {'token': sessionStorage.token, 'starttime': $('#dtpicker').datetimepicker('getValue').valueOf(), 'name': $('#scenarioRun').val(), 'template': oScenario.name, 'user': oScenario.user};
+	let bRunTraffic = true;
+	let bRunRoadWx = true;
+	let sModel = $('#modelstorun').val();
+	if (sModel === 'Traffic Model')
+		bRunRoadWx = false;
+	if (sModel === 'Road Weather Model')
+		bRunTraffic = false;
+	let oData = {'token': sessionStorage.token, 'starttime': $('#dtpicker').datetimepicker('getValue').valueOf(), 'name': $('#scenarioRun').val(), 'template': oScenario.name, 'user': oScenario.user, 'roadwxmodel': bRunRoadWx, 'trafficmodel': bRunTraffic};
 
 	$.ajax(
 	{
@@ -1587,19 +1549,6 @@ function saveScenario(bOverwrite)
 	if (validate())
 	{
 		let oScenario = {'name': $('#scenarioName').val(), 'run': false, 'groups': [], 'network': g_sLoadedNetwork, 'share': $('#checkboxShare').prop('checked')};
-		let sModel = $('#modelstorun').val();
-		if (sModel === 'Both')
-			oScenario.trafficmodel = oScenario.roadwxmodel = true;
-		else if (sModel === 'Traffic Model')
-		{
-			oScenario.trafficmodel = true;
-			oScenario.roadwxmodel = false;
-		}
-		else
-		{
-			oScenario.trafficmodel = false;
-			oScenario.roadwxmodel = true;
-		}
 		if (g_oMetadata !== undefined)
 			oScenario.metadata = g_oMetadata;
 		
@@ -1756,10 +1705,7 @@ function buildValues()
 				oRow.css('display', 'none');
 				if (aAction[2])
 					$('#' + aAction[0]).html(`${aAction[0]} (${g_oCurrentGroup[aAction[2]]}*)`);
-				if (g_bRoadWx && aAction[3] === 'roadwx')
-					oRow.css('display', 'table-row');
-				if (g_bTraffic && aAction[3] === 'traffic')
-					oRow.css('display', 'table-row');
+				oRow.css('display', 'table-row');
 			}
 			setValues();
 		},

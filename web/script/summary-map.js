@@ -509,15 +509,12 @@ async function initialize()
 			let nStep = mapTimeSlider.labeledSlider('option', 'step');
 			if (oNow.minutes() % nInterval === 0)
 			{
-				if (Math.abs(oNow.diff(oRefTime, 'minutes')) <= nStep)
-				{
+				let oNewTime = moment(oQueryTime).hours(0).minutes(0).add(oQueryTime.hours() * 60 + (Math.floor(oQueryTime.minutes() / nInterval) * nInterval) + Math.max(nInterval, nStep), 'minutes');
+				if (Math.abs(oNow.diff(oRefTime, 'minutes')) <= nInterval)
 					updateRefTime(getNowTime());
+				
 					if (oNow.minutes() % nStep === 0)
-					{
-						let oNewTime = moment(oQueryTime).hours(0).minutes(0).add(oQueryTime.hours() * 60 + (Math.floor(oQueryTime.minutes() / nInterval) * nInterval) + Math.max(nInterval, nStep), 'minutes');
 						updateQueryTime(oNewTime);
-					}
-				}
 				
 			}
 		}
