@@ -81,7 +81,7 @@ public class TileServlet extends SecureBaseBlock
 	/**
 	 * Array of keys that get added to vector tiles
 	 */
-	protected String[] m_sKeys = new String[]{"roadtype", "bridge"};
+	protected String[] m_sKeys = new String[]{"roadtype", "bridge", "lon", "lat"};
 
 	
 	/**
@@ -411,6 +411,8 @@ public class TileServlet extends SecureBaseBlock
 			}
 
 			ArrayList<double[]> oLines = new ArrayList();
+			int[] nMids = Arrays.newIntArray(oWays.size() * 2);
+			int nValueIndex = m_sValues.length;
 			if (!oObsList.isEmpty() || nRequestType == RNM)
 			{
 
@@ -454,11 +456,14 @@ public class TileServlet extends SecureBaseBlock
 						int[] nLine = oIt.next();
 						boolean bPrevInside = GeoUtil.isInside(nLine[0], nLine[1], nLineClippingBounds[0], nLineClippingBounds[1], nLineClippingBounds[2], nLineClippingBounds[3], 0);
 						double[] dLine = new double[66];
-						dLine[0] = 5; // insertion point
+						dLine[0] = 7; // insertion point
 						dLine[1] = dVal; // group value
 						dLine[2] = oWay.m_oId.getLowBytes(); // id in Mapbox can only be an 8-byte number
 						dLine[3] = bHighway ? 0.0 : 1.0; // highway flag, values are indices for m_sValues
 						dLine[4] = oWay.m_bBridge ? 2.0 : 3.0; // bridge flag, values are indices for m_sValues
+						nMids = Arrays.add(nMids, oWay.m_nMidLon, oWay.m_nMidLat);
+						dLine[5] = nValueIndex++;
+						dLine[6] = nValueIndex++;
 						if (bPrevInside) // first point is inside so include it in final linestring
 							dLine = addPoint(dLine, GeoUtil.fromIntDeg(nLine[0]), GeoUtil.fromIntDeg(nLine[1]));
 
@@ -480,7 +485,7 @@ public class TileServlet extends SecureBaseBlock
 									double[] dFinished = new double[(int)dLine[0] - 1]; // now that the line is outside finish the current line
 									System.arraycopy(dLine, 1, dFinished, 0, dFinished.length);
 									oLines.add(dFinished);
-									dLine[0] = 5; // reset point buffer
+									dLine[0] = 7; // reset point buffer
 								}
 							}
 							else // previous point was outside
@@ -527,7 +532,7 @@ public class TileServlet extends SecureBaseBlock
 							}
 						} while (bNotDone);
 
-						if (dLine[0] > 5)
+						if (dLine[0] > 7)
 						{
 							double[] dFinished = new double[(int)dLine[0] - 1];
 							System.arraycopy(dLine, 1, dFinished, 0, dFinished.length);
@@ -566,6 +571,13 @@ public class TileServlet extends SecureBaseBlock
 					for (int i = 0; i < m_sValues.length; i++)
 					{
 						oValueBuilder.setStringValue(m_sValues[i]);
+						oLayerBuilder.addValues(oValueBuilder.build());
+						oValueBuilder.clear();
+					}
+					Iterator<int[]> oIt = Arrays.iterator(nMids, new int[1], 1, 1);
+					while (oIt.hasNext())
+					{
+						oValueBuilder.setIntValue(oIt.next()[0]);
 						oLayerBuilder.addValues(oValueBuilder.build());
 						oValueBuilder.clear();
 					}
@@ -844,7 +856,21 @@ public class TileServlet extends SecureBaseBlock
 									{
 										nExistingIndex = nExistingLayer;
 										oLayerBuilder = VectorTile.Tile.Layer.newBuilder(oExisting);
-										oLayerBuilder.addAllFeatures(oLayer.getFeaturesList());
+										int nValueIndex = oLayerBuilder.getValuesCount();
+										for (VectorTile.Tile.Feature oFeature: oLayer.getFeaturesList())
+										{
+											VectorTile.Tile.Feature.Builder oFB = oFeature.toBuilder();
+											
+											VectorTile.Tile.Value oLonValue = oLayerBuilder.getValues(oFB.getTags(5));
+											VectorTile.Tile.Value oLatValue = oLayerBuilder.getValues(oFB.getTags(7));
+											
+											oLayerBuilder.addValues(oLonValue);
+											oLayerBuilder.addValues(oLatValue);
+											
+											oFB.setTags(5, nValueIndex++);
+											oFB.setTags(7, nValueIndex++);
+											oLayerBuilder.addFeatures(oFB);
+										}
 										break;
 									}
 								}
@@ -884,11 +910,11 @@ public class TileServlet extends SecureBaseBlock
 		StringBuilder sDebug = null;
 		String[] sColors = new String[]{"black", "blue", "red", "green", "pink", "yellow"};
 		int nColor = 0;
-		if (nZ == 13 && nX == 2431 && nY == 3000)
-		{
-			sDebug = new StringBuilder();
-			sDebug.append("{\"type\":\"FeatureCollection\",\"features\":[");
-		}
+//		if (nZ == 13 && nX == 2431 && nY == 3000)
+//		{
+//			sDebug = new StringBuilder();
+//			sDebug.append("{\"type\":\"FeatureCollection\",\"features\":[");
+//		}
 		int[] nContribAndSource = new int[2];
 	
 		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nRequestType);

@@ -330,7 +330,7 @@ public abstract class TileUtil
 		double[] dPrev = new double[2];
 		double[] dTemp;
 		nPointBuffer[0] = 1;
-		for (int i = 4; i < dLine.length;)
+		for (int i = 6; i < dLine.length;)
 		{
 			dCoords[0] = dLine[i++];
 			dCoords[1] = dLine[i++];
@@ -350,6 +350,10 @@ public abstract class TileUtil
 		oFeatureBuilder.addTags((int)dLine[2]);
 		oFeatureBuilder.addTags(1);
 		oFeatureBuilder.addTags((int)dLine[3]);
+		oFeatureBuilder.addTags(2);
+		oFeatureBuilder.addTags((int)dLine[4]);
+		oFeatureBuilder.addTags(3);
+		oFeatureBuilder.addTags((int)dLine[5]);
 		oFeatureBuilder.setType(VectorTile.Tile.GeomType.LINESTRING);
 	}
 	
