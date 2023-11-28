@@ -59,66 +59,69 @@ def spatial_temporal_feature(data,hurricane,lf_time,category,lf_zone,lf_coord,fi
 
 
 def extract_csvfile(folder_path,file_pattern_prefix,hurricane,category,lf_time,lf_zone,lf_coord):
-	file_list = glob.glob(folder_path + '/' + file_pattern_prefix + '*.csv')  # Adjust the file extension as needed
-	file_list.sort()  # Ensure the files are sorted
-	# Separate the file list into two parts
-	past_7d_filename = file_list[:7]
-	next_7d_filename = file_list[7:]
-	next_8d_filename = file_list[6:]
-
-	# Read the first 7 files
-	combined_past7d = [pd.read_csv(file) for file in past_7d_filename]
-	combined_past7d = pd.concat(combined_past7d, ignore_index=True)
-	print('past 7 done')
-	# Read the last 7 files 
-	combined_next7d = [pd.read_csv(file) for file in next_7d_filename]
-	combined_next7d = pd.concat(combined_next7d, ignore_index=True)
-	print('next 7 done')
-	# Read the last 8 files 
-	combined_next8d = [pd.read_csv(file) for file in next_8d_filename]
-	combined_next8d = pd.concat(combined_next8d, ignore_index=True)
-	print('next 8 done')
-
-	# lf_time = '2021-08-29 14:00:00'
-	# category = 4
-	# lf_zone = 1
-	# lf_coord = (29.1,-90.2)
-	# hurricane = 'hurricane'
-
-	# combine speed data for the past 7 days
-	# # Create a list of file paths using glob
-	# file_paths = glob.glob('test_data_past7/LA_speeds_*.csv')
-	# # Read and concatenate DataFrames using list comprehension
-	# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
-	# combined_past7d = pd.concat(data_frames, ignore_index=True)
-	combined_past7d['Time'] = pd.to_datetime(combined_past7d['Timestamp'])
-	combined_past7d = combined_past7d.groupby('Id').apply(lambda x : x.set_index('Time').resample('5T').mean(numeric_only=True).ffill()).reset_index()  
-	combined_past7d = combined_past7d[['Id','Time','Speed']]
-	combined_past7d['hurricane'] = hurricane
-	combined_past7d['Id_hur'] = combined_past7d['Id']+combined_past7d['hurricane']
-
-	# # check original data format
-	# # df = pd.read_csv('LA_speeds_20210826.csv')
-
-	# # Create a list of file paths using glob
-	# file_paths = glob.glob('test_data/LA_speeds_*.csv')
-
-	# # Read and concatenate DataFrames using list comprehension
-	# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
-	# combined_7d = pd.concat(data_frames, ignore_index=True)
-	combined_next7d = combined_next7d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
-	combined_next7d['hurricane'] = hurricane
-
-	combined_next8d = combined_next8d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
-	combined_next8d['hurricane'] = hurricane
-
+	try:
+		file_list = glob.glob(folder_path + '/' + file_pattern_prefix + '*.csv')  # Adjust the file extension as needed
+		file_list.sort()  # Ensure the files are sorted
+		# Separate the file list into two parts
+		past_7d_filename = file_list[:7]
+		next_7d_filename = file_list[7:]
+		next_8d_filename = file_list[6:]
 	
-	# add features
-	# lf_time = '2021-08-29 14:00:00'
-	# category = 4
-	# lf_zone = 1
-	# lf_coord = (29.1,-90.2)
-	return combined_past7d,combined_next7d,combined_next8d
+		# Read the first 7 files
+		combined_past7d = [pd.read_csv(file) for file in past_7d_filename]
+		combined_past7d = pd.concat(combined_past7d, ignore_index=True)
+		print('past 7 done')
+		# Read the last 7 files 
+		combined_next7d = [pd.read_csv(file) for file in next_7d_filename]
+		combined_next7d = pd.concat(combined_next7d, ignore_index=True)
+		print('next 7 done')
+		# Read the last 8 files 
+		combined_next8d = [pd.read_csv(file) for file in next_8d_filename]
+		combined_next8d = pd.concat(combined_next8d, ignore_index=True)
+		print('next 8 done')
+	
+		# lf_time = '2021-08-29 14:00:00'
+		# category = 4
+		# lf_zone = 1
+		# lf_coord = (29.1,-90.2)
+		# hurricane = 'hurricane'
+	
+		# combine speed data for the past 7 days
+		# # Create a list of file paths using glob
+		# file_paths = glob.glob('test_data_past7/LA_speeds_*.csv')
+		# # Read and concatenate DataFrames using list comprehension
+		# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
+		# combined_past7d = pd.concat(data_frames, ignore_index=True)
+		combined_past7d['Time'] = pd.to_datetime(combined_past7d['Timestamp'])
+		combined_past7d = combined_past7d.groupby('Id').apply(lambda x : x.set_index('Time').resample('5T').mean(numeric_only=True).ffill()).reset_index()  
+		combined_past7d = combined_past7d[['Id','Time','Speed']]
+		combined_past7d['hurricane'] = hurricane
+		combined_past7d['Id_hur'] = combined_past7d['Id']+combined_past7d['hurricane']
+	
+		# # check original data format
+		# # df = pd.read_csv('LA_speeds_20210826.csv')
+	
+		# # Create a list of file paths using glob
+		# file_paths = glob.glob('test_data/LA_speeds_*.csv')
+	
+		# # Read and concatenate DataFrames using list comprehension
+		# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
+		# combined_7d = pd.concat(data_frames, ignore_index=True)
+		combined_next7d = combined_next7d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
+		combined_next7d['hurricane'] = hurricane
+	
+		combined_next8d = combined_next8d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
+		combined_next8d['hurricane'] = hurricane
+	
+		
+		# add features
+		# lf_time = '2021-08-29 14:00:00'
+		# category = 4
+		# lf_zone = 1
+		# lf_coord = (29.1,-90.2)
+		return combined_past7d,combined_next7d,combined_next8d
+	except BaseException as oEx:
+		return None, oEx, None
 	# return 1==1
 
 def oneshot_annotate(data_w_feature_7d,combined_past7d,lf_time, sLogFile, sStatusLog, oMeansAndStds, sHur):

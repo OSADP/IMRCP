@@ -242,7 +242,7 @@ def pred_short(horz,resolution, startt, histdatafm, long_ts_predfm, loaded_data,
 							for j in range(4):
 								stt = np.argmin(np.abs(msss - np.array(tempsp)))
 								mss = msss
-								mss[stt] = tempsp.values[0]
+								mss[stt] = tempsp
 								tempsp = round(np.sum(mc[stt,:] * mss), 2)
 							predspd.append(tempsp)
 						else:
@@ -291,7 +291,7 @@ def pred_short(horz,resolution, startt, histdatafm, long_ts_predfm, loaded_data,
 						for j in range(4):
 							stt = np.argmin(np.abs(msss - np.array(tempsp)))
 							mss = msss
-							mss[stt] = tempsp.values[0]
+							mss[stt] = tempsp
 							tempsp = round(np.sum(mc[stt,]*mss), 2)
 						predspd.append(tempsp)
 					else:

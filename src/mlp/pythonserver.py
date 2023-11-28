@@ -141,6 +141,10 @@ def trainHur(kwds):
 		mlp_log(hurricane[i], sLogFile)
 		oMeansAndStds = oStats[hurricane[i]]
 		combined_past7d,combined_next7d,combined_next8d = extract_csvfile(folder_path[i],file_pattern_prefix,hurricane[i], category[i] ,lf_time[i],lf_zone[i],lf_coord[i])
+		if combined_past7d is None:
+			log_exception(combined_next7d, sLogFile)
+			mlp_log('Failed to load data for {}'.format(hurricane[i]), sStatusLog)
+			continue
 		data_w_feature_7d_single = spatial_temporal_feature(combined_next7d,hurricane[i],lf_time[i],category[i],lf_zone[i],lf_coord[i],filtered_mata)
 		data_w_feature_8d_single = spatial_temporal_feature(combined_next8d,hurricane[i],lf_time[i],category[i],lf_zone[i],lf_coord[i],filtered_mata)
 		
@@ -155,6 +159,9 @@ def trainHur(kwds):
 			data_w_feature_8d = pd.concat([data_w_feature_8d, data_w_feature_8d_single])
 			data_6hr_7d_all = pd.concat([data_6hr_7d_all, data_6hr_7d_all_single])
 	
+	if data_w_feature_7d is None:
+		mlp_log('No data available to train model', sStatusLog)
+		return
 	data_w_feature_7d = pd.DataFrame(data_w_feature_7d)
 	data_w_feature_8d = pd.DataFrame(data_w_feature_8d)
 	data_6hr_7d_all = pd.DataFrame(data_6hr_7d_all)
@@ -197,11 +204,8 @@ def runOneshot(kwds):
 	nIdCount = len(idlist)
 	oLongTs = loadData('{}mlp_lts_output.csv'.format(sDir))
 	oLongTsById = oLongTs.groupby('Id')
-	nWeatherIntvl = 60
-	nOutputs = int(60 / nWeatherIntvl * 168)
-	oDefault = []
-	for i in range (0, nOutputs):
-		oDefault.append(math.nan)
+# 	nWeatherIntvl = 60
+# 	nOutputs = int(60 / nWeatherIntvl * 168)
 	for sGroupName, oDf in oGroupsById:
 		oDf = oDf.reset_index(drop=True)
 		try:
@@ -210,15 +214,24 @@ def runOneshot(kwds):
 				oLts = oLts.reset_index(drop=True)
 				#oPred = realtime.oneshot(nWeatherIntvl, start_time, oDf, oLts, loaded_data)
 				oPred = realtime.oneshot_new(oDf, start_time, oLts, loaded_data)
+				bAllNans = True
+				for dVal in oPred[nOutputIndex:nOutputIndex + 25]:
+					if not math.isnan(dVal):
+						bAllNans = False
+						break
+				if bAllNans:
+					oPred = None
 			else:
-				oPred = oDefault
+				oPred = None
 		except BaseException as oEx:
 			oErrors.append('error with {}: {}'.format(sGroupName, str(oEx)))
-			oPred = oDefault
+			oPred = None
 		oPredictions.append(oPred)
 		
 	with open('{}mlp_oneshot_output.csv'.format(sDir), 'w') as oFile:
 		for i in range(0, nIdCount):
+			if oPredictions[i] is None:
+				continue
 			oFile.write(idlist[i])
 			for dVal in oPredictions[i][nOutputIndex:nOutputIndex + 25]:
 				oFile.write(',{:.2f}'.format(dVal))
@@ -238,25 +251,22 @@ def runLongTs(kwds):
 	oGroupsById = oHistDat.groupby('Id')
 	idlist = [sId for sId in oGroupsById.groups.keys()]
 	nIdCount = len(idlist)
-	oDefault = []
 	
 	sTsFormat = '%Y-%m-%d %H:%M'
 	oStartTime = datetime.strptime(start_time, sTsFormat)
 	oBeginningOfDay = oStartTime - timedelta(hours=oStartTime.hour + 1)
 	startt = oBeginningOfDay.strftime(sTsFormat)
-	for i in range(0, 2592):
-		oDefault.append(math.nan)
 	for sGroupName, oDf in oGroupsById:
 		oDf = oDf.reset_index(drop=True)
 		try:
 			if len(oDf['Speed'].dropna()) < 5:
-				oPred = oDefault
+				oPred = None
 			else:
 				oPred = realtime.long_ts_update(startt, oDf)
 				oPred = np.concatenate([oPred[1728:2016], oPred, oPred[0:288]])
 		except BaseException as oEx:
 			oErrors.append('error with {}: {}'.format(sGroupName, str(oEx)))
-			oPred = oDefault
+			oPred = None
 		oPredictions.append(oPred)
 	
 	oStartOfForecast = oBeginningOfDay - timedelta(hours=23, minutes=55)
@@ -264,6 +274,8 @@ def runLongTs(kwds):
 	with open('{}mlp_lts_output.csv'.format(sDir), 'w') as oFile:
 		oFile.write('Id,timestamplist,speed\n')
 		for i in range(0, nIdCount):
+			if oPredictions[i] is None:
+				continue
 			oTs = datetime.fromtimestamp(oStartOfForecast.timestamp())
 			sId = idlist[i]
 			for dVal in oPredictions[i]:
@@ -301,25 +313,25 @@ def runRealTime(kwds):
 		loaded_data = pickle.load(file)
 	horz = 120
 	resolution = 15
-	nObs = int(horz / resolution)
-	oDefault = []
-	for i in range(0, nObs):
-		oDefault.append(math.nan)
+# 	nObs = int(horz / resolution)
+
 	long_ts = pd.DataFrame(columns=['timestamplist', 'speed'])
 	for sGroupName, oDf in oGroupsById:
 		oDf = oDf.reset_index(drop=True)
 		try:
 			if len(oDf['Speed'].dropna()) < 5:
-				oPred = oDefault
+				oPred = None
 			else:
 				oPred = realtime.pred_short(horz, resolution, start_time, oDf, long_ts, loaded_data, tree)
 		except BaseException as oEx:
 			oErrors.append('error with {}: {}'.format(sGroupName, str(oEx)))
-			oPred = oDefault
+			oPred = None
 		oPredictions.append(oPred)
 
 	with open('{}mlp_output.csv'.format(sDir), 'w') as oFile:
 		for i in range(0, nIdCount):
+			if oPredictions[i] is None:
+				continue
 			oFile.write(idlist[i])
 			for dVal in oPredictions[i]:
 				oFile.write(',{:.2f}'.format(dVal))
@@ -509,7 +521,6 @@ if __name__ == '__main__':
 	logger.info('Server running on port {}'.format(port_listen))
 	handler.port_post = int(sys.argv[2])
 	handler.log_dir = sys.argv[4][:sys.argv[4].rfind('/') + 1]
-	logger.info('this is the dir {}'.format(handler.log_dir))
 	# Start the server
 	httpd.serve_forever()
 	httpd.server_close()
