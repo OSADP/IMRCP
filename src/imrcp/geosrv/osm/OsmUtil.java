@@ -7,17 +7,14 @@ package imrcp.geosrv.osm;
 
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
+import imrcp.geosrv.WayNetworks;
 import imrcp.system.dbf.DbfResultSet;
-import imrcp.system.shp.Header;
-import imrcp.system.shp.Polyline;
-import imrcp.system.shp.PolyshapeIterator;
-import imrcp.system.Arrays;
 import imrcp.system.FileUtil;
 import imrcp.system.StringPool;
+import imrcp.system.shp.ShpReader;
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -722,7 +719,7 @@ public abstract class OsmUtil
 			{
 				for (int[] nPart : oState.getValue())
 				{
-					if (GeoUtil.isInsidePolygon(nPart, oEndpoint.m_nLon, oEndpoint.m_nLat, 1)) // make sure the node is in the geometry of the state
+					if (GeoUtil.isPointInsideRingAndHoles(nPart, oEndpoint.m_nLon, oEndpoint.m_nLat)) // make sure the node is in the geometry of the state
 					{
 						int nHash = HashBucket.hashLonLat(oEndpoint.m_nLon, oEndpoint.m_nLat);
 						if (!oHashes.get(oState.getKey()).containsKey(nHash)) // if the hash hasn't been loaded
@@ -1691,51 +1688,53 @@ public abstract class OsmUtil
 		throws Exception
 	{
 		OpenOption[] oOpts = bAppend ? FileUtil.APPENDOPTS : FileUtil.WRITEOPTS;
-		try (DataOutputStream oSpeedLimits = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "spdlimit")), oOpts)));
-			DataOutputStream oLanes = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "lanes")), oOpts))))
+		synchronized (WayNetworks.METADATAFILELOCK)
 		{
-			for (OsmWay oWay : oWays)
+			try (DataOutputStream oSpeedLimits = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "spdlimit")), oOpts)));
+				DataOutputStream oLanes = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(sGeoFf, sNetworkId, "lanes")), oOpts))))
 			{
-				String sSpdLim = oWay.get("maxspeed");
-				if (sSpdLim != null)
+				for (OsmWay oWay : oWays)
 				{
-					try
+					String sSpdLim = oWay.get("maxspeed");
+					if (sSpdLim != null)
 					{
-						byte nLim;
-						int nSpace = sSpdLim.indexOf(" ");
-						if (nSpace > 0)
+						try
 						{
-							nLim = Byte.parseByte(sSpdLim.substring(0, nSpace));
-							String sUnit = sSpdLim.substring(nSpace + 1);
-							if (sUnit.compareTo("mph") != 0) // kph
-								nLim = (byte)Math.round(nLim * 0.6213711922); // convert
+							byte nLim;
+							int nSpace = sSpdLim.indexOf(" ");
+							if (nSpace > 0)
+							{
+								nLim = Byte.parseByte(sSpdLim.substring(0, nSpace));
+								String sUnit = sSpdLim.substring(nSpace + 1);
+								if (sUnit.compareTo("mph") != 0) // kph
+									nLim = (byte)Math.round(nLim * 0.6213711922); // convert
+							}
+							else
+							{
+								nLim = Byte.parseByte(sSpdLim);
+							}
+							oWay.m_oId.write(oSpeedLimits);
+							oSpeedLimits.writeByte(nLim);
 						}
-						else
+						catch (Exception oEx)
 						{
-							nLim = Byte.parseByte(sSpdLim);
+							oEx.printStackTrace();
 						}
-						oWay.m_oId.write(oSpeedLimits);
-						oSpeedLimits.writeByte(nLim);
 					}
-					catch (Exception oEx)
-					{
-						oEx.printStackTrace();
-					}
-				}
 
-				String sOneway = oWay.get("oneway");
-				String sLanes = oWay.get("lanes");
-				if (sLanes != null && sOneway != null && sOneway.compareTo("yes") == 0)
-				{
-					;
-					try
+					String sOneway = oWay.get("oneway");
+					String sLanes = oWay.get("lanes");
+					if (sLanes != null && sOneway != null && sOneway.compareTo("yes") == 0)
 					{
-						byte yLanes = Byte.parseByte(sLanes);
-						oWay.m_oId.write(oLanes);
-						oLanes.writeByte(yLanes);
-					}
-					catch (NumberFormatException oEx)
-					{
+						try
+						{
+							byte yLanes = Byte.parseByte(sLanes);
+							oWay.m_oId.write(oLanes);
+							oLanes.writeByte(yLanes);
+						}
+						catch (NumberFormatException oEx)
+						{
+						}
 					}
 				}
 			}
@@ -1791,75 +1790,30 @@ public abstract class OsmUtil
 				nWaysBb[3] = oWay.m_nMaxLat;
 		}
 		java.util.Arrays.sort(sStates);
-		DbfResultSet oDbf = new DbfResultSet(sStateShp.replace(".shp", ".dbf"));
-		DataInputStream oShp = new DataInputStream(new FileInputStream(sStateShp));
-		Header oHeader = new Header(oShp);
-		PolyshapeIterator oIter = null;
-		int[] nPt = new int[2];
+		
+		;
 		HashMap<String, ArrayList<int[]>> oStates = new HashMap();
 		HashMap<String, HashMap<Integer, ArrayList<OsmWay>>> oHashes = new HashMap();
-		int nX = 0;
-		int nY = 0;
-		while (oDbf.next())
+		try (DbfResultSet oDbf = new DbfResultSet(sStateShp.replace(".shp", ".dbf"));
+			ShpReader oShp = new ShpReader(new BufferedInputStream(Files.newInputStream(Paths.get(sStateShp)))))
 		{
-			Polyline oLine = new Polyline(oShp, true);
-			oIter = oLine.iterator(oIter);
-			String sState = oDbf.getString("NAME");
-			String sName = sState.toLowerCase().replaceAll(" ", "-");
-			if (java.util.Arrays.binarySearch(sStates, sName) < 0)
-				continue;
-			
-			HashMap<Integer, ArrayList<OsmWay>> oHash = new HashMap();
-			ArrayList<int[]> oBorder = new ArrayList();
-			int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-			while (oIter.nextPart())
+			while (oDbf.next())
 			{
-				int[] nPart = Arrays.newIntArray();
+				ArrayList<int[]> oBorder = new ArrayList();
+				oShp.readPolygon(oBorder);
+				String sState = oDbf.getString("NAME");
+				String sName = sState.toLowerCase().replaceAll(" ", "-");
+				if (java.util.Arrays.binarySearch(sStates, sName) < 0)
+					continue;
 
-				if (oIter.nextPoint())
-				{
-					nX = oIter.getX();
-					nY = oIter.getY();
-					if (nX < nBB[0])
-						nBB[0] = nX;
-					if (nY < nBB[1])
-						nBB[1] = nY;
-					if (nX > nBB[2])
-						nBB[2] = nX;
-					if (nY > nBB[3])
-						nBB[3] = nY;
-					nPart = Arrays.add(nPart, nX, nY);
+				HashMap<Integer, ArrayList<OsmWay>> oHash = new HashMap();
+				oStates.put(sName, oBorder);
 
-					while (oIter.nextPoint())
-					{
-						nX = oIter.getX();
-						nY = oIter.getY();
-						if (nX < nBB[0])
-							nBB[0] = nX;
-						if (nY < nBB[1])
-							nBB[1] = nY;
-						if (nX > nBB[2])
-							nBB[2] = nX;
-						if (nY > nBB[3])
-							nBB[3] = nY;
-						nPart = Arrays.add(nPart, nX, nY);
-					}
-				}
-				int nLen = Arrays.size(nPart);
-				if (nPart[1] == nPart[nLen - 2] && nPart[2] == nPart[nLen - 1])
-					nPart[0] = nLen - 2;
-				
-				nPart = Arrays.add(nPart, nPart[1], nPart[2]);
-				oBorder.add(nPart);
+				oLogger.info(String.format("Parsing hash - %s", sName));
+				new OsmBinParser().parseHashes(sOsmDir + sName + "-latest.bin", nWaysBb[0], nWaysBb[1], nWaysBb[2], nWaysBb[3], oHash);
+				oHashes.put(sName, oHash);
+				oLogger.info(String.format("Parsed hash - %s", sName));
 			}
-			
-			
-			oStates.put(sName, oBorder);
-			
-			oLogger.info(String.format("Parsing hash - %s", sName));
-			new OsmBinParser().parseHashes(sOsmDir + sName + "-latest.bin", nWaysBb[0], nWaysBb[1], nWaysBb[2], nWaysBb[3], oHash);
-			oHashes.put(sName, oHash);
-			oLogger.info(String.format("Parsed hash - %s", sName));
 		}
 		
 		oLogger.debug("Spliting ways");

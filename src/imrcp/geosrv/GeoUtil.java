@@ -8,6 +8,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Iterator;
+import org.apache.logging.log4j.LogManager;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  * This class contains computational geometry and related methods.
@@ -25,8 +28,8 @@ public abstract class GeoUtil
 
 
 	public static native int clipPolygon(long[] lResultClipSubjRefs);
-
-
+	
+	
 	public static native int[] popResult(long lResultRef);
 
 
@@ -1015,7 +1018,7 @@ public abstract class GeoUtil
 	}
 	
 	
-		public static boolean isClockwise(int[] nPoly, int nStart)
+	public static boolean isClockwise(int[] nPoly, int nStart)
 	{
 		return getDoubleSignedArea(nPoly, nStart) > 0;
 	}
@@ -1393,5 +1396,145 @@ public abstract class GeoUtil
 		dCentroid[1] /= (6.0 * dSignedArea);
 		
 		return new int[]{(int)Math.round(dCentroid[0]), (int)Math.round(dCentroid[1])};
+	}
+
+	public static ArrayList<int[]> parseGeojsonGeometry(JSONObject oGeometry, ArrayList<int[]> oOuters, ArrayList<int[]> oHoles)
+	{
+		ArrayList<int[]> oGeos = new ArrayList(1);
+		String sType = oGeometry.getString("type");
+		JSONArray oCoords = oGeometry.getJSONArray("coordinates");
+		if (sType.compareTo("Point") == 0)
+		{
+			int[] nGeo = Arrays.newIntArray(2);
+			nGeo = Arrays.add(nGeo, toIntDeg(oCoords.getDouble(0)));
+			nGeo = Arrays.add(nGeo, toIntDeg(oCoords.getDouble(1)));
+			oGeos.add(nGeo);
+		}
+		else if (sType.compareTo("MultiPoint") == 0)
+		{
+			for (int nIndex = 0; nIndex < oCoords.length(); nIndex++)
+			{
+				int[] nGeo = Arrays.newIntArray(2);
+				JSONArray oCoord = oCoords.getJSONArray(nIndex);
+				nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(0)));
+				nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(1)));
+				oGeos.add(nGeo);
+			}
+		}
+		else if (sType.compareTo("LineString") == 0)
+		{
+			int[] nGeo = Arrays.newIntArray(oCoords.length() * 2);
+			for (int nIndex = 0; nIndex < oCoords.length(); nIndex++)
+			{
+				JSONArray oCoord = oCoords.getJSONArray(nIndex);
+				nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(0)));
+				nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(1)));
+			}
+			oGeos.add(nGeo);
+		}
+		else if (sType.compareTo("MultiLineString") == 0)
+		{
+			for (int nLineIndex = 0; nLineIndex < oCoords.length(); nLineIndex++)
+			{
+				JSONArray oLine = oCoords.getJSONArray(nLineIndex);
+				int[] nGeo = Arrays.newIntArray(oLine.length() * 2);
+				for (int nIndex = 0; nIndex < oLine.length(); nIndex++)
+				{
+					JSONArray oCoord = oCoords.getJSONArray(nIndex);
+					nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(0)));
+					nGeo = Arrays.add(nGeo, toIntDeg(oCoord.getDouble(1)));
+				}
+				oGeos.add(nGeo);
+			}
+		}
+		else if (sType.compareTo("Polygon") == 0)
+		{
+			oGeos.add(parseGeojsonPolygon(oCoords, oOuters, oHoles));
+		}
+		else if (sType.compareTo("MultiPolygon") == 0)
+		{
+			for (int nPolyIndex = 0; nPolyIndex < oCoords.length(); nPolyIndex++)
+			{
+				oGeos.add(parseGeojsonPolygon(oCoords.getJSONArray(nPolyIndex), oOuters, oHoles));
+			}
+		}
+		
+		return oGeos;
+	}
+	
+	
+	public static int[] parseGeojsonPolygon(JSONArray oPolygonCoords, ArrayList<int[]> oOuters, ArrayList<int[]> oHoles)
+	{
+		oOuters.clear();
+		oHoles.clear();
+		
+		for (int nRingIndex = 0; nRingIndex < oPolygonCoords.length(); nRingIndex++)
+		{
+			JSONArray oRing = oPolygonCoords.getJSONArray(nRingIndex);
+			int[] nRing = Arrays.newIntArray(oRing.length() * 2 + 7);
+			int nPointCountIndex = 2;
+			int nBbIndex = 3;
+			int nPrevX = Integer.MIN_VALUE;
+			int nPrevY = Integer.MIN_VALUE;
+			nRing = Arrays.add(nRing, 1); // each array will represent 1 ring
+			nRing = Arrays.add(nRing, 0); // starts with zero points
+			nRing = Arrays.add(nRing, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+			
+			// geojson polygons are supposed to have closed rings and counterclockwise exterior rings and clockwise holes, our geometry structure wants the opposite of that (open rings and exteriors rings are clockwise)
+			int nCoordIndex = 0;
+			int nEnd = oRing.length();
+			int nStep = 1;
+			if (nRingIndex == 0)
+			{
+				nCoordIndex = oRing.length() - 1;
+				nEnd = -1;
+				nStep = -1;
+			}
+			while (nCoordIndex != nEnd)
+			{
+				JSONArray oCoord = oRing.getJSONArray(nCoordIndex);
+				int nX = toIntDeg(oCoord.getDouble(0));
+				int nY = toIntDeg(oCoord.getDouble(1));
+				if (nX != nPrevX || nY != nPrevY)
+				{
+					nRing = Arrays.addAndUpdate(nRing, nX, nY, nBbIndex);
+					++nRing[nPointCountIndex];
+					nPrevX = nX;
+					nPrevY = nY;
+				}
+				nCoordIndex += nStep;
+			}
+			
+			if (nRing[nRing[0] - 2] == nRing[nPointCountIndex + 5] && nRing[nRing[0] - 1] == nRing[nPointCountIndex + 6]) // if the polygon is closed (it should be), remove the last point
+			{
+				nRing[nPointCountIndex] -= 1;
+				nRing[0] -= 2;
+			}
+			
+			if (nRingIndex == 0)
+			{
+				if (!isClockwise(nRing, 2))
+					reverseRing(nRing, 2);
+				oOuters.add(nRing);
+			}
+			else
+			{
+				if (isClockwise(nRing, 2))
+					reverseRing(nRing, 2);
+				oHoles.add(nRing);
+			}
+		}
+		
+		getPolygons(oOuters, oHoles);
+		
+		return oOuters.get(0); // should only be a single polygon
+	}
+	
+	
+	public static boolean quickIsSamePolygon(int[] o1, int[] o2)
+	{
+		return o1[0] == o2[0] && o1[1] == o2[1] && o1[2] == o2[2] && 
+			   o1[3] == o2[3] && o1[4] == o2[4] && o1[5] == o2[5] && 
+			   o1[6] == o2[6];
 	}
 }

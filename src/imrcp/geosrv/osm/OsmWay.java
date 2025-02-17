@@ -698,7 +698,7 @@ public class OsmWay extends OsmObject
 	 * Gets the length of the Way in meters using the Haversine formula.
 	 * @return The length in meters of the Way
 	 */
-	public Object getLengthInM()
+	public double getLengthInM()
 	{
 		double dLen = 0.0;
 		OsmNode[] oSeg = new OsmNode[2];

@@ -5,8 +5,8 @@
  */
 package imrcp.geosrv;
 
-import imrcp.forecast.mlp.MLPCommons;
-import imrcp.forecast.mlp.MLPHurricaneTraining;
+import imrcp.forecast.mlp.MLP;
+import imrcp.forecast.mlp.MLPHurricane;
 import imrcp.system.BaseBlock;
 import imrcp.geosrv.osm.HashBucket;
 import imrcp.geosrv.osm.OsmBinParser;
@@ -16,15 +16,16 @@ import imrcp.geosrv.osm.OsmWay;
 import imrcp.system.Arrays;
 import imrcp.system.FileUtil;
 import imrcp.system.Id;
-import imrcp.system.Introsort;
-import imrcp.system.JSONUtil;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
 import imrcp.system.Util;
+import imrcp.web.Scenario;
 import imrcp.web.SessMgr;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.channels.Channels;
@@ -36,9 +37,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -101,6 +103,8 @@ public class WayNetworks extends BaseBlock
 	 * Path to the Network JSON file
 	 */
 	private String m_sNetworkFile;
+	
+	public final static Object METADATAFILELOCK = new Object();
 	
 	
 	@Override
@@ -213,12 +217,15 @@ public class WayNetworks extends BaseBlock
 						{
 							WayMetadata oMetadata = new WayMetadata(new Id(oIn));
 							oMetadata.m_nSpdLimit = oIn.readUnsignedByte();
-							m_oMetadata.add(oMetadata);
+							int nIndex = Collections.binarySearch(m_oMetadata, oMetadata);
+							if (nIndex < 0)
+								m_oMetadata.add(~nIndex, oMetadata);
+							else
+								m_oMetadata.get(nIndex).m_nSpdLimit = oMetadata.m_nSpdLimit;
 						}
 					}
 				}
 
-				Introsort.usort(m_oMetadata, (WayMetadata o1, WayMetadata o2) -> Id.COMPARATOR.compare(o1.m_oId, o2.m_oId));
 				Path oLanesFile = Paths.get(String.format(m_sGeoFileFormat, sId, "lanes"));
 				if (Files.exists(oLanesFile))
 				{
@@ -328,6 +335,70 @@ public class WayNetworks extends BaseBlock
 				m_oNetworks.add(~nSearch, oNetwork);
 			else
 				m_oNetworks.set(nSearch, oNetwork);
+		}
+	}
+	
+	
+	public void commitMetadata(Scenario oScenario)
+	{
+		TreeMap<Id, Integer> oUpdateLanes = new TreeMap(Id.COMPARATOR);
+		TreeMap<Id, Integer> oUpdateSpds = new TreeMap(Id.COMPARATOR);
+		synchronized (m_oMetadata)
+		{
+			WayMetadata oSearch = new WayMetadata(Id.NULLID);
+			for (Entry<Id, int[]> oUpdate : oScenario.m_oUserDefinedMetadata.entrySet())
+			{
+				oSearch.m_oId = oUpdate.getKey();
+				int nLanes = oUpdate.getValue()[0];
+				int nSpdLimit = oUpdate.getValue()[1];
+				int nIndex = Collections.binarySearch(m_oMetadata, oSearch);
+				if (nIndex < 0)
+				{
+					nIndex = ~nIndex;
+					m_oMetadata.add(nIndex, new WayMetadata(oUpdate.getKey()));					
+				}
+
+				WayMetadata oMetadata = m_oMetadata.get(nIndex);
+				if (nLanes > 0 && oMetadata.m_nLanes != nLanes)
+				{
+					oMetadata.m_nLanes = nLanes;
+					oUpdateLanes.put(oUpdate.getKey(), nLanes);
+				}
+				if (nSpdLimit > 0 && oMetadata.m_nSpdLimit != nSpdLimit)
+				{
+					oMetadata.m_nSpdLimit = nSpdLimit;
+					oUpdateSpds.put(oUpdate.getKey(), nSpdLimit);
+				}
+			}
+		}
+		
+		synchronized (METADATAFILELOCK)
+		{
+			try (DataOutputStream oLanes = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(m_sGeoFileFormat, oScenario.m_sNetwork, "lanes")), FileUtil.APPENDOPTS))))
+			{
+				for (Entry<Id, Integer> oUpdate : oUpdateLanes.entrySet())
+				{
+					oUpdate.getKey().write(oLanes);
+					oLanes.writeByte(oUpdate.getValue());
+				}
+			}
+			catch (Exception oEx)
+			{
+				m_oLogger.error(oEx);
+			}
+			
+			try (DataOutputStream oSpeedLimits = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(String.format(m_sGeoFileFormat, oScenario.m_sNetwork, "spdlimit")), FileUtil.APPENDOPTS))))
+			{
+				for (Entry<Id, Integer> oUpdate : oUpdateSpds.entrySet())
+				{
+					oUpdate.getKey().write(oSpeedLimits);
+					oSpeedLimits.writeByte(oUpdate.getValue());
+				}
+			}
+			catch (Exception oEx)
+			{
+				m_oLogger.error(oEx);
+			}
 		}
 	}
 	
@@ -1039,20 +1110,11 @@ public class WayNetworks extends BaseBlock
 
 					if (nStatus == HURMODEL_TRAINING)
 					{
-						String sCurrentModel = oStatus.getString("model");
-						String sNextModel = sCurrentModel.contains("model_a") ? "model_b/" : "model_a/";
 						String sNetworkDir = getNetworkDir(oNetwork.m_sNetworkId);
-						String sModelDir = sNetworkDir + sNextModel;
-						String sStatusLog = sNetworkDir + MLPHurricaneTraining.STATUSLOG;
+						String sStatusLog = sNetworkDir + MLPHurricane.STATUSLOG;
 						oNetwork.m_sMsg = Util.getLastLinesOfFile(sStatusLog, 4);
 						if (oNetwork.m_sMsg != null)
 							oNetwork.m_sMsg = oNetwork.m_sMsg.replace("\n", "<br>");
-						if (MLPCommons.hurricaneModelFilesExist(sModelDir))
-						{
-							bRewrite = true;
-							writeHurricaneModelStatus(oNetwork, sNextModel, HURMODEL_TRAINED);
-							oNetwork.removeStatus(Network.TRAINING);
-						}
 					}
 				}
 				else
