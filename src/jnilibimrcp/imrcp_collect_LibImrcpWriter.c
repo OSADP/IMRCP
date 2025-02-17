@@ -1,17 +1,17 @@
 #include <string.h>
-#include "imrcp_system_LibImrcpWriter.h"
+#include "imrcp_collect_LibImrcpWriter.h"
 #include "Tile.h"
 #include "TileWriter.h"
 
 
-JNIEXPORT jlong JNICALL Java_imrcp_system_LibImrcpWriter_init
+JNIEXPORT jlong JNICALL Java_imrcp_collect_LibImrcpWriter_init
 	(JNIEnv* pEnv, jclass pClass, jint nPPT, jint nZoom)
 {
 	return (jlong)TileWriter_new(nPPT, nZoom);
 }
 
 
-JNIEXPORT jint JNICALL Java_imrcp_system_LibImrcpWriter_addCell
+JNIEXPORT jint JNICALL Java_imrcp_collect_LibImrcpWriter_addCell
 	(JNIEnv* pEnv, jclass pClass, jlong lTileWriterRef, jint nCellX, jint nCellY, jdoubleArray dCell)
 {
 	jdouble* dVals = (*pEnv)->GetDoubleArrayElements(pEnv, dCell, NULL);
@@ -22,7 +22,7 @@ JNIEXPORT jint JNICALL Java_imrcp_system_LibImrcpWriter_addCell
 }
 
 
-JNIEXPORT void JNICALL Java_imrcp_system_LibImrcpWriter_process
+JNIEXPORT void JNICALL Java_imrcp_collect_LibImrcpWriter_process
 	(JNIEnv* pEnv, jclass pClass, jlong lTileWriterRef, jintArray nTileInfo, jint nLevel, jint nIndex)
 {
 	TileWriter* pThis = (TileWriter*)lTileWriterRef;
@@ -35,7 +35,7 @@ JNIEXPORT void JNICALL Java_imrcp_system_LibImrcpWriter_process
 }
 
 
-JNIEXPORT void JNICALL Java_imrcp_system_LibImrcpWriter_getData
+JNIEXPORT void JNICALL Java_imrcp_collect_LibImrcpWriter_getData
 	(JNIEnv* pEnv, jclass pClass, jlong lTileWriterRef, jbyteArray yOutBuf, jint nIndex)
 {
 	Tile* pTile = ((TileWriter*)lTileWriterRef)->m_pTileList->m_pElems[nIndex];
@@ -45,7 +45,7 @@ JNIEXPORT void JNICALL Java_imrcp_system_LibImrcpWriter_getData
 }
 
 
-JNIEXPORT void JNICALL Java_imrcp_system_LibImrcpWriter_free
+JNIEXPORT void JNICALL Java_imrcp_collect_LibImrcpWriter_free
 	(JNIEnv* pEnv, jclass pClass, jlong lTileWriterRef)
 {
 	TileWriter_del((TileWriter*)lTileWriterRef);
