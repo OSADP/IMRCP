@@ -1,8 +1,8 @@
 package imrcp.collect;
 
 import imrcp.geosrv.GeoUtil;
-import imrcp.store.ProjProfile;
-import imrcp.store.ProjProfiles;
+import imrcp.geosrv.ProjProfile;
+import imrcp.geosrv.ProjProfiles;
 import imrcp.store.TileObsView;
 import imrcp.system.Arrays;
 import imrcp.system.FilenameFormatter;
@@ -12,7 +12,6 @@ import imrcp.system.ObsType;
 import imrcp.system.OneTimeReentrantLock;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
-import imrcp.system.TileFileInfo;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,8 +36,6 @@ import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -539,8 +536,7 @@ public class NWS extends Collector
 			long lStart = oInfo.m_lStart;
 			long lEnd = oInfo.m_lEnd;
 			long lRecv = oInfo.m_lRef;
-			ThreadPoolExecutor oTP = createThreadPool();
-			ArrayList<Future> oTasks = new ArrayList();
+
 			for (Path oFile : oArchiveFiles)
 			{
 				String sFilepath = oFile.toString();
@@ -647,6 +643,7 @@ public class NWS extends Collector
 					else
 						nBB = oRR.getBoundingBox();
 					Array oMerged = null;
+					ArrayList<NWSTileFileWriterJni> oWriters = new ArrayList();
 					try
 					{
 						for (int nT = 0; nT < dTime.length; nT++)
@@ -658,8 +655,9 @@ public class NWS extends Collector
 							if (oMerged == null)
 								oMerged = oTFWriter.getDataArray();
 							oTFWriter.setValuesForCall(oProj, oVar, dHrz, dVrt, dTime, nT, oRR, lParsedTimes[FilenameFormatter.END], lRecv, nBB, m_oLogger, oFile.toString());
-							oTasks.add(oTP.submit(oTFWriter));
+							oWriters.add(oTFWriter);
 						}
+						Scheduling.processCallables(oWriters, m_nThreads);
 					}
 					catch (Exception oEx)
 					{
@@ -667,10 +665,7 @@ public class NWS extends Collector
 					}
 				}
 			}
-			
-			for (Future oTask : oTasks)
-				oTask.get();
-			oTP.shutdown();
+
 			for (NetcdfFile oNcFile : oCachedFiles.values())
 			{
 				oNcFile.close();

@@ -18,10 +18,6 @@ import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
-import imrcp.system.TileForFile;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileForPoint;
-import imrcp.system.TileForPoly;
 import imrcp.system.Units;
 import imrcp.system.Units.UnitConv;
 import imrcp.system.Util;
@@ -49,8 +45,6 @@ import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TimeZone;
 import java.util.TreeSet;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -302,6 +296,11 @@ public class NHC extends Collector
 				}
 				
 				long lValid = Long.MIN_VALUE;
+				if (yBuffers[0] == null || yBuffers[1] == null)
+				{
+					m_oLogger.info(String.format("Missing cone or track file on NHC server for %s", sAdv));
+					continue;
+				}
 				try (ZipInputStream oIn = new ZipInputStream(new ByteArrayInputStream(yBuffers[0]))) // read the cone file to determine the date created
 				{
 					ZipEntry oZe;
@@ -487,6 +486,7 @@ public class NHC extends Collector
 				oPressure.m_lObsTime2 = oCone.m_lObsTime2 = lStormEnd;
 				oPressure.m_lTimeRecv = oCone.m_lTimeRecv = lStormRecv;
 				oPressure.m_oGeoArray = oCone.m_oGeoArray = oCP.m_nGeo;
+				oPressure.m_yGeoType = oCone.m_yGeoType = Obs.POLYGON;
 				oCone.m_dValue = lookupStormType(oCP.m_sStormType);
 				oPressure.m_dValue = oPressureConv.convert(oTP.m_nMinPressure);
 				
@@ -556,6 +556,7 @@ public class NHC extends Collector
 							}
 							
 							oWindCenter.m_oGeoArray = nGeo;
+							oWindCenter.m_yGeoType = Obs.POLYGON;
 
 							if (oObsMap.containsKey(ObsType.GSTWND))
 								oObsMap.get(ObsType.GSTWND).add(oWindCenter);
@@ -607,6 +608,7 @@ public class NHC extends Collector
 					}
 					oCat.m_lTimeRecv = lStormRecv;
 					oCat.m_oGeoArray = Obs.createPoint(oP.m_nX, oP.m_nY);
+					oCat.m_yGeoType = Obs.POINT;
 					oCat.m_dValue = lookupStormType(oP.m_sStormType);
 					if (oObsMap.containsKey(ObsType.TRSCAT))
 						oObsMap.get(ObsType.TRSCAT).add(oCat);
@@ -634,7 +636,7 @@ public class NHC extends Collector
 				
 				
 				ArrayList<TileForFile> oAllTiles = new ArrayList();
-				TileForFile oSearch = new TileForPoly();
+				TileForFile oSearch = new TileForFile();
 				byte yGeoType;
 				if (nObstype == ObsType.TRSCNE || nObstype == ObsType.PRSUR || nObstype == ObsType.GSTWND) // polygons
 				{
@@ -658,11 +660,10 @@ public class NHC extends Collector
 								if (nIndex < 0)
 								{
 									nIndex = ~nIndex;
-									oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
+									oAllTiles.add(nIndex, new TileForFile(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
 								}
 								
-								
-								((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(oObs.m_oGeoArray, oObs.m_sStrings, oObs.m_lObsTime1, oObs.m_lObsTime2, oObs.m_lTimeRecv, oObs.m_dValue));
+								oAllTiles.get(nIndex).m_oObsList.add(oObs);
 							}
 						}
 					}
@@ -681,17 +682,15 @@ public class NHC extends Collector
 						if (nIndex < 0)
 						{
 							nIndex = ~nIndex;
-							oAllTiles.add(nIndex, new TileForPoint(nTile[0], nTile[1]));
+							oAllTiles.add(nIndex, new TileForFile(nTile[0], nTile[1]));
 						}
 						
-						((TileForPoint)oAllTiles.get(nIndex)).m_oObsList.add(oObs);
+						oAllTiles.get(nIndex).m_oObsList.add(oObs);
 					}
 				}
 				else
 					continue;
-				
-				ThreadPoolExecutor oTP = createThreadPool();
-				ArrayList<Future> oTasks = new ArrayList(oAllTiles.size());
+
 				for (TileForFile oTile : oAllTiles)
 				{
 					oTile.m_oSP = oSPList;
@@ -704,9 +703,9 @@ public class NHC extends Collector
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
 					oTile.m_bWriteObsType = false;
-					oTasks.add(oTP.submit(oTile));
 				}
 				m_oLogger.debug(Integer.toString(oRR.getObsTypeId(), 36) + " " + oAllTiles.size());
+				Scheduling.processCallables(oAllTiles, m_nThreads);
 				FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
 				Path oTiledFile = oRR.getFilename(lFileRecv, lStart, lEnd, oFF);
 				Files.createDirectories(oTiledFile.getParent());
@@ -742,9 +741,6 @@ public class NHC extends Collector
 
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
-					for (Future oTask : oTasks)
-						oTask.get();
-					oTP.shutdown();
 
 					int nIndex = oAllTiles.size();
 					while (nIndex-- > 0) // remove possible empty tiles

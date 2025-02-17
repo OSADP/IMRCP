@@ -19,12 +19,11 @@ import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileForPoint;
 import imrcp.system.Units;
 import imrcp.system.Units.UnitConv;
 import imrcp.system.Util;
 import imrcp.system.XzBuffer;
+import imrcp.web.SecureBaseBlock;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -39,10 +38,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import org.json.JSONObject;
 
 /**
@@ -128,8 +123,11 @@ public class WxDESub extends Collector
 	@Override
 	public boolean start()
 	{
-		execute();
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bCollectRT)
+		{
+			execute();
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		}
 		return true;
 	}
 	
@@ -147,8 +145,7 @@ public class WxDESub extends Collector
 			long lTimestamp = (System.currentTimeMillis() / nPeriodMillis) * nPeriodMillis + m_nOffset * 1000;
 			
 			String sSrc = m_sBaseURL + m_oSrcFile.format(lTimestamp - m_nCollectOffset * 1000, lTimestamp, lTimestamp + m_nPeriod, m_sSubUuid);
-			URL oUrl = new URL(sSrc);
-			URLConnection oConn = oUrl.openConnection();
+			URLConnection oConn = SecureBaseBlock.getTrustingConnection(sSrc);
 			oConn.setConnectTimeout(m_nTimeout);
 			oConn.setReadTimeout(m_nTimeout);
 			m_oLogger.info("Downloading " + sSrc);
@@ -284,7 +281,7 @@ public class WxDESub extends Collector
 				UnitConv oConv = null;
 				int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
 				Mercator oM = new Mercator(nPPT);
-				ArrayList<TileForPoint> oTiles = new ArrayList();
+				ArrayList<TileForFile> oTiles = new ArrayList();
 				StringPool oSP = new StringPool();
 				for (Obs oObs : oObsList)
 				{
@@ -297,7 +294,7 @@ public class WxDESub extends Collector
 						oSP.intern(oObs.m_sStrings[nString]);
 					oM.lonLatToTile(GeoUtil.fromIntDeg(oObs.m_oGeoArray[1]), GeoUtil.fromIntDeg(oObs.m_oGeoArray[2]), oRR.getZoom(), nTile);
 					oObs.m_dValue = oConv.convert(oObs.m_dValue);
-					TileForPoint oTile = new TileForPoint(nTile[0], nTile[1]);
+					TileForFile oTile = new TileForFile(nTile[0], nTile[1]);
 					int nIndex = Collections.binarySearch(oTiles, oTile);
 					if (nIndex < 0)
 					{
@@ -310,12 +307,10 @@ public class WxDESub extends Collector
 
 				m_oLogger.info(oTiles.size());
 				ArrayList<String> oSPList = oSP.toList();
-				ThreadPoolExecutor oTP = createThreadPool();
-				ArrayList<Future> oTasks = new ArrayList(oTiles.size());
 				int nStringFlag = 0;
 				for (int nString = 0; nString < m_nStrings; nString++)
 					nStringFlag = Obs.addFlag(nStringFlag, nString);
-				for (TileForPoint oTile : oTiles)
+				for (TileForFile oTile : oTiles)
 				{
 					oTile.m_oSP = oSPList;
 					oTile.m_oM = oM;
@@ -327,8 +322,8 @@ public class WxDESub extends Collector
 					oTile.m_bWriteRecv = true;
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
-					oTasks.add(oTP.submit(oTile));
 				}
+				Scheduling.processCallables(oTiles, m_nThreads);
 				try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTiledFile))))
 				{
 					oOut.writeByte(1); // version
@@ -361,17 +356,15 @@ public class WxDESub extends Collector
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
 					oOut.writeInt(oTiles.size());
-					for (Future oTask : oTasks)
-						oTask.get();
-					oTP.shutdown();
-					for (TileForPoint oTile : oTiles) // finish writing tile metadata
+
+					for (TileForFile oTile : oTiles) // finish writing tile metadata
 					{
 						oOut.writeShort(oTile.m_nX);
 						oOut.writeShort(oTile.m_nY);
 						oOut.writeInt(oTile.m_yTileData.length);
 					}
 
-					for (TileForPoint oTile : oTiles)
+					for (TileForFile oTile : oTiles)
 					{
 						oOut.write(oTile.m_yTileData);
 					}

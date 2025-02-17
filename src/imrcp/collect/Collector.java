@@ -6,7 +6,6 @@
 package imrcp.collect;
 
 import imrcp.system.FilenameFormatter;
-import imrcp.system.TileFileWriter;
 import org.json.JSONObject;
 
 /**

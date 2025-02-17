@@ -8,13 +8,11 @@ package imrcp.collect;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.RangeRules;
 import imrcp.store.Obs;
-import imrcp.store.ProjProfile;
-import imrcp.store.ProjProfiles;
+import imrcp.geosrv.ProjProfile;
+import imrcp.geosrv.ProjProfiles;
 import imrcp.system.FilenameFormatter;
-import imrcp.system.LibImrcpWriter;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
-import imrcp.system.TileFileWriter;
 import imrcp.system.Units;
 import imrcp.system.Units.UnitConv;
 import imrcp.system.Util;
@@ -153,8 +151,6 @@ public class NWSTileFileWriterJni extends LibImrcpWriter implements Callable
 			{
 				oIndex.setDim(nHrzIndex, nX);
 				double dVal = m_oData.getDouble(oIndex);
-				if (dVal > 0.7)
-					System.currentTimeMillis();
 				if (!Double.isFinite(dVal) || m_oVar.isMissing(dVal) || m_oVar.isFillValue(dVal) || m_oVar.isInvalidData(dVal))
 					continue;
 				

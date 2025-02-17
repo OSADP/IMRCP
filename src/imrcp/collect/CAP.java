@@ -4,26 +4,21 @@ import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.store.Obs;
 import static imrcp.store.TileObsView.PATHREFCOMP;
-import imrcp.system.Arrays;
 import imrcp.system.FilenameFormatter;
 import imrcp.system.dbf.DbfResultSet;
 import imrcp.system.Directory;
+import imrcp.system.Id;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileForPoly;
 import imrcp.system.Util;
 import imrcp.system.XzBuffer;
-import imrcp.system.shp.Header;
-import imrcp.system.shp.Polyline;
-import imrcp.system.shp.PolyshapeIterator;
+import imrcp.system.shp.ShpReader;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.URL;
 import java.net.URLConnection;
@@ -36,8 +31,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeSet;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -54,7 +47,7 @@ public class CAP extends Collector
 	/**
 	 * Timestamp of the last time the file was updated on the CAP website
 	 */
-	private long m_lLastUpdated = 0;
+	private String m_sLastUpdated = "";
 
 	
 	/**
@@ -91,36 +84,14 @@ public class CAP extends Collector
 		{
 			long lNow = System.currentTimeMillis() / 60000 * 60000;
 			ResourceRecord oRR = Directory.getResource(m_nContribId, m_nObsTypeId);
-			URL oUrl = new URL(m_sBaseURL);
+			String sSrc = m_oSrcFile.format(0, 0, 0);
+			URL oUrl = new URL(m_sBaseURL + sSrc);
 			URLConnection oConn = oUrl.openConnection();
 			oConn.setConnectTimeout(60000);
 			oConn.setReadTimeout(60000);
-			StringBuilder sBuf = new StringBuilder();
-			try (BufferedInputStream oIn = new BufferedInputStream(oConn.getInputStream()))
+			String sLastModified = oConn.getHeaderField("Last-Modified");
+			if (sLastModified.compareTo(m_sLastUpdated) != 0)
 			{
-				int nByte;
-				while ((nByte = oIn.read()) >= 0)
-					sBuf.append((char)nByte);
-			}
-			
-			String sSrc = m_oSrcFile.format(0, 0, 0); // not time dependent
-			int nStart = sBuf.indexOf(sSrc); 
-			if (nStart < 0)
-				throw new Exception("File does not exist on NWS server.");
-			
-			nStart = sBuf.indexOf("</td>", nStart) + 1;
-			int nEnd = sBuf.indexOf("</td>", nStart);
-			nStart = sBuf.lastIndexOf(">", nEnd - 1) + 1;
-			String sDate = sBuf.substring(nStart, nEnd).trim();
-			SimpleDateFormat oSdf = new SimpleDateFormat("dd-MMM-yyyy HH:mm");
-			oSdf.setTimeZone(Directory.m_oUTC);
-			long lUpdated = oSdf.parse(sDate).getTime();
-			if (lUpdated > m_lLastUpdated)
-			{
-				oUrl = new URL(m_sBaseURL + sSrc);
-				oConn = oUrl.openConnection();
-				oConn.setConnectTimeout(60000);
-				oConn.setReadTimeout(60000);
 				byte[] yFile = new byte[oConn.getContentLength()];
 				m_oLogger.debug("Downloading " + sSrc);
 				try (BufferedInputStream oIn = new BufferedInputStream(oConn.getInputStream()))
@@ -136,7 +107,7 @@ public class CAP extends Collector
 				{
 					oOut.write(yFile);
 				}
-				m_lLastUpdated = lUpdated;
+				m_sLastUpdated = sLastModified;
 				ArrayList<ResourceRecord> oRRs = new ArrayList(1);
 				oRRs.add(oRR);
 				processRealTime(oRRs, lNow, lNow, lNow);
@@ -236,15 +207,14 @@ public class CAP extends Collector
 				oSdf.setTimeZone(Directory.m_oUTC);
 				long lFileStart = Long.MAX_VALUE;
 				long lFileEnd = Long.MIN_VALUE;
-				ArrayList<TileForPoly> oAllTiles = new ArrayList();
+				ArrayList<TileForFile> oAllTiles = new ArrayList();
 				int[] nFileBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-				TileForPoly oSearch = new TileForPoly();
+				TileForFile oSearch = new TileForFile();
 				int nCount = 0;
+				
 				try (DbfResultSet oDbf = new DbfResultSet(new BufferedInputStream(new ByteArrayInputStream(yDbf)));
-					 DataInputStream oShp = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(yShp))))
+					ShpReader oShp = new ShpReader(new BufferedInputStream(new ByteArrayInputStream(yShp))))
 				{
-					new Header(oShp); // read through shp header
-					PolyshapeIterator oIter = null;
 					// find the correct column for each of the needed parameters
 					int nExCol = oDbf.findColumn("EXPIRATION"); // end time
 					int nOnCol = oDbf.findColumn("ONSET"); // start time
@@ -252,13 +222,10 @@ public class CAP extends Collector
 					int nIdCol = oDbf.findColumn("CAP_ID"); // cap id
 					int nTypeCol = oDbf.findColumn("PROD_TYPE"); // alert type
 					int nUrlCol = oDbf.findColumn("URL"); // cap url
-
-					ArrayList<int[]> oOuters = new ArrayList();
-					ArrayList<int[]> oHoles = new ArrayList();
+					ArrayList<int[]> oPolygonsFromShp = new ArrayList();
 					while (oDbf.next()) // for each record in the .dbf
 					{
-						oOuters.clear();
-						oHoles.clear();
+						oPolygonsFromShp.clear();
 						long lEventStart = oSdf.parse(oDbf.getString(nOnCol)).getTime();
 						long lEventEnd= oSdf.parse(oDbf.getString(nExCol)).getTime();
 						long lEventRecv = oSdf.parse(oDbf.getString(nIsCol)).getTime();
@@ -270,34 +237,9 @@ public class CAP extends Collector
 						String[] sStrings = new String[]{oDbf.getString(nIdCol), oDbf.getString(nUrlCol), null, null, null, null, null, null};
 						for (int nString = 0; nString < m_nStrings; nString++)
 							oSP.intern(sStrings[nString]);
-						Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
-						oIter = oPoly.iterator(oIter);
+						oShp.readPolygon(oPolygonsFromShp);
 						
-						while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
-						{
-							int[] nPolygon = Arrays.newIntArray();
-							nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
-							int nPointIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
-							int nBbIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
-							while (oIter.nextPoint())
-							{
-								nPolygon[nPointIndex] += 1; // increment point count
-								nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
-							}
-							if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
-							{
-								nPolygon[nPointIndex] -= 1;
-								nPolygon[0] -= 2;
-							}
-							if (GeoUtil.isClockwise(nPolygon, 2))
-								oOuters.add(nPolygon);
-							else
-								oHoles.add(nPolygon);
-						}
-						GeoUtil.getPolygons(oOuters, oHoles);
-						for (int[] nPolygon : oOuters)
+						for (int[] nPolygon : oPolygonsFromShp)
 						{
 							if (nPolygon[3] < nFileBB[0])
 								nFileBB[0] = nPolygon[3];
@@ -325,26 +267,26 @@ public class CAP extends Collector
 									if (nIndex < 0)
 									{
 										nIndex = ~nIndex;
-										oAllTiles.add(nIndex, new TileForPoly(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
+										oAllTiles.add(nIndex, new TileForFile(nTileX, nTileY, oM, oRR, lFileRecv, nStringFlag, m_oLogger));
 									}
-
-									((TileForPoly)oAllTiles.get(nIndex)).m_oData.add(new TileForPoly.PolyData(nPolygon, sStrings, lEventStart, lEventEnd, lEventRecv, dEventValue));
+									
+									oAllTiles.get(nIndex).m_oObsList.add(new Obs(oRR.getObsTypeId(), oRR.getContribId(), Id.NULLID, lEventStart, lEventEnd, lEventRecv, nPolygon, Obs.POLYGON, dEventValue, sStrings));
 								}
 							}
 						}
 					}
 				}
-				ThreadPoolExecutor oTP = createThreadPool();
-				ArrayList<Future> oTasks = new ArrayList(oAllTiles.size());
+
 				ArrayList<String> oSPList = oSP.toList();
-				for (TileForPoly oTile : oAllTiles)
+				for (TileForFile oTile : oAllTiles)
 				{
 					oTile.m_oSP = oSPList;
 					oTile.m_bWriteRecv = true;
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
-					oTasks.add(oTP.submit(oTile));
+
 				}
+				Scheduling.processCallables(oAllTiles, m_nThreads);
 				m_oLogger.debug(oAllTiles.size());
 				
 				
@@ -383,10 +325,6 @@ public class CAP extends Collector
 
 					oOut.writeByte(oRR.getZoom()); // tile zoom level
 					oOut.writeByte(oRR.getTileSize());
-					
-					for (Future oTask : oTasks)
-						oTask.get();
-					oTP.shutdown();
 
 					int nIndex = oAllTiles.size();
 					while (nIndex-- > 0) // remove possible empty tiles
@@ -398,14 +336,14 @@ public class CAP extends Collector
 					
 					
 					
-					for (TileForPoly oTile : oAllTiles) // finish writing tile metadata
+					for (TileForFile oTile : oAllTiles) // finish writing tile metadata
 					{
 						oOut.writeShort(oTile.m_nX);
 						oOut.writeShort(oTile.m_nY);
 						oOut.writeInt(oTile.m_yTileData.length);
 					}
 
-					for (TileForPoly oTile : oAllTiles)
+					for (TileForFile oTile : oAllTiles)
 					{
 						oOut.write(oTile.m_yTileData);
 					}

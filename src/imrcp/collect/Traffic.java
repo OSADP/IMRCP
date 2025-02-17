@@ -24,8 +24,6 @@ import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
 import imrcp.system.Text;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileForPoint;
 import imrcp.system.Util;
 import imrcp.system.XzBuffer;
 import java.io.BufferedInputStream;
@@ -43,8 +41,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeSet;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.zip.GZIPInputStream;
 import org.json.JSONObject;
 
@@ -318,7 +314,7 @@ public class Traffic extends Collector
 					long lFileTime = oRecordBucket.getKey() - oRR.getDelay();
 					long lStartTime = oRecordBucket.getKey();
 					long lEndTime = lStartTime + oRR.getRange();
-					ArrayList<TileForPoint> oTiles = new ArrayList();
+					ArrayList<TileForFile> oTiles = new ArrayList();
 					int nCount = 0;
 					double dTotal = 0.0;
 					TrafficRecord oPrevRec = null;
@@ -351,7 +347,7 @@ public class Traffic extends Collector
 									nBB[3] = oPrevRec.m_nLat;
 
 								oM.lonLatToTile(GeoUtil.fromIntDeg(oPrevRec.m_nLon), GeoUtil.fromIntDeg(oPrevRec.m_nLat), oRR.getZoom(), nTile);
-								TileForPoint oTile = new TileForPoint(nTile[0], nTile[1]);
+								TileForFile oTile = new TileForFile(nTile[0], nTile[1]);
 								int nIndex = Collections.binarySearch(oTiles, oTile);
 								if (nIndex < 0)
 								{
@@ -365,6 +361,7 @@ public class Traffic extends Collector
 								oObs.m_lTimeRecv = oPrevRec.m_lStart;
 								oObs.m_dValue = bAverage ? dTotal / nCount : dTotal;
 								oObs.m_oGeoArray = Obs.createPoint(oPrevRec.m_nLon, oPrevRec.m_nLat);
+								oObs.m_yGeoType = Obs.POINT;
 								oObs.m_sStrings = new String[]{oPrevRec.m_sExtId, oPrevRec.m_sDesc, null, null, null, null, null, null};
 								if (oPrevRec.m_sExtId != null)
 									oSP.intern(oPrevRec.m_sExtId);
@@ -389,10 +386,9 @@ public class Traffic extends Collector
 					if (oTiles.isEmpty())
 						continue;
 
-					ThreadPoolExecutor oTP = createThreadPool();
-					ArrayList<Future> oTasks = new ArrayList(oTiles.size());
+
 					ArrayList<String> oSPList = oSP.toList();
-					for (TileForPoint oTile : oTiles)
+					for (TileForFile oTile : oTiles)
 					{
 						oTile.m_oSP = oSPList;
 						oTile.m_oM = oM;
@@ -404,9 +400,8 @@ public class Traffic extends Collector
 						oTile.m_bWriteStart = false;
 						oTile.m_bWriteEnd = false;
 						oTile.m_bWriteObsType = false;
-						oTasks.add(oTP.submit(oTile));
-
 					}
+					Scheduling.processCallables(oTiles, m_nThreads);
 					FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
 					Path oTiledFile = oRR.getFilename(lFileTime, lStartTime, lEndTime, oFF);
 					m_oLogger.debug("Writing " + oTiledFile.toString());
@@ -445,18 +440,14 @@ public class Traffic extends Collector
 						oOut.writeByte(oRR.getTileSize());
 						oOut.writeInt(oTiles.size());
 
-						for (Future oTask : oTasks)
-							oTask.get();
-						oTP.shutdown();
-
-						for (TileForPoint oTile : oTiles) // finish writing tile metadata
+						for (TileForFile oTile : oTiles) // finish writing tile metadata
 						{
 							oOut.writeShort(oTile.m_nX);
 							oOut.writeShort(oTile.m_nY);
 							oOut.writeInt(oTile.m_yTileData.length);
 						}
 
-						for (TileForPoint oTile : oTiles)
+						for (TileForFile oTile : oTiles)
 						{
 							oOut.write(oTile.m_yTileData);
 						}

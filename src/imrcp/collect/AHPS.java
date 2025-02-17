@@ -1,20 +1,21 @@
 package imrcp.collect;
 
+import imrcp.comp.InundationRecord;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Mercator;
 import imrcp.store.Obs;
 import imrcp.system.Directory;
 import imrcp.system.FilenameFormatter;
 import imrcp.system.Id;
+import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileForPoint;
 import imrcp.system.Util;
 import imrcp.system.XzBuffer;
 import imrcp.system.dbf.DbfResultSet;
+import imrcp.system.shp.ShpReader;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -23,6 +24,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,11 +32,14 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.TimeZone;
 import java.util.TreeSet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -53,18 +58,10 @@ public class AHPS extends Collector
 	 * The last time the file was modified on the AHPS website
 	 */
 	private String m_sLastModified = "";
+	
+	private String m_sInundationDir;
+	private String m_sDateFormat;
 
-	
-	/**
-	 * String to search for in the AHPS website's HTML to find the last modified
-	 * time. This is different depending on which file is being collected
-	 */
-	private String m_sSearchTag;
-	
-	
-
-
-	
 	/**
 	 * Default constructor.
 	 */
@@ -83,7 +80,8 @@ public class AHPS extends Collector
 	@Override
 	public boolean start() throws Exception
 	{
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bCollectRT)
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 
@@ -95,7 +93,11 @@ public class AHPS extends Collector
 	public void reset(JSONObject oBlockConfig)
 	{
 		super.reset(oBlockConfig);
-		m_sSearchTag = oBlockConfig.optString("search", "(Maximum Forecast 1-Day)");
+		m_sInundationDir = oBlockConfig.optString("inundationdir", "ahps_inundation/");
+		if (!m_sInundationDir.endsWith("/"))
+			m_sInundationDir += "/";
+		m_sInundationDir = m_sArchPath + m_sInundationDir;
+		m_sDateFormat = oBlockConfig.optString("dateformat", "yyyy-MM-dd HH:mm");
 	}
 
 	
@@ -119,13 +121,16 @@ public class AHPS extends Collector
 				while ((nByte = oIn.read()) >= 0)
 					sBuffer.append((char)nByte);
 			}
-			int nIndex = sBuffer.indexOf(m_sSearchTag);
-			nIndex = sBuffer.indexOf("Last Updated", nIndex);
-			nIndex = sBuffer.indexOf("<span>", nIndex) + "<span>".length();
-			String sLastModified = sBuffer.substring(nIndex, sBuffer.indexOf("</span>", nIndex));
+			String sSrc = m_oSrcFile.format(0, 0, 0); // not time dependent
+			int nIndex = sBuffer.indexOf(sSrc);
+			nIndex = sBuffer.indexOf("</a>", nIndex) + "</a>".length() + 1;
+			while ((Character.isWhitespace(sBuffer.charAt(nIndex++)))); // skip whitespace to get to date
+			--nIndex;
+			String sLastModified = sBuffer.substring(nIndex, nIndex + m_sDateFormat.length());
 			if (sLastModified.compareTo(m_sLastModified) != 0)
 			{
-				SimpleDateFormat oDate = new SimpleDateFormat("MM/dd/yyyy HH:mm zzz");
+				SimpleDateFormat oDate = new SimpleDateFormat(m_sDateFormat);
+				oDate.setTimeZone(TimeZone.getTimeZone("UTC"));
 				long lTimestamp = oDate.parse(sLastModified).getTime();
 				ResourceRecord oRR = null;
 				for (ResourceRecord oTemp : Directory.getResourcesByContribSource(m_nContribId, m_nSourceId))
@@ -142,7 +147,7 @@ public class AHPS extends Collector
 				if (Files.exists(oArchive))
 					return;
 				m_sLastModified = sLastModified; // update last modified
-				String sSrc = m_oSrcFile.format(0, 0, 0); // not time dependent
+				
 				oUrl = new URL(m_sBaseURL + sSrc);
 				oConn = oUrl.openConnection();
 				oConn.setConnectTimeout(60000);
@@ -187,6 +192,7 @@ public class AHPS extends Collector
 			int[] nTile = new int[2];
 			int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
 			Mercator oM = new Mercator(nPPT);
+			HashMap<String, ArrayList<InundationRecord>> oInundationRecordsByGauge = getInundation();
 			for (Path oPath : oArchiveFiles)
 			{
 				byte[] yBuffer = null;
@@ -218,7 +224,8 @@ public class AHPS extends Collector
 				}
 				
 				StringPool oSP = new StringPool();
-				ArrayList<TileForPoint> oTiles = new ArrayList();
+				ArrayList<TileForFile> oTiles = new ArrayList();
+				ArrayList<int[]> oPolygonsFromShp = new ArrayList();
 				int[] nBB = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
 				SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 				oSdf.setTimeZone(Directory.m_oUTC);
@@ -251,7 +258,8 @@ public class AHPS extends Collector
 						long lRecvTime = lTimes[FilenameFormatter.VALID];
 
 						FloodStageMetadata oTemp = new FloodStageMetadata(oAhps);
-						double dVal = oTemp.getStageValue(oAhps.getDouble(nValCol));
+						double dStageLevel = oAhps.getDouble(nValCol);
+						double dVal = oTemp.getStageValue(dStageLevel);
 						String sTimeVal = oAhps.getString(nTimeCol);
 						if (!sTimeVal.isEmpty() && sTimeVal.compareTo("N/A") != 0)
 						{
@@ -279,14 +287,9 @@ public class AHPS extends Collector
 								m_oLogger.debug(oEx, oEx);
 							}
 						}
-						Obs oObs = new Obs();
-						oObs.m_nObsTypeId = ObsType.STG;
-						oObs.m_oGeoArray = Obs.createPoint(nLon, nLat);
-						oObs.m_lObsTime1 = lStartTime;
-						oObs.m_lObsTime2 = lEndTime;
-						oObs.m_lTimeRecv = lRecvTime;
-						oObs.m_dValue = dVal;
-						oObs.m_sStrings = new String[]{sGaugeLID, sWaterbody, sLocation, null, null, null, null, null};
+						String[] sAhpsStrings =new String[]{sGaugeLID, sWaterbody, sLocation, null, null, null, null, null};
+						Obs oObs = new Obs(ObsType.STG, oRR.getContribId(), Id.NULLID, lStartTime, lEndTime, lRecvTime, Obs.createPoint(nLon, nLat), Obs.POINT, dVal, sAhpsStrings);
+						oObs.m_nObsFlag = Obs.POINT;
 						for (int nString = 0; nString < m_nStrings; nString++)
 							oSP.intern(oObs.m_sStrings[nString]);
 						if (nLon < nBB[0])
@@ -302,7 +305,7 @@ public class AHPS extends Collector
 						if (lEndTime > lFileEnd)
 							lFileEnd = lEndTime;
 						oM.lonLatToTile(GeoUtil.fromIntDeg(nLon), GeoUtil.fromIntDeg(nLat), oRR.getZoom(), nTile);
-						TileForPoint oTile = new TileForPoint(nTile[0], nTile[1]);
+						TileForFile oTile = new TileForFile(nTile[0], nTile[1]);
 						int nIndex = Collections.binarySearch(oTiles, oTile);
 						if (nIndex < 0)
 						{
@@ -311,36 +314,98 @@ public class AHPS extends Collector
 						}
 
 						oTiles.get(nIndex).m_oObsList.add(oObs);
+						ArrayList<InundationRecord> oIRecords = oInundationRecordsByGauge.get(sGaugeLID.toLowerCase());
+						if (oIRecords != null)
+						{
+							TileForFile oSearch = new TileForFile();
+							int nInunIndex = oIRecords.size();
+							
+							while (nInunIndex-- > 0)
+							{
+								InundationRecord oRec = oIRecords.get(nInunIndex);
+								if (dStageLevel >= oRec.m_dStage)
+									break;
+							}
+							if (nInunIndex < 0)
+								continue;
+							
+							InundationRecord oRec = oIRecords.get(nInunIndex);
+							
+							try (DbfResultSet oDbf = new DbfResultSet(new BufferedInputStream(new ByteArrayInputStream(oRec.m_yDbf)));
+								 ShpReader oShp = new ShpReader(new BufferedInputStream(new ByteArrayInputStream(oRec.m_yShp))))
+							{
+								while (oDbf.next()) // for each record in the .dbf
+								{
+									oShp.readPolygon(oPolygonsFromShp);
+									
+									for (int[] nPolygon : oPolygonsFromShp)
+									{
+										if (nPolygon[3] < nBB[0])
+											nBB[0] = nPolygon[3];
+										if (nPolygon[4] < nBB[1])
+											nBB[1] = nPolygon[4];
+										if (nPolygon[5] > nBB[2])
+											nBB[2] = nPolygon[5];
+										if (nPolygon[6] > nBB[3])
+											nBB[3] = nPolygon[6];
 
+										oM.lonLatToTile(GeoUtil.fromIntDeg(nPolygon[3]), GeoUtil.fromIntDeg(nPolygon[6]), oRR.getZoom(), nTile);
+										int nStartX = nTile[0]; 
+										int nStartY = nTile[1];
+										oM.lonLatToTile(GeoUtil.fromIntDeg(nPolygon[5]), GeoUtil.fromIntDeg(nPolygon[4]), oRR.getZoom(), nTile);
+										int nEndX = nTile[0];
+										int nEndY = nTile[1];
+										for (int nTileY = nStartY; nTileY <= nEndY; nTileY++)
+										{
+											for (int nTileX = nStartX; nTileX <= nEndX; nTileX++)
+											{
+												oSearch.m_nX = nTileX;
+												oSearch.m_nY = nTileY;
+
+												nIndex = Collections.binarySearch(oTiles, oSearch);
+												if (nIndex < 0)
+												{
+													nIndex = ~nIndex;
+													oTiles.add(nIndex, new TileForFile(nTileX, nTileY));
+												}
+												oObs = new Obs(ObsType.STG, oRR.getContribId(), Id.NULLID, lStartTime, lEndTime, lRecvTime, nPolygon, Obs.POLYGON, ObsType.lookup(ObsType.STG, "flood"), sAhpsStrings);
+												oObs.m_nObsFlag = Obs.POLYGON;
+												oTiles.get(nIndex).m_oObsList.add(oObs);
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
+				FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
+				Path oTiledFile = oRR.getFilename(lTimes[FilenameFormatter.VALID], lFileStart, lFileEnd, oFF);
+				if (Files.exists(oTiledFile))
+					continue;
+				Files.createDirectories(oTiledFile.getParent());
 				
 				m_oLogger.info(oTiles.size());
 				ArrayList<String> oSPList = oSP.toList();
-				ThreadPoolExecutor oTP = (ThreadPoolExecutor)Executors.newFixedThreadPool(m_nThreads);
-				ArrayList<Future> oTasks = new ArrayList();
+
 				int nStringFlag = 0;
 				for (int nString = 0; nString < m_nStrings; nString++)
 					nStringFlag = Obs.addFlag(nStringFlag, nString);
-				for (TileForPoint oTile : oTiles)
+				for (TileForFile oTile : oTiles)
 				{
 					oTile.m_oSP = oSPList;
 					oTile.m_oM = oM;
 					oTile.m_oRR = oRR;
 					oTile.m_lFileRecv = lTimes[FilenameFormatter.VALID];
 					oTile.m_nStringFlag = nStringFlag;
-					oTile.m_bWriteObsFlag = false;
+					oTile.m_bWriteObsFlag = true;
 					oTile.m_bWriteRecv = true;
 					oTile.m_bWriteStart = true;
 					oTile.m_bWriteEnd = true;
 					oTile.m_bWriteObsType = false;
-					oTasks.add(oTP.submit(oTile));
 				}
+				Scheduling.processCallables(oTiles, m_nThreads);
 
-				
-				FilenameFormatter oFF = new FilenameFormatter(oRR.getTiledFf());
-				Path oTiledFile = oRR.getFilename(lTimes[FilenameFormatter.VALID], lFileStart, lFileEnd, oFF);
-				Files.createDirectories(oTiledFile.getParent());
 				try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTiledFile))))
 				{
 					oOut.writeByte(1); // version
@@ -349,8 +414,8 @@ public class AHPS extends Collector
 					oOut.writeInt(nBB[2]); // bounds max x
 					oOut.writeInt(nBB[3]); // bounds max y
 					oOut.writeInt(oRR.getObsTypeId()); // obsversation type
-					oOut.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag not present. value type
-					oOut.writeByte(Obs.POINT);
+					oOut.writeByte(Util.combineNybbles(1, oRR.getValueType())); // obs flag  present. value type
+					oOut.writeByte(0);
 					oOut.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
 					oOut.writeByte(Util.combineNybbles(Id.SENSOR, 0b0111)); // associate with obj and timestamp flag. the lower bits are all 1 since recv, start, and end time are written per obs 
 					oOut.writeLong(lTimes[FilenameFormatter.VALID]);
@@ -376,18 +441,14 @@ public class AHPS extends Collector
 					oOut.writeByte(oRR.getTileSize());
 					oOut.writeInt(oTiles.size());
 					
-					for (Future oTask : oTasks)
-						oTask.get();
-					oTP.shutdown();
-					
-					for (TileForPoint oTile : oTiles) // finish writing tile metadata
+					for (TileForFile oTile : oTiles) // finish writing tile metadata
 					{
 						oOut.writeShort(oTile.m_nX);
 						oOut.writeShort(oTile.m_nY);
 						oOut.writeInt(oTile.m_yTileData.length);
 					}
 
-					for (TileForPoint oTile : oTiles)
+					for (TileForFile oTile : oTiles)
 					{
 						oOut.write(oTile.m_yTileData);
 					}
@@ -399,5 +460,71 @@ public class AHPS extends Collector
 		{
 			m_oLogger.error(oEx, oEx);
 		}
+	}
+	
+	private HashMap<String, ArrayList<InundationRecord>> getInundation()
+	{
+		HashMap<String, ArrayList<InundationRecord>> oRecordMap = new HashMap();
+		Path oDir = Paths.get(m_sInundationDir);
+		InundationRecord oSearch = new InundationRecord();
+		try (DirectoryStream oDirStream = Files.newDirectoryStream(oDir, (oPath -> oPath.toString().endsWith("_shapefiles.zip"))))
+		{
+			List<Path> oFiles = (List)StreamSupport.stream(oDirStream.spliterator(), false).collect(Collectors.toList());
+			for (Path oFile : oFiles)
+			{
+				String sGauge = oFile.getFileName().toString().substring(0, oFile.getFileName().toString().indexOf("_"));
+				ArrayList<InundationRecord> oRecords = new ArrayList();
+				oSearch.m_sId = sGauge;
+				try (ZipInputStream oZipIn = new ZipInputStream(Files.newInputStream(oFile)))
+				{
+					ZipEntry oZe;
+					
+					while ((oZe = oZipIn.getNextEntry()) != null)
+					{
+						String sEntry = oZe.getName();
+						int nStartIndex = sEntry.lastIndexOf("/") + 1;
+						int nEnd = sEntry.indexOf(".", nStartIndex);
+						if (nEnd < 0)
+							continue;
+						String sName = sEntry.substring(nStartIndex, nEnd);
+						oSearch.m_sFilename = sName;
+						if (sEntry.contains("polygons") && !sEntry.contains("extra"))
+						{
+							boolean bShp = sEntry.endsWith(".shp");
+							boolean bDbf = sEntry.endsWith(".dbf");
+							if (!bShp && !bDbf)
+								continue;
+							int nSearchIndex = Collections.binarySearch(oRecords, oSearch, InundationRecord.COMPBYFILE);
+							if (nSearchIndex < 0)
+							{
+								nSearchIndex = ~nSearchIndex;
+								oRecords.add(nSearchIndex, new InundationRecord(sGauge, sName));
+							}
+							InundationRecord oRec = oRecords.get(nSearchIndex);
+							byte[] yBuf = new byte[(int)oZe.getSize()];
+							int nOffset = 0;
+							int nBytesRead = 0;
+							while (nOffset < yBuf.length && (nBytesRead = oZipIn.read(yBuf, nOffset, yBuf.length - nOffset)) >= 0)
+								nOffset += nBytesRead;
+							if (bShp)
+								oRec.m_yShp = yBuf;
+							else
+								oRec.m_yDbf = yBuf;
+						}
+					}
+				}
+				for (InundationRecord oRec : oRecords)
+					oRec.findStage();
+				
+				Introsort.usort(oRecords, InundationRecord.COMPBYSTAGE);
+				oRecordMap.put(sGauge, oRecords);
+			}
+		}
+		catch (Exception oEx)
+		{
+			
+		}
+		
+		return oRecordMap;
 	}
 }
