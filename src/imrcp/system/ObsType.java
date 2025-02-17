@@ -23,70 +23,68 @@ public class ObsType
 	 */
 	private static final String OBS_TYPES[][] = new String[][]
 	{
-		{"obstype", "english", "metric", "description", "in use(y/n)"}, // reserved for unknown observation type
-		{"TAIR", "F", "C", "air temperature", "y"},
-		{"TDEW", "F", "C", "dew point temperature", "y"},
-		{"TPVT", "F", "C", "pavement temperature", "y"},
-		{"PRBAR", "psi", "mbar", "barometric pressure", "y"},
-		{"PRSUR", "psi", "mbar", "surface pressure", "y"},
-		{"RH", "%", "%", "relative humidity", "y"},
-		{"VIS", "mi", "m", "surface visibility", "y"},
-		{"CONPVT", "V", "V", "pavement conductivity", "y"},
-		{"STPVT", "", "", "pavement state", "y"},
-		{"DIRWND", "º", "º", "wind direction", "y"},
-		{"GSTWND", "mph", "m/s", "wind speed gust", "y"},
-		{"SPDWND", "mph", "m/s", "wind speed", "y"},
-		{"COVCLD", "%", "%", "total cloud cover", "y"},
-		{"RTEPC", "in/hr", "mm/hr", "precipitation rate surface", "y"},
-		{"TYPPC", "", "", "precipitation type", "y"},
-		{"STG", "", "", "stage", "y"},
-		{"EVT", "", "", "event", "y"},
-		{"VOLLNK", "veh/min", "veh/min", "link volume", "y"},
-		{"GENLNK", "veh", "veh", "vehicles generated on each generation link", "n"},
-		{"VEHLNK", "veh", "veh", "number of vehicles on each link", "n"},
-		{"QUELNK", "veh", "veh", "number of queued vehicles on each link", "n"},
-		{"SPDLNK", "mph", "kph", "average speed of vehicles on each link", "y"},
-		{"DNTLNK", "%", "%", "average density of vehicles on each link", "y"},
-		{"SPFLNK", "mph", "kph", "average speed of moving vehicles on each link", "n"},
-		{"DNFLNK", "%", "%", "average density of moving vehicles on each link", "n"},
-		{"CTLEFT", "veh", "veh", "number of left-turning vehicles on each link", "n"},
-		{"DURGRN", "s", "s", "average green time for each approach", "n"},
-		{"CTTHRU", "veh", "veh", "number of vehicles that pass through the link", "n"},
-		{"CTMID", "veh", "veh", "cumulative number of vehicles that pass the mid point of links", "n"},
-		{"TSSRF", "F", "C", "subsurface temperature", "y"},
-		{"DPHLIQ", "in", "mm", "liquid inundation depth", "y"},
-		{"DPHSN", "in", "mm", "snow inundation depth", "y"},
-		{"FLWCAT", "", "", "predicted flow category", "n"},
-		{"SPDCAT", "", "", "predicted speed category", "n"},
-		{"OCCCAT", "", "", "predicted occupancy category", "n"},
-		{"QPRLNK", "%", "%", "queue percentage on link", "n"},
-		{"DPHLNK", "in", "mm", "link depth", "y"},
-		{"PCCAT", "", "", "precipitation category", "y"},
-		{"TRFLNK", "%", "%", "traffic", "y"},
-		{"TDNLNK", "", "", "traffic density", "y"},
-		{"TIMERT", "min", "min", "route time", "y"},
-		{"RDR0", "dBZ", "dBZ", "merged base reflectivity", "y"},
-		{"NOTIFY", "", "", "Notification", "y"},
-		{"TRSCAT", "", "", "Tropical Storm Category", "y"},
-		{"TRSTRK", "", "", "Tropical Storm Track", "y"},
-		{"TRSCNE", "", "", "Tropical Storm Cone", "y"},
-		{"KRTPVT", "F", "C", "kriged pavement temperature", "y"},
-		{"KTSSRF", "F", "C", "kriged subsurface temperature", "y"},
-		{"SSCST", "ft", "m", "extra tropical storm surge combined surge and tide", "y"},
-		{"VARIES", "", "", "various"},
-		{"RTSLDM", "", "kg/km", "Solid material rate", "y"},
-		{"RTLIQM", "", "L/km", "Liquid material rate", "y"},
-		{"RTPREM", "", "L/Mg", "Prewet material rate", "y"},
-		{"TPSLDM", "", "", "Solid material type", "y"},
-		{"TPLIQM", "", "", "Liquid material type", "y"},
-		{"TPPREM", "", "", "Prewet material type", "y"},
-		{"MPLOW", "", "", "MAC main plow", "y"},
-		{"WPLOW", "", "", "MAC wing plow", "y"},
-		{"TPLOW", "", "", "MAC tow plow", "y"},
-		{"SPDVEH", "mph", "kph", "vehicle speed", "y"},
-		{"RESRN", "in", "mm", "rain reservoir", "y"},
-		{"RESSN", "in", "mm", "snow reservoir", "y"},
-		{"VSLLNK", "mph", "kph", "variable speed limit on link", "y"}
+		{"obstype", "english", "metric", "description", "in use(y/n)", "label"}, // reserved for unknown observation type
+		{"TAIR", "F", "C", "air temperature", "y", "Air Temperature (F)"},
+		{"TDEW", "F", "C", "dew point temperature", "y", "Dew Point (F)"},
+		{"TPVT", "F", "C", "pavement temperature", "y", "Pavement Temperature (F)"},
+		{"PRBAR", "psi", "mbar", "barometric pressure", "y", "Barometric Pressure (psi)"},
+		{"PRSUR", "psi", "mbar", "surface pressure", "y", "Surface Pressure (psi)"},
+		{"RH", "%", "%", "relative humidity", "y", "Relative Humidity (%)"},
+		{"VIS", "mi", "m", "surface visibility", "y", "Visibility (mi)"},
+		{"CONPVT", "V", "V", "pavement conductivity", "y", "Conductivity (V)"},
+		{"STPVT", "", "", "pavement state", "y", "Pavement State"},
+		{"DIRWND", "º", "º", "wind direction", "y", "Wind Direction (º)"},
+		{"GSTWND", "mph", "m/s", "wind speed gust", "y", "Wind Gust Speed (mph)"},
+		{"SPDWND", "mph", "m/s", "wind speed", "y", "Wind Speed (mph)"},
+		{"COVCLD", "%", "%", "total cloud cover", "y", "Cloud Cover (%)"},
+		{"RTEPC", "in/hr", "mm/hr", "precipitation rate surface", "y", "Precipitation Rate (in/hr)"},
+		{"TYPPC", "", "", "precipitation type", "y", "Precipitation Type"},
+		{"STG", "", "", "stage", "y", "Flood Stage"},
+		{"EVT", "", "", "event", "y", "Event"},
+		{"VOLLNK", "veh/min", "veh/min", "link volume", "y", "Link Volume (veh/min)"},
+		{"GENLNK", "veh", "veh", "vehicles generated on each generation link", "n", ""},
+		{"VEHLNK", "veh", "veh", "number of vehicles on each link", "n", ""},
+		{"QUELNK", "veh", "veh", "number of queued vehicles on each link", "n", ""},
+		{"SPDLNK", "mph", "kph", "average speed of vehicles on each link", "y", "Link Speed (mph)"},
+		{"DNTLNK", "%", "%", "average density of vehicles on each link", "y", "Link Density (%)"},
+		{"SPFLNK", "mph", "kph", "average speed of moving vehicles on each link", "n", ""},
+		{"DNFLNK", "%", "%", "average density of moving vehicles on each link", "n", ""},
+		{"CTLEFT", "veh", "veh", "number of left-turning vehicles on each link", "n", ""},
+		{"DURGRN", "s", "s", "average green time for each approach", "n", ""},
+		{"CTTHRU", "veh", "veh", "number of vehicles that pass through the link", "n", ""},
+		{"CTMID", "veh", "veh", "cumulative number of vehicles that pass the mid point of links", "n", ""},
+		{"TSSRF", "F", "C", "subsurface temperature", "y", "Subsurface Temperature (F)"},
+		{"DPHLIQ", "in", "mm", "liquid inundation depth", "y", "Liquid Depth (in)"},
+		{"DPHSN", "in", "mm", "snow inundation depth", "y", "Snow Depth (in)"},
+		{"FLWCAT", "", "", "predicted flow category", "n", ""},
+		{"SPDCAT", "", "", "predicted speed category", "n", ""},
+		{"OCCCAT", "", "", "predicted occupancy category", "n", ""},
+		{"QPRLNK", "%", "%", "queue percentage on link", "n", ""},
+		{"DPHLNK", "in", "mm", "link depth", "y", "Link Depth (in)"},
+		{"PCCAT", "", "", "precipitation category", "y", "Precipitation Category"},
+		{"TRFLNK", "%", "%", "traffic", "y", "Traffic (%)"},
+		{"TDNLNK", "", "", "traffic density", "y", "Traffic Density"},
+		{"TIMERT", "min", "min", "route time", "y", "Route Time"},
+		{"RDR0", "dBZ", "dBZ", "merged base reflectivity", "y", "Radar Reflectivity (dBZ)"},
+		{"NOTIFY", "", "", "Notification", "y", "Notification"},
+		{"TRSCAT", "", "", "Tropical Storm Category", "y", "Tropical Storm Category"},
+		{"TRSTRK", "", "", "Tropical Storm Track", "y", "Tropical Storm Track"},
+		{"TRSCNE", "", "", "Tropical Storm Cone", "y", "Tropical Storm Cone"},
+		{"KRTPVT", "F", "C", "kriged pavement temperature", "n", ""},
+		{"KTSSRF", "F", "C", "kriged subsurface temperature", "n", ""},
+		{"SSCST", "ft", "m", "extra tropical storm surge combined surge and tide", "y", "Storm Surge and Tide (ft)"},
+		{"VARIES", "", "", "various", "y", "Various"},
+		{"RTSLDM", "", "kg/km", "Solid material rate", "y", "Solid Material Rate (kg/km)"},
+		{"RTLIQM", "", "L/km", "Liquid material rate", "y", "Liquid Material Rate (L/km)"},
+		{"RTPREM", "", "L/Mg", "Prewet material rate", "y", "Prewet Material Rate (L/Mg)"},
+		{"TPSLDM", "", "", "Solid material type", "y", "Solid Material Type"},
+		{"TPLIQM", "", "", "Liquid material type", "y", "Liquid Material Type"},
+		{"TPPREM", "", "", "Prewet material type", "y", "Prewet Material Type"},
+		{"MPLOW", "", "", "MAC main plow", "y", "MAC Main Plow"},
+		{"WPLOW", "", "", "MAC wing plow", "y", "MAC Wing Plow"},
+		{"TPLOW", "", "", "MAC tow plow", "y", "MAC Tow Plow"},
+		{"SPDVEH", "mph", "kph", "vehicle speed", "y", "Vehicle Speed (mph)"},
+		{"VSLLNK", "mph", "kph", "variable speed limit on link", "y", "Variable Speed Limit (mph)"}
 	};
 
 	
@@ -447,10 +445,8 @@ public class ObsType
 	 * Vehicle Speed
 	 */
 	public static final int SPDVEH = Integer.valueOf(OBS_TYPES[60][0], 36);
-	
-	public static final int RESRN = Integer.valueOf(OBS_TYPES[61][0], 36);
-	public static final int RESSN = Integer.valueOf(OBS_TYPES[62][0], 36);
-	public static final int VSLLNK = Integer.valueOf(OBS_TYPES[63][0], 36);
+
+	public static final int VSLLNK = Integer.valueOf(OBS_TYPES[61][0], 36);
 	
 	
 	/**
@@ -467,7 +463,7 @@ public class ObsType
 		   DNFLNK, CTLEFT, DURGRN, CTTHRU, CTMID, TSSRF, DPHLIQ, DPHSN,
 		   FLWCAT, SPDCAT, OCCCAT, QPRLNK, DPHLNK, PCCAT, TRFLNK, TDNLNK,
 		   TIMERT, RDR0, NOTIFY, TRSCAT, TRSTRK, TRSCNE, KRTPVT, KTSSRF, SSCST, VARIES,
-		   RTSLDM, RTLIQM, RTPREM, TPSLDM, TPLIQM, TPPREM, MPLOW, WPLOW, TPLOW, SPDVEH, RESRN, RESSN, VSLLNK
+		   RTSLDM, RTLIQM, RTPREM, TPSLDM, TPLIQM, TPPREM, MPLOW, WPLOW, TPLOW, SPDVEH, VSLLNK
 	   };
 
 	
@@ -1061,6 +1057,12 @@ public class ObsType
 	public static String getDescription(int nObsTypeId)
 	{
 		return OBS_TYPES[getIndex(nObsTypeId)][3];
+	}
+	
+	
+	public static String getLabel(int nObsTypeId)
+	{
+		return OBS_TYPES[getIndex(nObsTypeId)][5];
 	}
 
 	

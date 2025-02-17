@@ -25,6 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -508,6 +511,22 @@ public abstract class BaseBlock extends HttpServlet implements Runnable, IRunTar
 		}
 		else
 			m_oLogger.info(String.format("%s didn't run. Status was %s", m_sInstanceName, STATUSES[m_nStatus.get()]));
+	}
+	
+	
+	protected ThreadPoolExecutor createThreadPool(int nThreads)
+	{
+		return (ThreadPoolExecutor)Executors.newFixedThreadPool(nThreads, new NameableThreadFactory());
+	}
+	
+	
+	private class NameableThreadFactory implements ThreadFactory
+	{
+		@Override
+		public Thread newThread(Runnable r)
+		{
+			return new Thread(r, String.format("%s-%d", getName(), System.nanoTime()));
+		}
 	}
 	
 	

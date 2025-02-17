@@ -1,5 +1,6 @@
 package imrcp.system;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -7,10 +8,14 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Singleton class that contains a thread pool and manages scheduling tasks for
@@ -47,6 +52,8 @@ public class Scheduling implements Executor
 	 * Counter used to assign schedule ids
 	 */
 	private static AtomicInteger m_nIdCount = new AtomicInteger();
+	
+	private Logger m_oLogger = LogManager.getLogger(Scheduling.class);
 
 	
 	/**
@@ -74,6 +81,12 @@ public class Scheduling implements Executor
 		{
 			 m_iExecutor = Executors.newFixedThreadPool(nThreads);
 		}
+	}
+	
+	
+	public <T> Future<T> submit(Callable<T> oWork)
+	{
+		return m_iExecutor.submit(oWork);
 	}
 
 	
@@ -252,6 +265,82 @@ public class Scheduling implements Executor
 		}
 
 		return false;
+	}
+
+	public static <T extends Callable> ArrayList<Future<T>> processCallables(ArrayList<T> oCallables, int nThreadsToUse) throws Exception
+	{
+		ArrayDeque<Future<T>> oTasks = new ArrayDeque();
+		ArrayList<Future<T>> oComplete = new ArrayList();
+		ArrayDeque<T> oToDo = new ArrayDeque();
+		Scheduling oScheduling = getInstance();
+		int nAvailable = nThreadsToUse;
+		if (nAvailable == 0)
+		{
+			nAvailable = 1;
+		}
+		for (T oCallable : oCallables)
+		{
+			if (nAvailable > 0)
+			{
+				oTasks.addLast(oScheduling.submit(oCallable)); // submit work to thread pool
+				--nAvailable; // update available threads
+			}
+			else
+			{
+				oToDo.addLast(oCallable); // add to queue if no available threads
+			}
+			int nTaskIndex = oTasks.size();
+			while (nTaskIndex-- > 0)
+			{
+				Future<T> oTask = oTasks.pollFirst();
+				if (oTask.isDone())
+				{
+					oComplete.add(oTask);
+					if (!oToDo.isEmpty())
+					{
+						oTasks.addLast(oScheduling.submit(oToDo.getFirst()));
+					}
+					else
+					{
+						++nAvailable; // update available threads
+					}
+				}
+				else
+				{
+					// task isn't done so put back in queue
+					oTasks.addLast(oTask);
+				}
+			}
+		}
+		while (!oTasks.isEmpty() || !oToDo.isEmpty())
+		{
+			while (nAvailable > 0 && !oToDo.isEmpty())
+			{
+				oTasks.add(oScheduling.submit(oToDo.pollFirst()));
+				--nAvailable;
+			}
+			if (!oTasks.isEmpty())
+			{
+				int nIndex = oTasks.size();
+				boolean bGo = true;
+				while (nIndex-- > 0 && bGo)
+				{
+					Future<T> oTask = oTasks.pollFirst();
+					if (oTask.isDone())
+					{
+						oComplete.add(oTask);
+						++nAvailable;
+						bGo = false;
+					}
+					else
+					{
+						oTasks.addLast(oTask);
+					}
+				}
+			}
+		}
+		
+		return oComplete;
 	}
 
 	

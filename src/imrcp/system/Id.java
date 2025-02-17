@@ -345,4 +345,24 @@ public class Id implements Comparable<Id>
 	{
 		return m_l0;
 	}
+	
+	
+	@Override
+	public int hashCode()
+	{
+		return Long.hashCode(m_l1);
+	}
+
+	@Override
+	public boolean equals(Object obj)
+	{
+		if (this == obj)
+			return true;
+		
+		if (obj == null || getClass() != obj.getClass())
+			return false;
+		
+		final Id other = (Id) obj;
+		return !(this.m_l0 == other.m_l0 && this.m_l1 == other.m_l1);
+	}
 }
