@@ -8,15 +8,15 @@ package imrcp.comp;
 import imrcp.geosrv.GeoUtil;
 import imrcp.store.Obs;
 import imrcp.store.ObsList;
-import imrcp.store.ProjProfile;
-import imrcp.store.ProjProfiles;
+import imrcp.geosrv.ProjProfile;
+import imrcp.geosrv.ProjProfiles;
 import imrcp.store.TileObsView;
 import imrcp.system.Directory;
 import imrcp.system.Introsort;
 import imrcp.system.ResourceRecord;
 import imrcp.system.Scheduling;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileFileWriter;
+import imrcp.collect.TileFileInfo;
+import imrcp.collect.TileFileWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -121,6 +121,7 @@ public class DataAssimilation extends TileFileWriter
 	protected int m_nContribId;
 	protected int m_nSourceId;
 	protected int m_nObsTypeId;
+	protected boolean m_bRun;
 	
 
 	@Override
@@ -144,6 +145,7 @@ public class DataAssimilation extends TileFileWriter
 		m_nObsTypeId = Integer.valueOf(oBlockConfig.optString("obstypeid", "0"), 36);
 		if (m_nObsTypeId == 0)
 			m_nObsTypeId = Integer.MIN_VALUE;
+		m_bRun = oBlockConfig.optBoolean("run", true);
 	}
 	
 	
@@ -198,7 +200,8 @@ public class DataAssimilation extends TileFileWriter
 			ProjProfiles.getInstance().newProfile(dX, dY, new LatLonProjection(), Integer.valueOf("imrcp", 36));
 		}
 		
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bRun)
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
 		return true;
 	}
 	

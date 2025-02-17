@@ -13,13 +13,14 @@ import imrcp.store.ObsList;
 import imrcp.store.TileObsView;
 import imrcp.system.Directory;
 import imrcp.system.FilenameFormatter;
+import imrcp.system.Id;
 import imrcp.system.JSONUtil;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
-import imrcp.system.TileFileInfo;
-import imrcp.system.TileFileWriter;
-import imrcp.system.TileForPoly;
-import imrcp.system.TileForPoly.PolyData;
+import imrcp.system.Scheduling;
+import imrcp.collect.TileFileInfo;
+import imrcp.collect.TileFileWriter;
+import imrcp.collect.TileForFile;
 import imrcp.system.Util;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -31,8 +32,6 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import org.json.JSONObject;
 
 /**
@@ -75,7 +74,7 @@ public class PcCat extends TileFileWriter
 				nContribSource[1] = oRR.getSourceId();
 				oRateRR = oRR;
 				oRates = oObsView.getData(ObsType.RTEPC, lTimestamp, oInfo.m_lEnd, m_nAreaToProcess[1], m_nAreaToProcess[3], m_nAreaToProcess[0], m_nAreaToProcess[2], oInfo.m_lRef, nContribSource);
-				m_oLogger.debug(String.format("%d %s for %s", oRates.size(), "RTEPC", Integer.toString(nContribSource[0], 36)));
+				//m_oLogger.debug(String.format("%d %s for %s", oRates.size(), "RTEPC", Integer.toString(nContribSource[0], 36)));
 			}
 			if (oRates.isEmpty())
 				return;
@@ -162,7 +161,7 @@ public class PcCat extends TileFileWriter
 			nContribSource[0] = oSecondaryRR.getContribId();
 			nContribSource[1] = oSecondaryRR.getSourceId();
 			oSecondaryObsList = oObsView.getData(nSecondaryObsType, lTimestamp, oInfo.m_lEnd, nQueryLat1, nQueryLat2, nQueryLon1, nQueryLon2, oInfo.m_lRef, nContribSource);
-			m_oLogger.debug(String.format("%d %s for %s", oSecondaryObsList.size(), Integer.toString(nSecondaryObsType, 36), Integer.toString(nContribSource[0], 36)));
+			//m_oLogger.debug(String.format("%d %s for %s", oSecondaryObsList.size(), Integer.toString(nSecondaryObsType, 36), Integer.toString(nContribSource[0], 36)));
 
 			if (oSecondaryObsList.isEmpty())
 				return;
@@ -188,10 +187,6 @@ public class PcCat extends TileFileWriter
 				}
 			}
 
-			ThreadPoolExecutor oTP = createThreadPool();
-			ArrayList<Future> oTasks = new ArrayList();
-
-			ArrayList<TileForPoly> oAllTiles = new ArrayList();
 			long lFileStart = 0;
 			long lFileEnd = 0;
 			long lFileRecv = 0;
@@ -200,34 +195,38 @@ public class PcCat extends TileFileWriter
 			{
 				oProcess.add(new PcCatTile(oEntry.getKey()[0], oEntry.getKey()[1], oEntry.getValue()[0], oEntry.getValue()[1], oAlgorithm));
 			}
+			Scheduling.processCallables(oProcess, m_nThreads);
 			
+			ArrayList<TileForFile> oAllTiles = new ArrayList();
 			boolean bSetTimes = true;
-			for (Future<TileForPoly> oFuture : oTP.invokeAll(oProcess))
+			for (PcCatTile oTile : oProcess)
 			{
-				TileForPoly oTFP = oFuture.get();
-				if (oTFP != null && !oTFP.m_oData.isEmpty())
+				TileForFile oTFP = new TileForFile(oTile.m_nX, oTile.m_nY);
+				oTFP.m_oObsList = oTile.m_oOutput;
+				if (!oTFP.m_oObsList.isEmpty())
 				{
 					oTFP.m_bWriteEnd = false;
 					oTFP.m_bWriteObsFlag = false;
 					oTFP.m_bWriteObsType = false;
 					oTFP.m_bWriteRecv = false;
 					oTFP.m_bWriteStart = false;
-					oTFP.m_lFileRecv = oTFP.m_oData.get(0).m_lRecv;
+					oTFP.m_lFileRecv = oTFP.m_oObsList.get(0).m_lTimeRecv;
 					oTFP.m_oLogger = m_oLogger;
 					oTFP.m_oSP = null;
 					oTFP.m_oRR = oPcCatRR;
 					oTFP.m_oM = oM;
-					oTasks.add(oTP.submit(oTFP));
 					if (bSetTimes)
 					{
 						bSetTimes = false;
-						lFileStart = oTFP.m_oData.get(0).m_lStart;
-						lFileEnd = oTFP.m_oData.get(0).m_lEnd;
-						lFileRecv = oTFP.m_oData.get(0).m_lRecv;
+						lFileStart = oTFP.m_oObsList.get(0).m_lObsTime1;
+						lFileEnd = oTFP.m_oObsList.get(0).m_lObsTime2;
+						lFileRecv = oTFP.m_oObsList.get(0).m_lTimeRecv;
 					}
 					oAllTiles.add(oTFP);
 				}	
 			}
+			
+			Scheduling.processCallables(oAllTiles, m_nThreads);
 
 			m_oLogger.info(oAllTiles.size());
 			FilenameFormatter oFF = new FilenameFormatter(oPcCatRR.getTiledFf());
@@ -254,9 +253,6 @@ public class PcCat extends TileFileWriter
 				oOut.writeByte(oPcCatRR.getZoom()); // tile zoom level
 				oOut.writeByte(oPcCatRR.getTileSize());
 
-				for (Future oTask : oTasks)
-					oTask.get();
-				oTP.shutdown();
 				int nIndex = oAllTiles.size();
 				while (nIndex-- > 0) // remove possible empty tiles
 				{
@@ -267,14 +263,14 @@ public class PcCat extends TileFileWriter
 
 
 
-				for (TileForPoly oTile : oAllTiles) // finish writing tile metadata
+				for (TileForFile oTile : oAllTiles) // finish writing tile metadata
 				{
 					oOut.writeShort(oTile.m_nX);
 					oOut.writeShort(oTile.m_nY);
 					oOut.writeInt(oTile.m_yTileData.length);
 				}
 
-				for (TileForPoly oTile : oAllTiles)
+				for (TileForFile oTile : oAllTiles)
 				{
 					oOut.write(oTile.m_yTileData);
 				}
@@ -287,13 +283,14 @@ public class PcCat extends TileFileWriter
 	}
 	
 	
-	private class PcCatTile implements Callable<TileForPoly>
+	private class PcCatTile implements Callable<PcCatTile>
 	{
 		int m_nX;
 		int m_nY;
 		ObsList m_oRates;
 		ObsList m_oSecondary;
 		CategoryAlgorithm m_oAlgo;
+		ObsList m_oOutput;
 		
 		PcCatTile(int nX, int nY, ObsList oRates, ObsList oSecondary, CategoryAlgorithm oAlgo)
 		{
@@ -302,15 +299,13 @@ public class PcCat extends TileFileWriter
 			m_oRates = oRates;
 			m_oSecondary = oSecondary;
 			m_oAlgo = oAlgo;
+			m_oOutput = new ObsList(oRates.size());
 		}
 		
 		
 		@Override
-		public TileForPoly call() throws Exception
+		public PcCatTile call() throws Exception
 		{
-			TileForPoly oTFP = new TileForPoly();
-			oTFP.m_nX = m_nX;
-			oTFP.m_nY = m_nY;
 			long[] oRateAreas = new long[m_oRates.size()];
 			long[] oSecondaryAreas = new long[m_oSecondary.size()];
 			try
@@ -356,7 +351,7 @@ public class PcCat extends TileFileWriter
 						{
 							try
 							{
-								oTFP.m_oData.add(new PolyData(GeoUtil.popResult(lClipRef[0]), null, lStart, lEnd, oRateObs.m_lTimeRecv, dCat));
+								m_oOutput.add(new Obs(ObsType.PCCAT, 0, Id.NULLID, lStart, lEnd, oRateObs.m_lTimeRecv, GeoUtil.popResult(lClipRef[0]), Obs.POLYGON, dCat, (String[])null));
 							}
 							catch (Exception oEx)
 							{
@@ -382,7 +377,7 @@ public class PcCat extends TileFileWriter
 			}
 			
 			
-			return oTFP;
+			return this;
 		}
 	}
 	
