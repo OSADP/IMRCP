@@ -1,3 +1,4 @@
+import logging
 import pandas as pd 
 import numpy as np 
 
@@ -8,16 +9,8 @@ import glob
 import torch
 import torch.nn as nn
 from datetime import datetime, timedelta
-import traceback
 import math
 
-def mlp_log(sMsg, sFilePath):
-	with open(sFilePath, 'a') as file:
-		file.write('{} - {}\n'.format(datetime.now().isoformat(timespec='milliseconds'), sMsg))
-		
-def log_exception(oEx, sFilePath):
-	with open(sFilePath, 'a') as f:
-		traceback.print_exception(oEx, file=f)
 
 
 def filter_mata(data_mata,freeway_name):
@@ -40,7 +33,7 @@ def spatial_temporal_feature(data,hurricane,lf_time,category,lf_zone,lf_coord,fi
 	data['lf'] = pd.to_datetime(data['landfall'])
 	data['t_to_lf'] = data['time'] - data['lf']
 	data['t_to_lf'] = pd.to_timedelta(data['t_to_lf']).dt.total_seconds()/3600
-	data = pd.merge(data,filtered_df[['imrcpid','lat','lon','name']],left_on = 'Id',right_on=['imrcpid'])
+	data = pd.merge(data,filtered_df[['imrcpid','lat','lon']],left_on = 'Id',right_on=['imrcpid'])
 	data = data.drop(['imrcpid', 'landfall','lf'], axis=1)
 	data['hour'] = data['time'].dt.hour
 	data['category'] = category
@@ -59,72 +52,69 @@ def spatial_temporal_feature(data,hurricane,lf_time,category,lf_zone,lf_coord,fi
 
 
 def extract_csvfile(folder_path,file_pattern_prefix,hurricane,category,lf_time,lf_zone,lf_coord):
-	try:
-		file_list = glob.glob(folder_path + '/' + file_pattern_prefix + '*.csv')  # Adjust the file extension as needed
-		file_list.sort()  # Ensure the files are sorted
-		# Separate the file list into two parts
-		past_7d_filename = file_list[:7]
-		next_7d_filename = file_list[7:]
-		next_8d_filename = file_list[6:]
+	file_list = glob.glob(folder_path + '/' + file_pattern_prefix + '*.csv')  # Adjust the file extension as needed
+	file_list.sort()  # Ensure the files are sorted
+	# Separate the file list into two parts
+	past_7d_filename = file_list[:7]
+	next_7d_filename = file_list[7:]
+	next_8d_filename = file_list[6:]
+
+	# Read the first 7 files
+	combined_past7d = [pd.read_csv(file) for file in past_7d_filename]
+	combined_past7d = pd.concat(combined_past7d, ignore_index=True)
+	print('past 7 done')
+	# Read the last 7 files 
+	combined_next7d = [pd.read_csv(file) for file in next_7d_filename]
+	combined_next7d = pd.concat(combined_next7d, ignore_index=True)
+	print('next 7 done')
+	# Read the last 8 files 
+	combined_next8d = [pd.read_csv(file) for file in next_8d_filename]
+	combined_next8d = pd.concat(combined_next8d, ignore_index=True)
+	print('next 8 done')
+
+	# lf_time = '2021-08-29 14:00:00'
+	# category = 4
+	# lf_zone = 1
+	# lf_coord = (29.1,-90.2)
+	# hurricane = 'hurricane'
+
+	# combine speed data for the past 7 days
+	# # Create a list of file paths using glob
+	# file_paths = glob.glob('test_data_past7/LA_speeds_*.csv')
+	# # Read and concatenate DataFrames using list comprehension
+	# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
+	# combined_past7d = pd.concat(data_frames, ignore_index=True)
+	combined_past7d['Time'] = pd.to_datetime(combined_past7d['Timestamp'])
+	combined_past7d = combined_past7d.groupby('Id').apply(lambda x : x.set_index('Time').resample('5T').mean(numeric_only=True).ffill()).reset_index()  
+	combined_past7d = combined_past7d[['Id','Time','Speed']]
+	combined_past7d['hurricane'] = hurricane
+	combined_past7d['Id_hur'] = combined_past7d['Id']+combined_past7d['hurricane']
+
+	# # check original data format
+	# # df = pd.read_csv('LA_speeds_20210826.csv')
+
+	# # Create a list of file paths using glob
+	# file_paths = glob.glob('test_data/LA_speeds_*.csv')
+
+	# # Read and concatenate DataFrames using list comprehension
+	# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
+	# combined_7d = pd.concat(data_frames, ignore_index=True)
+	combined_next7d = combined_next7d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
+	combined_next7d['hurricane'] = hurricane
+
+	combined_next8d = combined_next8d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
+	combined_next8d['hurricane'] = hurricane
+
 	
-		# Read the first 7 files
-		combined_past7d = [pd.read_csv(file) for file in past_7d_filename]
-		combined_past7d = pd.concat(combined_past7d, ignore_index=True)
-		print('past 7 done')
-		# Read the last 7 files 
-		combined_next7d = [pd.read_csv(file) for file in next_7d_filename]
-		combined_next7d = pd.concat(combined_next7d, ignore_index=True)
-		print('next 7 done')
-		# Read the last 8 files 
-		combined_next8d = [pd.read_csv(file) for file in next_8d_filename]
-		combined_next8d = pd.concat(combined_next8d, ignore_index=True)
-		print('next 8 done')
-	
-		# lf_time = '2021-08-29 14:00:00'
-		# category = 4
-		# lf_zone = 1
-		# lf_coord = (29.1,-90.2)
-		# hurricane = 'hurricane'
-	
-		# combine speed data for the past 7 days
-		# # Create a list of file paths using glob
-		# file_paths = glob.glob('test_data_past7/LA_speeds_*.csv')
-		# # Read and concatenate DataFrames using list comprehension
-		# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
-		# combined_past7d = pd.concat(data_frames, ignore_index=True)
-		combined_past7d['Time'] = pd.to_datetime(combined_past7d['Timestamp'])
-		combined_past7d = combined_past7d.groupby('Id').apply(lambda x : x.set_index('Time').resample('5T').mean(numeric_only=True).ffill()).reset_index()  
-		combined_past7d = combined_past7d[['Id','Time','Speed']]
-		combined_past7d['hurricane'] = hurricane
-		combined_past7d['Id_hur'] = combined_past7d['Id']+combined_past7d['hurricane']
-	
-		# # check original data format
-		# # df = pd.read_csv('LA_speeds_20210826.csv')
-	
-		# # Create a list of file paths using glob
-		# file_paths = glob.glob('test_data/LA_speeds_*.csv')
-	
-		# # Read and concatenate DataFrames using list comprehension
-		# data_frames = [pd.read_csv(file_path) for file_path in file_paths]
-		# combined_7d = pd.concat(data_frames, ignore_index=True)
-		combined_next7d = combined_next7d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
-		combined_next7d['hurricane'] = hurricane
-	
-		combined_next8d = combined_next8d[['Timestamp','Id','Direction','DayOfWeek','Lanes','Speed']]
-		combined_next8d['hurricane'] = hurricane
-	
-		
-		# add features
-		# lf_time = '2021-08-29 14:00:00'
-		# category = 4
-		# lf_zone = 1
-		# lf_coord = (29.1,-90.2)
-		return combined_past7d,combined_next7d,combined_next8d
-	except BaseException as oEx:
-		return None, oEx, None
+	# add features
+	# lf_time = '2021-08-29 14:00:00'
+	# category = 4
+	# lf_zone = 1
+	# lf_coord = (29.1,-90.2)
+	return combined_past7d,combined_next7d,combined_next8d
 	# return 1==1
 
-def oneshot_annotate(data_w_feature_7d,combined_past7d,lf_time, sLogFile, sStatusLog, oMeansAndStds, sHur):
+def oneshot_annotate(data_w_feature_7d,combined_past7d,lf_time, oMeansAndStds, sHur):
 	time_string = lf_time
 	# Convert the time string to a datetime object
 	time_dt = datetime.strptime(time_string, '%Y-%m-%d %H:%M:%S')
@@ -218,13 +208,13 @@ def oneshot_annotate(data_w_feature_7d,combined_past7d,lf_time, sLogFile, sStatu
 					data_6hr_7d_all = pd.concat([data_6hr_7d_all, data_6hr_7d], ignore_index=True)
 			if i%100 == 99:
 				dPercent = round(i / len(linkid), 2) * 100
-				mlp_log('Oneshot annotate {:.0f}% complete for storm {}'.format(dPercent, sHur), sStatusLog)
-				mlp_log('{:.0f}% completed'.format(dPercent), sLogFile)
+				logging.info('Oneshot annotate {:.0f}% complete for storm {}!@#'.format(dPercent, sHur))
+
 			if i == len(linkid)-1:
-				mlp_log('Oneshot annotate 100% complete for storm {}'.format(sHur), sStatusLog)
-				mlp_log('100% completed', sLogFile)
-		except BaseException as oEx:
-			log_exception(oEx, sLogFile)
+				logging.info('Oneshot annotate 100% complete for storm {}!@#'.format(sHur))
+
+		except BaseException:
+			logging.exception('')
 			
 	data_6hr_7d_all['spd_ratio'] = data_6hr_7d_all['spd_mean_current']/data_6hr_7d_all['spd_mean_past7']
 	data_6hr_7d_all['congested'] = 0
@@ -341,8 +331,8 @@ def data_normalization_oneshot(df,dummy):
 		size_dummy = len(dummy)
 		# categorical features to be onverted to One Hot Encoding
 		df_onehot = df.copy()
-		df_onehot = df_onehot[['Id','category','timeofday','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','spd_mean_past7','spd_std_past7','Direction','lf_zone' ]]
-		df_dummy = dummy[['Id','category','timeofday','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','spd_mean_past7','spd_std_past7','Direction','lf_zone' ]]
+		df_onehot = df_onehot[['Id','category','timeofday','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','spd_mean_past7','spd_std_past7','Direction','lf_zone']]
+		df_dummy = dummy[['Id','category','timeofday','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','spd_mean_past7','spd_std_past7','Direction','lf_zone']]
 		df_onehot = pd.concat([df_dummy,df_onehot])
 		df_onehot = df_onehot.reset_index(drop=True)
 		scaler = MinMaxScaler(feature_range=(-1, 1)) 
@@ -356,10 +346,11 @@ def data_normalization_oneshot(df,dummy):
 		categ = ['Direction','lf_zone']
 		df_onehot = pd.get_dummies(df_onehot, prefix_sep="_", columns=categ, dtype=float)
 		df_onehot = df_onehot.drop(columns=['Id'])
-		array_input = df_onehot.values
+		array_input = df_onehot.to_numpy()
 		array_input = array_input[size_dummy:] # remove the dummy rows
-		array_labels = df['congested'].values.reshape(-1,1) 
-		return array_input,array_labels,df_onehot.columns
+		#array_labels = df['congested'].values.reshape(-1,1) 
+		#return array_input,array_labels,df_onehot.columns
+		return array_input,None,df_onehot.columns
 	
 def data_normalization_online(df,dummy):
 		# categorical features to be onverted to One Hot Encoding
@@ -367,7 +358,7 @@ def data_normalization_online(df,dummy):
 		df_onehot = df.copy()
 		df_onehot = df_onehot[['Id','category','hour','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','Direction','lf_zone','Speed']]
 		df_dummy = dummy[['Id','category','hour','Lanes', 't_to_lf','lat', 'lon', 'dis_to_lf','Direction','lf_zone','Speed']]
-		df_onehot = pd.concat([dummy,df_onehot])
+		df_onehot = pd.concat([df_dummy,df_onehot])
 		df_onehot = df_onehot.reset_index(drop=True)
 		scaler = MinMaxScaler(feature_range=(-1, 1)) 
 		df_onehot['t_to_lf'] = scaler.fit_transform(df_onehot[['t_to_lf']])
@@ -381,7 +372,7 @@ def data_normalization_online(df,dummy):
 		categ = ['Direction','lf_zone']
 		df_onehot = pd.get_dummies(df_onehot, prefix_sep="_", columns=categ, dtype=float)
 		df_onehot = df_onehot.drop(columns=['Id'])
-		array_input = df_onehot.values
+		array_input = df_onehot.to_numpy()
 		array_input = array_input[size_dummy:]
 		df_out = df[['Id','Speed']]
 		dummy_out = dummy[['Id','Speed']]
@@ -437,7 +428,6 @@ def initialize_online(input_size, path_online):
 			out = self.fc(out[:, -1, :])
 			return out
 
-	horizon = 6 # define the prediction horizon (e.g., 1,2,3,4,5,6)
 	model_online = LSTM(input_size,64,2) # initialize the model with 21 input features,2 hidden layers and each hidden layer with 64 nodes
 	model_online.load_state_dict(torch.load(path_online))
 	model_online.eval()  # set the model in evaluation mode
@@ -445,7 +435,6 @@ def initialize_online(input_size, path_online):
 	
 	
 def oneshot_predict(input_oneshot,dummy_oneshot,input_past7speed,model_oneshot):
-
 	norm_input, _, _ = data_normalization_oneshot(input_oneshot,dummy_oneshot)
 	
 	inputs_tensor = torch.tensor(norm_input, dtype=torch.float32)
@@ -453,7 +442,6 @@ def oneshot_predict(input_oneshot,dummy_oneshot,input_past7speed,model_oneshot):
 	predicted_class = torch.argmax(outputs, dim=1) # predict congestion labels for each 6-hour window across 7 days, giving 28 output labels for a link
 	predicted_class = predicted_class.tolist()
 
-	spd_mean = input_past7speed['Speed'].mean()
 	df_pred = pd.DataFrame({'prediction':predicted_class})
 	df_pred = df_pred.reset_index(drop=True)
 	df_pred['ratio'] = 1
@@ -468,7 +456,6 @@ def oneshot_predict(input_oneshot,dummy_oneshot,input_past7speed,model_oneshot):
 
 
 def online_predict(start_time,input_online,dummy_online,model_online):
-	start_time = '2021-08-27 10:00:00' # define the start time of the online prediction
 	single_link_input = input_online
 	strt_index = single_link_input[single_link_input['time']==start_time].index.values[0]
 	single_link_input = single_link_input[strt_index-288:strt_index:3]

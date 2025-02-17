@@ -10,7 +10,6 @@ import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from pmdarima.arima import auto_arima
 import random
-from mlph_functions import mlp_log
 
 
 
@@ -424,7 +423,7 @@ def oneshot_new(oneshot_input, start_time, lts, loaded_data):
 			tempsp = 0
 			sBranch = 'lanesclosed'
 		# First, determine if the contraflow ever existed in the last 5 minutes. Make sure 'contraflow' is one of the column names.
-		elif 'contraflow' in oneshot_input.columns and oneshot_input.loc[i-1, 'contraflow'] > 0:
+		elif 'contraflow' in oneshot_input.columns and int(oneshot_input.loc[i-1, 'contraflow']) > 0:
 			# If contraflow is implemented, determine which contraflow scenario it meets
 			if oneshot_input.loc[i-1, 'contraflow'] == 1:
 				if lts.loc[nLTSIndex-5:nLTSIndex, 'speed'].min() >= 20:

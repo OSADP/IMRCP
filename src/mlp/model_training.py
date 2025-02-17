@@ -6,13 +6,12 @@ import torch.nn as nn
 from torch.utils.data import ConcatDataset, Dataset, DataLoader
 import torch
 import time
-from mlph_functions import mlp_log
 
-
+import logging
 import random
 
 
-def train_oneshot(df,dummy, sLogFile, sStatusLog):
+def train_oneshot(df,dummy):
 	oneshot_input = df
 	# remove odd data
 	oddlink =  oneshot_input[oneshot_input['Lanes']==-1]['Id'].unique()	 
@@ -60,7 +59,7 @@ def train_oneshot(df,dummy, sLogFile, sStatusLog):
 	norm_x, norm_y, input_col = data_normalization(oneshot_input,dummy)
 	toc = time.perf_counter()
 	
-	mlp_log(f'Data normalization finished in : {(toc-tic):.2f} sec', sLogFile)
+	logging.info(f'Data normalization finished in : {(toc-tic):.2f} sec')
 	
 	
 	#%% 3. batch processing
@@ -129,7 +128,8 @@ def train_oneshot(df,dummy, sLogFile, sStatusLog):
 	input_size = cl_x_train.shape[1]
 	output_size = 3
 	
-	mlp_log(f"Input layer size: {input_size} ", sLogFile)
+	logging.info(f"Input layer size: {input_size}")
+	logging.info(f"Output layer size: {output_size}")
 	
 	model = MultiClassCongestion(input_size, output_size)
 	optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -153,7 +153,7 @@ def train_oneshot(df,dummy, sLogFile, sStatusLog):
 		dPercent = 0.1
 		for x, (inputs, labels) in enumerate(train_loader):
 			if x / nSize > dPercent:
-				mlp_log('{:.0f}% complete for epoch {} of oneshot training'.format(dPercent * 100, epoch +1), sStatusLog)
+				logging.info('{:.0f}% complete for epoch {} of oneshot training!@#'.format(dPercent * 100, epoch +1))
 				dPercent += .1
 			optimizer.zero_grad()
 			outputs = model(inputs)
@@ -197,12 +197,12 @@ def train_oneshot(df,dummy, sLogFile, sStatusLog):
 
 		toc_ep = time.perf_counter()
 		epoch_time = toc_ep-tic_ep  
-		mlp_log(f"Epoch {epoch+1}/{num_epochs}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Train Acc: {train_accuracy:.4f}, Epoch {epoch + 1}, Validation Acc: {val_accuracy:.4f}, Time: {epoch_time:.2f} sec", sLogFile) 
-		mlp_log(f"Epoch {epoch+1}/{num_epochs}: Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Epoch {epoch + 1}, Time: {epoch_time:.2f} sec", sStatusLog) 
+		logging.info(f"Epoch {epoch+1}/{num_epochs}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Train Acc: {train_accuracy:.4f}, Epoch {epoch + 1}, Validation Acc: {val_accuracy:.4f}, Time: {epoch_time:.2f} sec") 
+		logging.info(f"Epoch {epoch+1}/{num_epochs}: Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Epoch {epoch + 1}, Time: {epoch_time:.2f} sec!@#") 
 
 	return model
 
-def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
+def train_online(df_label, df_speed, dummy, horizon):
 	# hurricane speed data balancing
 	# len(freeway_name)
 	def data_balance_one_hurricane(df_label,df_speed):
@@ -280,7 +280,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 	tic = time.perf_counter()
 	data_out_raw, target_out_raw = data_normalization_online(speed_data_all,dummy)
 	toc = time.perf_counter()
-	mlp_log(f'Data normalization finished in : {(toc-tic):.2f} sec', sLogFile)
+	logging.info(f'Data normalization finished in : {(toc-tic):.2f} sec')
 
 	# reshape data
 	numoflink = int(len(data_out_raw)/576)
@@ -324,7 +324,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 
 
 	# training dataset generation
-	mlp_log('Data split started', sLogFile)
+	logging.info('Data split started')
 	tic = time.perf_counter()
 	oTrainLoaders = []
 	for i in range(num_train_samples):
@@ -346,7 +346,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 # =============================================================================
 
 	toc = time.perf_counter()
-	mlp_log(f"Training data generation finished in {toc - tic:0.4f} seconds，processed {len(oTrainLoaders)} samples", sLogFile)
+	logging.info(f"Training data generation finished in {toc - tic:0.4f} seconds，processed {len(oTrainLoaders)} samples")
 
 	# validation dataset generation
 	tic = time.perf_counter()
@@ -368,7 +368,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 # 	validate_loader = torch.utils.data.DataLoader(ts_dataset_all, batch_size=batch_size, shuffle=True)
 
 	toc = time.perf_counter()
-	mlp_log(f"Validation data generation finished in {toc - tic:0.4f} seconds，processed {len(oValidateLoaders)} samples", sLogFile)
+	logging.info(f"Validation data generation finished in {toc - tic:0.4f} seconds，processed {len(oValidateLoaders)} samples")
 
 	# test dataset generation
 	tic = time.perf_counter()
@@ -389,7 +389,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 		#	 print(i,len(data_out1))
 # 	test_loader = torch.utils.data.DataLoader(ts_dataset_all, batch_size=batch_size, shuffle=True)
 	toc = time.perf_counter()
-	mlp_log(f"Testing data generation finished in {toc - tic:0.4f} seconds, processed {len(oTestLoaders)} samples", sLogFile)
+	logging.info(f"Testing data generation finished in {toc - tic:0.4f} seconds, processed {len(oTestLoaders)} samples")
 
 	# define the LSTM model
 	class LSTM(nn.Module):
@@ -424,7 +424,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 	model = LSTM(input_size=data_out1.shape[2], hidden_size=hidden_size, num_layers=num_layers).to(device)
 
 	
-	mlp_log(f"Input layer size: {data_out1.shape[2]} ", sLogFile)
+	logging.info(f"Input layer size: {data_out1.shape[2]} ")
 	
 	# define the loss function and optimizer
 	criterion = nn.MSELoss()
@@ -439,7 +439,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 		dPercent = .1
 		for x, oLoader in enumerate(oTrainLoaders):
 			if x / nBatches > dPercent:
-				mlp_log('{:.0f}% complete for epoch {} for hour {} of online training'.format(dPercent * 100, epoch +1, horizon), sStatusLog)
+				logging.info('{:.0f}% complete for epoch {} for hour {} of online training!@#'.format(dPercent * 100, epoch +1, horizon))
 				dPercent += .1
 			for i, (inputs, targets) in enumerate(oLoader):
 				# move inputs and targets to the GPU
@@ -469,9 +469,9 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 		toc_ep = time.perf_counter()
 		epoch_time = toc_ep-tic_ep
 		# print statistics
-		mlp_log(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss/len(oTrainLoaders):.6f}, Val Loss: {val_loss/len(oValidateLoaders):.6f}, Time: {epoch_time:.2f} sec', sLogFile)
+		logging.info(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss/len(oTrainLoaders):.6f}, Val Loss: {val_loss/len(oValidateLoaders):.6f}, Time: {epoch_time:.2f} sec')
 	toc = time.perf_counter()
-	mlp_log(f"Triaining finished in {toc - tic:0.4f} seconds", sLogFile)
+	logging.info(f"Training finished in {toc - tic:0.4f} seconds")
 
 	# Evaluate the model on the test set
 	tic_test = time.perf_counter()
@@ -486,7 +486,7 @@ def train_online(df_label, df_speed, dummy, horizon, sLogFile, sStatusLog):
 				loss = criterion(outputs, targets)
 				test_loss += loss.item()
 	toc_test = time.perf_counter()
-	mlp_log(f'Test Loss: {test_loss/len(oTestLoaders):.6f}, Time: {(toc_test-tic_test):.2f} sec', sLogFile)
+	logging.info(f'Test Loss: {test_loss/len(oTestLoaders):.6f}, Time: {(toc_test-tic_test):.2f} sec')
 
 	return model
 
