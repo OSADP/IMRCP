@@ -11,7 +11,6 @@ import imrcp.store.Obs;
 import imrcp.store.ObsList;
 import imrcp.store.TileObsView;
 import imrcp.system.Directory;
-import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.ResourceRecord;
 import java.util.ArrayList;
@@ -27,6 +26,8 @@ public class MetroObsSet
 	ObsList[] m_oObsDewPoint;
 	ObsList[] m_oObsWindSpeed;
 	ObsList[] m_oObsTpvt;
+	ObsList[] m_oMetroTpvt;
+	ObsList[] m_oMetroTssrf;
 	ObsList[] m_oObsTssrf;
 	ObsList[] m_oObsRoadCond;
 	double[] m_dObsTime;
@@ -43,14 +44,18 @@ public class MetroObsSet
 	double[] m_dFTime;
 	double[] m_dFTimeSeconds;
 	
+	int m_nSourceId;
 	
-	MetroObsSet(int nObsHrs, int nFcstHrs)
+	
+	MetroObsSet(int nObsHrs, int nFcstHrs, int nSource)
 	{
 		m_oObsAirTemp = new ObsList[nObsHrs];
 		m_oObsDewPoint = new ObsList[nObsHrs];
 		m_oObsWindSpeed = new ObsList[nObsHrs];
 		m_oObsTpvt = new ObsList[nObsHrs];
 		m_oObsTssrf = new ObsList[nObsHrs];
+		m_oMetroTpvt = new ObsList[nObsHrs];
+		m_oMetroTssrf = new ObsList[nObsHrs];
 		m_oObsRoadCond = new ObsList[nObsHrs];
 		m_dObsTime = new double[nObsHrs];
 		
@@ -65,6 +70,8 @@ public class MetroObsSet
 		m_oFcstPrecipType = new ObsList[nFcstHrs];
 		m_dFTime = new double[nFcstHrs];
 		m_dFTimeSeconds = new double[nFcstHrs];
+		
+		m_nSourceId = nSource;
 	}
 	
 	
@@ -74,20 +81,49 @@ public class MetroObsSet
 		long lForecast = lStartTime - 3600000; // the first "forecast" actually uses observed values
 		TileObsView oOV = (TileObsView)Directory.getInstance().lookup("ObsView");
 		Calendar oCal = Calendar.getInstance(Directory.m_oUTC);
+		ResourceRecord oMetroTpvt = Directory.getResource(Integer.valueOf("metro", 36), ObsType.TPVT);
+		int[] nTpvtContribSrc = new int[]{oMetroTpvt.getContribId(), oMetroTpvt.getSourceId()};
+		ResourceRecord oMetroTssrf = Directory.getResource(Integer.valueOf("metro", 36), ObsType.TSSRF);
+		int[] nTssrfContribSrc = new int[]{oMetroTssrf.getContribId(), oMetroTssrf.getSourceId()};
 		for (int i = 0; i < m_oObsAirTemp.length; i++)
 		{
 			long lQueryStart = lObservation + (i * 3600000);
-			long lQueryEnd = lQueryStart + 60000;
-			m_oObsAirTemp[i] = getData(oOV, ObsType.TAIR, nBb, lQueryStart, lQueryEnd, lStartTime);
-			m_oObsDewPoint[i] = getData(oOV, ObsType.TDEW, nBb, lQueryStart, lQueryEnd, lStartTime);
-			m_oObsWindSpeed[i] = getData(oOV, ObsType.SPDWND, nBb, lQueryStart, lQueryEnd, lStartTime);
-			m_oObsTpvt[i] = getData(oOV, ObsType.TPVT, nBb, lQueryStart, lQueryEnd, lStartTime);
-			m_oObsTssrf[i] = getData(oOV, ObsType.TSSRF, nBb, lQueryStart, lQueryEnd, lStartTime);
-			m_oObsRoadCond[i] = getData(oOV, ObsType.STPVT, nBb, lQueryStart, lQueryEnd, lStartTime);
+			long lQueryEnd = lQueryStart + 120000;
+			m_oObsAirTemp[i] = oOV.getPreferedData(ObsType.TAIR, nBb, lQueryStart, lQueryEnd, lStartTime);
+			m_oObsDewPoint[i] = oOV.getPreferedData(ObsType.TDEW, nBb, lQueryStart, lQueryEnd, lStartTime);
+			m_oObsWindSpeed[i] = oOV.getPreferedData(ObsType.SPDWND, nBb, lQueryStart, lQueryEnd, lStartTime);
+			m_oObsTpvt[i] = oOV.getPreferedData(ObsType.TPVT, nBb, lQueryStart, lQueryEnd, lStartTime);
+			m_oObsTssrf[i] = oOV.getPreferedData(ObsType.TSSRF, nBb, lQueryStart, lQueryEnd, lStartTime);
+			m_oMetroTpvt[i] = oOV.getData(ObsType.TPVT, lQueryStart, lQueryEnd, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, nTpvtContribSrc);
+			m_oMetroTssrf[i] = oOV.getData(ObsType.TSSRF, lQueryStart, lQueryEnd, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, nTssrfContribSrc);
+			m_oObsRoadCond[i] = oOV.getPreferedData(ObsType.STPVT, nBb, lQueryStart, lQueryEnd, lStartTime);
 			oCal.setTimeInMillis(lQueryStart);
 			m_dObsTime[i] = oCal.get(Calendar.HOUR_OF_DAY) + (double)oCal.get(Calendar.MINUTE) / 60.0;
 		}
 		
+		ArrayList<ResourceRecord> oMetroRRs = Directory.getResourcesByContribSource(Integer.valueOf("metro", 36), m_nSourceId);
+		ResourceRecord oMetroDphSn = null;
+		for (ResourceRecord oRR : oMetroRRs)
+		{
+			if (oRR.getObsTypeId() == ObsType.DPHSN)
+			{
+				oMetroDphSn = oRR;
+				break;
+			}
+		}
+		
+		ResourceRecord oMetroDphLiq = null;
+		for (ResourceRecord oRR : oMetroRRs)
+		{
+			if (oRR.getObsTypeId() == ObsType.DPHLIQ)
+			{
+				oMetroDphLiq = oRR;
+				break;
+			}
+		}
+
+		m_oRainRes = oOV.getData(ObsType.DPHLIQ, lForecast, lForecast + 60000, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, new int[]{oMetroDphLiq.getContribId(), oMetroDphLiq.getSourceId()});
+		m_oSnowRes = oOV.getData(ObsType.DPHSN, lForecast, lForecast + 60000, nBb[1], nBb[3], nBb[0], nBb[2], lStartTime, new int[]{oMetroDphSn.getContribId(), oMetroDphSn.getSourceId()});
 		
 		for (int i = 0; i < m_oFcstAirTemp.length; i++)
 		{
@@ -101,22 +137,20 @@ public class MetroObsSet
 				m_oFcstAirTemp[i] = m_oObsAirTemp[m_oObsAirTemp.length - 1];
 				m_oFcstDewPoint[i] = m_oObsDewPoint[m_oObsDewPoint.length - 1];
 				m_oFcstWindSpeed[i] = m_oObsWindSpeed[m_oObsWindSpeed.length - 1];
-				m_oFcstCloudCover[i] = getData(oOV, ObsType.COVCLD, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstSfcPres[i] = getData(oOV, ObsType.PRSUR, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstPrecipRate[i] = getData(oOV, ObsType.RTEPC, nBb, lQueryStart, lQueryStart + 3600000, lStartTime);
+				m_oFcstCloudCover[i] = oOV.getPreferedData(ObsType.COVCLD, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstSfcPres[i] = oOV.getPreferedData(ObsType.PRSUR, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstPrecipRate[i] = oOV.getPreferedData(ObsType.RTEPC, nBb, lQueryStart, lQueryStart + 3600000, lStartTime);
 				m_oFcstPrecipType[i] = null;
-				m_oRainRes = getData(oOV, ObsType.RESRN, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oSnowRes = getData(oOV, ObsType.RESSN, nBb, lQueryStart, lQueryEnd, lStartTime);
 			}
 			else
 			{
-				m_oFcstAirTemp[i] = getData(oOV, ObsType.TAIR, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstDewPoint[i] = getData(oOV, ObsType.TDEW, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstWindSpeed[i] = getData(oOV, ObsType.SPDWND, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstCloudCover[i] = getData(oOV, ObsType.COVCLD, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstSfcPres[i] = getData(oOV, ObsType.PRSUR, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstPrecipRate[i] = getData(oOV, ObsType.RTEPC, nBb, lQueryStart, lQueryEnd, lStartTime);
-				m_oFcstPrecipType[i] = getData(oOV, ObsType.TYPPC, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstAirTemp[i] = oOV.getPreferedData(ObsType.TAIR, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstDewPoint[i] = oOV.getPreferedData(ObsType.TDEW, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstWindSpeed[i] = oOV.getPreferedData(ObsType.SPDWND, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstCloudCover[i] = oOV.getPreferedData(ObsType.COVCLD, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstSfcPres[i] = oOV.getPreferedData(ObsType.PRSUR, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstPrecipRate[i] = oOV.getPreferedData(ObsType.RTEPC, nBb, lQueryStart, lQueryEnd, lStartTime);
+				m_oFcstPrecipType[i] = oOV.getPreferedData(ObsType.TYPPC, nBb, lQueryStart, lQueryEnd, lStartTime);
 			}
 		}
 	}
@@ -134,6 +168,8 @@ public class MetroObsSet
 			fillObsList(oAllObs.m_oObsWindSpeed[i], m_oObsWindSpeed, i, nBoundingGeo);
 			fillObsList(oAllObs.m_oObsTpvt[i], m_oObsTpvt, i, nBoundingGeo);
 			fillObsList(oAllObs.m_oObsTssrf[i], m_oObsTssrf, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oMetroTpvt[i], m_oMetroTpvt, i, nBoundingGeo);
+			fillObsList(oAllObs.m_oMetroTssrf[i], m_oMetroTssrf, i, nBoundingGeo);
 			fillObsList(oAllObs.m_oObsRoadCond[i], m_oObsRoadCond, i, nBoundingGeo);
 		}
 		
@@ -184,24 +220,5 @@ public class MetroObsSet
 			if (oObs.spatialMatch(nBoundingGeo))
 				oList.add(oObs);
 		}
-	}
-	
-	
-	private ObsList getData(TileObsView oOV, int nObstype, int[] nBb, long lStartQuery, long lEndQuery, long lRef)
-	{
-		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
-		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
-		int[] nContribAndSource = new int[2];
-		for (ResourceRecord oTemp : oRRs)
-		{
-			nContribAndSource[0] = oTemp.getContribId();
-			nContribAndSource[1] = oTemp.getSourceId();
-			ObsList oData = oOV.getData(nObstype, lStartQuery, lEndQuery,
-			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
-			if (oData.m_bHasData || !oData.isEmpty())
-				return oData;
-		}
-		
-		return new ObsList();
 	}
 }

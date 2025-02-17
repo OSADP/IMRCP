@@ -7,6 +7,7 @@ import imrcp.store.ObsList;
 import imrcp.system.Directory;
 import imrcp.system.Introsort;
 import imrcp.system.ObsType;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -150,7 +151,7 @@ public class DoMetroWrapper implements Runnable
 	 * Array used to store the liquid accumulation outputs from METRo in mm
 	 */
 	private final double[] m_dOutLiquidAcc;
-
+	
 	
 	/**
 	 * Array that contains the hour of day (using 24 hour clock) of each
@@ -486,14 +487,22 @@ public class DoMetroWrapper implements Runnable
 			m_dObsAirTemp[i] = getValue(oObsSet.m_oObsAirTemp[i], nBoundingPolygon);
 			m_dObsDewPoint[i] = getValue(oObsSet.m_oObsDewPoint[i], nBoundingPolygon);
 			m_dObsWindSpeed[i] = getValue(oObsSet.m_oObsWindSpeed[i], nBoundingPolygon);
-			m_dObsRoadTemp[i] = getValue(oObsSet.m_oObsTpvt[i], nSegmentPolygon, nImrcpContrib);
-			m_dObsSubSurfTemp[i] = getValue(oObsSet.m_oObsTssrf[i], nSegmentPolygon, nImrcpContrib);
+			m_dObsRoadTemp[i] = getValue(oObsSet.m_oObsTpvt[i], nSegmentPolygon);
+			m_dObsSubSurfTemp[i] = getValue(oObsSet.m_oObsTssrf[i], nSegmentPolygon);
 			
 			if (Double.isNaN(m_dObsRoadTemp[i]))
-				m_dObsRoadTemp[i] = m_dObsAirTemp[i];
+			{
+				m_dObsRoadTemp[i] = getValue(oObsSet.m_oMetroTpvt[i], nSegmentPolygon);
+				if (Double.isNaN(m_dObsRoadTemp[i]))
+					m_dObsRoadTemp[i] = m_dObsAirTemp[i];
+			}
 			
 			if (Double.isNaN(m_dObsSubSurfTemp[i]))
-				m_dObsSubSurfTemp[i] = m_dObsRoadTemp[i];
+			{
+				m_dObsSubSurfTemp[i] = getValue(oObsSet.m_oMetroTssrf[i], nSegmentPolygon);
+				if (Double.isNaN(m_dObsSubSurfTemp[i]))
+					m_dObsSubSurfTemp[i] = m_dObsRoadTemp[i];
+			}
 			
 			m_lRoadCond[i] = imrcpToMetroRoadCond((int)getValue(oObsSet.m_oObsRoadCond[i], nSegmentPolygon, nImrcpContrib));
 
@@ -537,7 +546,7 @@ public class DoMetroWrapper implements Runnable
 			long lTimestamp = lForecast + (3600000 * i);
 			long lQueryStart = lTimestamp;
 			// for the first hour of forecast use RTMA and radar precip, after that use NDFD for air temp, dew point, wind speed, and cloud cover and RAP for other values
-			// the first hour of "forecast" is an hour in the past
+			// the first hour ofc "forecast" is an hour in the past
 			if (i == 0)
 			{
 				
@@ -547,13 +556,13 @@ public class DoMetroWrapper implements Runnable
 				m_dCloudCover[i] = getValue(oObsSet.m_oFcstCloudCover[i], nBoundingPolygon) / 12.5; // convert % to "octal"
 				m_dSfcPres[i] = getValue(oObsSet.m_oFcstSfcPres[i], nBoundingPolygon) * 100; // convert mbar to Pa
 
-				m_dRainReservoir = getValue(oObsSet.m_oRainRes, nBoundingPolygon);
-				m_dSnowReservoir = getValue(oObsSet.m_oSnowRes, nBoundingPolygon);
+				m_dRainReservoir = getValue(oObsSet.m_oRainRes, nSegmentPolygon);
+				m_dSnowReservoir = getValue(oObsSet.m_oSnowRes, nSegmentPolygon);
 				if (Double.isNaN(m_dRainReservoir))
 					m_dRainReservoir = 0;
 				if (Double.isNaN(m_dSnowReservoir))
 					m_dSnowReservoir = 0;
-				
+				m_dSnowReservoir /= 10; // account for liquid equivalence
 				ObsList oPrecip = getValues(oObsSet.m_oFcstPrecipRate[i], nBoundingPolygon);
 				if (!oPrecip.isEmpty())
 				{
@@ -561,8 +570,8 @@ public class DoMetroWrapper implements Runnable
 					int nPrecipIndex = 0;
 					Obs oPrecipObs = oPrecip.get(nPrecipIndex);
 					int nPrecipLimit = oPrecip.size();
-					long lType = m_dAirTemp[i] > -2 ? 1 : 2; // infer type from the air temp
-					for (int nIndex = 0; nIndex < 30; nIndex++) // fill in the precip arrays for every 30 secs
+					long lType = m_dAirTemp[i] > 0.5 ? 1 : 2; // infer type from the air temp
+					for (int nIndex = 0; nIndex < 30; nIndex++) // fill in the precip arrays for every 30 secs of the last ten minutes
 					{
 						long lPrecipStart = lQueryStart + 120000 * nIndex;
 						double dVal = Double.NaN;
@@ -682,9 +691,6 @@ public class DoMetroWrapper implements Runnable
 		int nObsPerType = Metro.getObservationCount(m_nForecastHrs);
 		RoadcastData oRD = new RoadcastData(nObsPerType, nLon, nLat);
 		int nRoadcastIndex = 0;
-//		long lFirstValue = lStartTime - 3600000; // substract an hour since outputs from METRo start at the time of the most recent observations
-		oRD.m_oDataArrays.get(ObsType.RESRN)[0] = (float)m_dOutLiquidAcc[20]; // the next metro run is in ten minutes so store the resevoir values at the time
-		oRD.m_oDataArrays.get(ObsType.RESSN)[0] = (float)m_dOutSnowIceAcc[20];
 		float[] fStpvt = oRD.m_oDataArrays.get(ObsType.STPVT);
 		float[] fTpvt = oRD.m_oDataArrays.get(ObsType.TPVT);
 		float[] fTssrf = oRD.m_oDataArrays.get(ObsType.TSSRF);
@@ -695,13 +701,14 @@ public class DoMetroWrapper implements Runnable
 		{
 			if (i == 0) // for the first hour save values every 2 minutes
 			{
-				for (int nIndex = 120; nIndex < 240; nIndex += 4) // start at 120 which is the index that corresponds to lStartTime (each value in the output arrays is 30 seconds apart so an hour in 120 positions)
-				{
+				for (int nIndex = 20; nIndex < 240; nIndex += 4) // start at 20 which is the index that corresponds to 50 minutes before lStartTime (each value in the output arrays is 30 seconds apart)
+				{												//  we start there since that will be time index 0 in the next metro run
 					fStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]);
 					fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
 					fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
-					fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+					fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex] * 10; // liquid equivalent for snow so multiple by ten to mm
 					fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
+					
 				}
 			}
 			else if (i < 12) // up to 12 hours save values for every 20 minutes
@@ -712,7 +719,7 @@ public class DoMetroWrapper implements Runnable
 					fStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]);
 					fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
 					fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
-					fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+					fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex] * 10; // liquid equivalent for snow so multiple by ten to mm
 					fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 				}
 			}
@@ -722,7 +729,7 @@ public class DoMetroWrapper implements Runnable
 				fStpvt[nRoadcastIndex] = convertRoadCondition((int)m_lOutRoadCond[nIndex]);
 				fTpvt[nRoadcastIndex] = (float)m_dOutRoadTemp[nIndex];
 				fTssrf[nRoadcastIndex] = (float)m_dOutSubSurfTemp[nIndex];
-				fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex];
+				fDphsn[nRoadcastIndex] = (float)m_dOutSnowIceAcc[nIndex] * 10; // liquid equivalent for snow so multiple by ten to mm
 				fDphliq[nRoadcastIndex++] = (float)m_dOutLiquidAcc[nIndex];
 			}
 		}
@@ -894,20 +901,23 @@ public class DoMetroWrapper implements Runnable
 	}
 
 	
-//	/**
-//	 * Creates a StringBuilder containing information about the METRo run
-//	 * @param lTimestamp run time of METRo
-//	 * @return StringBuilder with log messages
-//	 * @throws Exception
-//	 */
-//	public StringBuilder log(long lTimestamp)
-//		throws Exception
-//	{
-//		StringBuilder oOut = new StringBuilder();
-//		SimpleDateFormat oSdf = new SimpleDateFormat("yyyyMMdd HHmm");
-//		long lObservation = lTimestamp - (3600000 * m_nObsHrs);
-//		long lForecast = lTimestamp - 3600000; // the first "forecast" actually uses observed values
-//		oSdf.setTimeZone(Directory.m_oUTC);
+	/**
+	 * Creates a StringBuilder containing information about the METRo run
+	 * @param lTimestamp run time of METRo
+	 * @return StringBuilder with log messages
+	 * @throws Exception
+	 */
+	public StringBuilder log(long lTimestamp)
+		throws Exception
+	{
+		StringBuilder oOut = new StringBuilder();
+		if (m_oOutput == null)
+			return oOut;
+		
+		SimpleDateFormat oSdf = new SimpleDateFormat("yyyyMMdd HHmm");
+		long lObservation = lTimestamp - (3600000 * m_nObsHrs);
+		long lForecast = lTimestamp - 3600000; // the first "forecast" actually uses observed values
+		oSdf.setTimeZone(Directory.m_oUTC);
 //		oOut.append(String.format("runtime:%s,%2.7f,%2.7f,%s,%2.7f,%2.7f\n", oSdf.format(lTimestamp), m_dLon, m_dLat, m_bBridge == 1 ? "yes" : "no", m_dRainReservoir, m_dSnowReservoir));
 //		oOut.append("obs_times");
 //		for (int i = 0; i < m_nObsHrs; i++)
@@ -994,53 +1004,90 @@ public class DoMetroWrapper implements Runnable
 //		for (long dVal : m_lPrecipType)
 //			oOut.append(String.format(",%2.2f", (double)dVal));
 //		oOut.append('\n');
-//		oOut.append("outputs");
-//		long lFirstValue = lTimestamp - 3600000;
-//		long l30Sec = 30 * 1000;
-//		for (int i = 0; i < m_nForecastHrs - 2; i++)
-//		{
-//			if (i == 0) // for the first hour save values every 2 minutes
-//			{
-//				for (int j = 0; j < 30; j++)
-//				{
-//					int nIndex = 120 + j * 4;
-//					long lTs = lFirstValue + l30Sec * nIndex;
-//					oOut.append(',').append(oSdf.format(lTs));
-//				}
-//			}
-//			else // for all other forecast hours save values for every 20 minutes
-//			{
-//				for (int j = 0; j < 3; j++)
-//				{
-//					int nIndex = ((i + 1) * 120) + (j * 40);
-//					long lTs = lFirstValue + l30Sec * nIndex;
-//					oOut.append(',').append(oSdf.format(lTs));
-//				}
-//			}
-//		}
-//		oOut.append('\n');
-//		oOut.append("out_stpvt_(3=dry_5=wet_20=ice/snow_21=slush_12=dew_22=melting-snow_13=frost_23=icing-rain_1=other)");
-//		for (long dVal : m_oOutput.m_fStpvt)
-//			oOut.append(String.format(",%d", dVal));
-//		oOut.append('\n');
-//		oOut.append("out_tpvt_C");
-//		for (double dVal : m_oOutput.m_fTpvt)
-//			oOut.append(String.format(",%2.2f", dVal));
-//		oOut.append('\n');
-//		oOut.append("out_tssrf_C");
-//		for (double dVal : m_oOutput.m_fTssrf)
-//			oOut.append(String.format(",%2.2f", dVal));
-//		oOut.append('\n');
-//		oOut.append("out_dphliq_mm");
-//		for (double dVal : m_oOutput.m_fDphliq)
-//			oOut.append(String.format(",%2.2f", dVal));
-//		oOut.append('\n');
-//		oOut.append("out_dphsn_mm");
-//		for (double dVal : m_oOutput.m_fDphsn)
-//			oOut.append(String.format(",%2.2f", dVal));
-//		oOut.append('\n').append('\n');
-//		return oOut;
-//	}
+		oOut.append("outputs");
+		int nOutputStart = 25;
+		long lFirstValue = lForecast + 600000;
+		for (int i = 0; i < m_nForecastHrs - 2; i++)
+		{
+			if (i == 0) // for the first hour save values every 2 minutes
+			{
+				for (int j = nOutputStart; j < 55; j++)
+				{
+					long lTs = lFirstValue + j * 120000;
+					oOut.append(',').append(oSdf.format(lTs));
+				}
+				lFirstValue = lTimestamp + 3600000;
+			}
+			else if (i < 12) // for all other forecast hours save values for every 20 minutes
+			{
+				for (int j = 0; j < 3; j++)
+				{
+					
+					long lTs = lFirstValue + j * 1200000;
+					oOut.append(',').append(oSdf.format(lTs));
+				}
+				lFirstValue += 3600000;
+			}
+			else
+			{
+				oOut.append(',').append(oSdf.format(lFirstValue));
+				lFirstValue += 3600000;
+			}
+		}
+
+		oOut.append('\n');
+		oOut.append("fcst_tair_C");
+		for (int nTemp = nOutputStart; nTemp < 25; nTemp++)
+			oOut.append(String.format(",%2.2f", m_dAirTemp[0]));
+		for (int nTemp = 0; nTemp < 30; nTemp++)
+			oOut.append(String.format(",%2.2f", m_dAirTemp[1]));
+		for (int nTemp = 0; nTemp < 3; nTemp++)
+			oOut.append(String.format(",%2.2f", m_dAirTemp[2]));
+		oOut.append("\nout_stpvt_(3=dry_5=wet_20=ice/snow_21=slush_12=dew_22=melting-snow_13=frost_23=icing-rain_1=other)");
+		float[] fStpvt = m_oOutput.m_oDataArrays.get(ObsType.STPVT);
+		float[] fTpvt = m_oOutput.m_oDataArrays.get(ObsType.TPVT);
+		float[] fTssrf = m_oOutput.m_oDataArrays.get(ObsType.TSSRF);
+		float[] fDphsn = m_oOutput.m_oDataArrays.get(ObsType.DPHSN);
+		float[] fDphliq = m_oOutput.m_oDataArrays.get(ObsType.DPHLIQ);
+		
+		for (int n = nOutputStart; n < fStpvt.length; n++)
+			oOut.append(String.format(",%d", (int)fStpvt[n]));
+		oOut.append('\n');
+		oOut.append("out_tpvt_C");
+		for (int n = nOutputStart; n < fStpvt.length; n++)
+			oOut.append(String.format(",%2.2f", fTpvt[n]));
+		oOut.append('\n');
+		oOut.append("out_tssrf_C");
+		for (int n = nOutputStart; n < fStpvt.length; n++)
+			oOut.append(String.format(",%2.2f", fTssrf[n]));
+		oOut.append('\n');
+		oOut.append("out_dphliq_mm");
+		for (int n = nOutputStart; n < fStpvt.length; n++)
+			oOut.append(String.format(",%2.2f", fDphliq[n]));
+		oOut.append('\n');
+		oOut.append("out_dphsn_mm");
+		for (int n = nOutputStart; n < fStpvt.length; n++)
+			oOut.append(String.format(",%2.2f", fDphsn[n]));
+		
+		oOut.append('\n');
+		oOut.append("precip_into_model_mm");
+		
+		double dPrecip = 0.0;
+		for (int nTempIndex = 0; nTempIndex < 20; nTempIndex++)
+			dPrecip += m_dPrecipAmt[nTempIndex] * 30 * 1000;
+		
+		oOut.append(String.format(",%2.2f,,,,", dPrecip * 10));
+		oOut.append('\n');
+		oOut.append("input_snow_res_mm");
+		oOut.append(String.format(",%2.2f,,,,", m_dSnowReservoir * 10));
+		oOut.append('\n');
+		oOut.append("tpvt-comp");
+		oOut.append(String.format(",%2.2f,%2.2f,,,", fTpvt[0], m_dObsRoadTemp[m_dObsRoadTemp.length - 1]));
+		
+		
+		oOut.append('\n');
+		return oOut;
+	}
 	
 	
 	public static double getValue(ObsList oData, int[] nBoundingPolygon)

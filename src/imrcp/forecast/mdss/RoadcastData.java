@@ -48,8 +48,6 @@ public class RoadcastData implements Comparable<RoadcastData>
 		m_oDataArrays.put(ObsType.TSSRF, new float[nOutputs]);
 		m_oDataArrays.put(ObsType.DPHLIQ, new float[nOutputs]);
 		m_oDataArrays.put(ObsType.DPHSN, new float[nOutputs]);
-		m_oDataArrays.put(ObsType.RESRN, new float[1]);
-		m_oDataArrays.put(ObsType.RESSN, new float[1]);
 		m_nLon = nLon;
 		m_nLat = nLat;
 	}

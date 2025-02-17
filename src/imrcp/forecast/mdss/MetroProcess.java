@@ -197,7 +197,7 @@ public class MetroProcess
 		ResourceRecord oRR = Directory.getResource(Integer.valueOf("metro", 36), ObsType.TPVT);
 		int nPPT = (int)Math.pow(2, oRR.getTileSize()) - 1;
 		Mercator oM = new Mercator(nPPT);
-		int nTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
+		int nTol = (int)Math.round(oM.RES[oRR.getZoom()] * 100); // meters per pixel * 100 
 		long lStartTime = oScenario.m_lStartTime - 3600000 * (m_nObsPerRun - 1); // the first forecast time is an hour after the reftime, for metro the run time is used for both the last observation hour and first forecast hour
 		long lEndTime = lStartTime + (m_dAirTemp.length * 3600000); // could use any of the array, they are the same length
 		for (int nIndex = 0; nIndex < m_lTimes.length; nIndex++) // fill time array
@@ -328,21 +328,9 @@ public class MetroProcess
 		
 	private void getData(TileObsView oOV, int nObstype, int[] nBb, int[] nQueryGeo, long lStartQuery, long lEndQuery, long lRef, int nIndex, double[] dArr, boolean bAverage)
 	{
-		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
-		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
-		int[] nContribAndSource = new int[2];
-		ObsList oData = null;
-		for (ResourceRecord oTemp : oRRs)
-		{
-			nContribAndSource[0] = oTemp.getContribId();
-			nContribAndSource[1] = oTemp.getSourceId();
-			oData = oOV.getData(nObstype, lStartQuery, lEndQuery,
-			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
-			if (oData.m_bHasData || !oData.isEmpty())
-				break;
-		}
-		
-		if (oData != null && !oData.isEmpty())
+		ObsList oData = oOV.getPreferedData(nObstype, nBb, lStartQuery, lEndQuery, lRef);
+
+		if (!oData.isEmpty())
 		{
 			if (bAverage)
 			{
@@ -370,21 +358,9 @@ public class MetroProcess
 	
 	private void getData(TileObsView oOV, int nObstype, int[] nBb, long lStartQuery, long lEndQuery, long lRef, int nIndex, int[] nArr)
 	{
-		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
-		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
-		int[] nContribAndSource = new int[2];
-		ObsList oData = null;
-		for (ResourceRecord oTemp : oRRs)
-		{
-			nContribAndSource[0] = oTemp.getContribId();
-			nContribAndSource[1] = oTemp.getSourceId();
-			oData = oOV.getData(nObstype, lStartQuery, lEndQuery,
-			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
-			if (oData.m_bHasData || !oData.isEmpty())
-				break;
-		}
+		ObsList oData = oOV.getPreferedData(nObstype, nBb, lStartQuery, lEndQuery, lRef);
 		
-		if (oData != null && !oData.isEmpty())
+		if (!oData.isEmpty())
 		{
 			nArr[nIndex] = (int)oData.get(0).m_dValue;
 		}

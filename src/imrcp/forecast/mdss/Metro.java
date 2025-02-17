@@ -8,7 +8,7 @@ import imrcp.geosrv.Network;
 import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
 import imrcp.store.Obs;
-import imrcp.store.ProjProfile;
+import imrcp.geosrv.ProjProfile;
 import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.Id;
@@ -33,16 +33,23 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import ucar.unidata.geoloc.ProjectionImpl;
 import ucar.unidata.geoloc.projection.LambertConformal;
 import ucar.unidata.geoloc.projection.LatLonProjection;
-import imrcp.system.TileFileWriter;
+import imrcp.collect.TileFileWriter;
+import imrcp.system.FileUtil;
 import imrcp.system.XzBuffer;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.channels.Channels;
+import java.nio.file.Paths;
+import java.util.Map.Entry;
 import java.util.TimeZone;
 
 /**
@@ -54,12 +61,6 @@ import java.util.TimeZone;
  */
 public class Metro extends BaseBlock
 {
-	/**
-	 * Local thread pool 
-	 */
-	private ExecutorService m_oThreadPool;
-
-	
 	/**
 	 * Number of hours of forecast data used as input for the METRo model.
 	 */
@@ -113,6 +114,12 @@ public class Metro extends BaseBlock
 	 * false times have to be queue to run on demand
 	 */
 	private boolean m_bRealTime;
+	
+	
+	private int m_nThreads;
+	
+	
+	private String m_sToken;
 	
 	
 	/**
@@ -186,13 +193,14 @@ public class Metro extends BaseBlock
 	
 	private ProjProfile[] m_oProjProfiles;
 	
-	private final MetroExecutor m_oMetroExecutor = new MetroExecutor();
+	private int m_nSourceId;
+	
 	
 	@Override
 	public void reset(JSONObject oBlockConfig)
 	{
 		super.reset(oBlockConfig);
-		m_oThreadPool = Executors.newFixedThreadPool(oBlockConfig.optInt("threads", 3));
+		m_nThreads = oBlockConfig.optInt("threads", 3);
 		m_nForecastHours = oBlockConfig.optInt("fcsthrs", 6);
 		m_nObsHours = oBlockConfig.optInt("obshrs", 6);
 		m_nOffset = oBlockConfig.optInt("offset", 3300);
@@ -207,6 +215,8 @@ public class Metro extends BaseBlock
 		m_sWaysBlock = oBlockConfig.optString("way", "WayNetworks");
 		m_sLogFf = oBlockConfig.optString("logff", "");
 		m_sLogTrigger = oBlockConfig.optString("logtrigger", "");
+		m_sToken = oBlockConfig.optString("token", null);
+		m_nSourceId = Integer.valueOf(oBlockConfig.optString("sourceid", "metro"), 36);
 		JSONArray oProfiles = oBlockConfig.getJSONArray("projprofiles");
 		m_oProjProfiles = new ProjProfile[oProfiles.length()];
 		for (int nIndex = 0; nIndex < oProfiles.length(); nIndex++)
@@ -272,23 +282,36 @@ public class Metro extends BaseBlock
 				m_oRunTimes.addLast(oIn.parseLong(0));
 		}
 
-		m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		if (m_bRealTime)
+			m_nSchedId = Scheduling.getInstance().createSched(this, m_nOffset, m_nPeriod);
+		else if (!m_oRunTimes.isEmpty())
+			Scheduling.getInstance().scheduleOnce(this, 60000);
 		return true;
 	}
-
 	
-	/**
-	 * Wrapper for {@link java.util.concurrent.ExecutorService#shutdown()} and
-	 * cancels the schedule for {@link Metro#m_oTileUpdate}
-	 * @return true
-	 */
+	
 	@Override
-	public boolean stop()
+	public void doGet(HttpServletRequest oReq, HttpServletResponse oRes)
+		throws ServletException, IOException
 	{
-		m_oThreadPool.shutdownNow();
-		return true;
+		if (m_sToken == null)
+			return;
+		
+		String[] sUriParts = oReq.getRequestURI().split("/");
+		String sStart = sUriParts[sUriParts.length - 3];
+		String sEnd = sUriParts[sUriParts.length - 2];
+		String sToken = sUriParts[sUriParts.length - 1];
+		
+		if (m_sToken.compareTo(sToken) != 0)
+			return;
+		StringBuilder sBuf = new StringBuilder();
+		queue(sStart, sEnd, sBuf);
+		Scheduling.getInstance().scheduleOnce(this, 1000);
+		try (PrintWriter oOut = oRes.getWriter())
+		{
+			oOut.append(sBuf);
+		}
 	}
-	
 	
 	/**
 	 * If this instance is configured to reprocess files, it parses the given
@@ -299,7 +322,7 @@ public class Metro extends BaseBlock
 	 * @param sEnd end timestamp in the format yyyy-MM-ddTHH:mm
 	 * @param sBuffer Buffer that gets fills with html containing the queued files
 	 */
-	public void queue(String sStart, String sEnd, StringBuilder sBuffer)
+	private void queue(String sStart, String sEnd, StringBuilder sBuffer)
 	{
 		try
 		{
@@ -440,87 +463,78 @@ public class Metro extends BaseBlock
 				if (oTile.m_nWaysBb[3] > nBB[3])
 					nBB[3] = oTile.m_nWaysBb[3];
 			}
-
-			MetroObsSet oObsSet = new MetroObsSet(m_nObsHours, m_nForecastHours);
+			nBB[0] -= 1000;
+			nBB[1] -= 1000;
+			nBB[2] += 1000;
+			nBB[3] += 1000;
+			MetroObsSet oObsSet = new MetroObsSet(m_nObsHours, m_nForecastHours, m_nSourceId);
 			oObsSet.getData(nBB, lRunTime);
 			for (MetroTile oTile : oTiles)
 				oTile.m_oAllObs = oObsSet;
 			long[] lStartTimes = new long[getObservationCount(m_nForecastHours)];
-			lStartTimes[0] = lRunTime;
-			for (int nIndex = 1; nIndex < 30; nIndex++) // the first hour of values are 2 minutes apart
+			lStartTimes[0] = lRunTime - 3000000; // start 50 minutes before the run time which corresponds to time index 0 of the next metro run
+			for (int nIndex = 1; nIndex < 55; nIndex++) // the first hour and 50 minutes of values are 2 minutes apart
 				lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 120000;
-			if (lStartTimes.length > 30)
+			if (lStartTimes.length > 55)
 			{
-				lStartTimes[30] = lRunTime + 3600000;
-				int nTwentyMinLimit = 63; // 30 2 minute values and 33 20 minute values
+				lStartTimes[55] = lRunTime + 3600000;
+				int nTwentyMinLimit = 88; // 55 2 minute values and 33 20 minute values
 				int nLimit = Math.min(nTwentyMinLimit, lStartTimes.length);
-				for (int nIndex = 31; nIndex < nLimit; nIndex++) // the rest of the values are 20 minutes apart
+				for (int nIndex = 56; nIndex < nLimit; nIndex++) // the rest of the values are 20 minutes apart
 					lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 1200000;
 				if (nTwentyMinLimit < lStartTimes.length)
 					lStartTimes[nTwentyMinLimit] = lStartTimes[nTwentyMinLimit - 1] + 1200000;
 				for (int nIndex = nTwentyMinLimit + 1; nIndex < lStartTimes.length; nIndex++)
 					lStartTimes[nIndex] = lStartTimes[nIndex - 1] + 3600000;
 			}
+			
+			Scheduling.processCallables(oTiles, m_nThreads);
 
-			m_oThreadPool.invokeAll(oTiles); // and run them all
+			ResourceRecord oRR = Directory.getResource(Integer.valueOf("METRO", 36), ObsType.VARIES);
+			FilenameFormatter oFf = new FilenameFormatter(oRR.getTiledFf());
 
-			ArrayList<ResourceRecord> oRRs = oTiles.get(0).m_oRRs;
-			for (int nRRIndex = 0; nRRIndex < oRRs.size(); nRRIndex++)
+			long lStart = lRunTime + oRR.getDelay();
+			long lEnd = lStart + oRR.getRange();
+			Path oTileFile = oRR.getFilename(lRunTime, lStart, lEnd, oFf);
+			Files.createDirectories(oTileFile.getParent());
+			try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTileFile))))
 			{
-				ResourceRecord oRR = oRRs.get(nRRIndex);
-				FilenameFormatter oFf = new FilenameFormatter(oRR.getTiledFf());
+				oOut.writeByte(1); // version
+				oOut.writeInt(nBB[0]); // bounds min x
+				oOut.writeInt(nBB[1]); // bounds min y
+				oOut.writeInt(nBB[2]); // bounds max x
+				oOut.writeInt(nBB[3]); // bounds max y
+				oOut.writeInt(oRR.getObsTypeId()); // obsversation type
+				oOut.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
+				oOut.writeByte(Obs.POINT); // geo type
+				oOut.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
+				int nObjAndTimes = Id.SEGMENT;
+				nObjAndTimes <<= 4;
+				oOut.writeByte(nObjAndTimes); // associate with obj and timestamp flag, first nybble is Id.SEGMENT the lower bytes are all zero since times for obs are found in header
+				oOut.writeLong(lRunTime);
+				oOut.writeInt((int)((lEnd - lRunTime) / 1000)); // end time offset from received time
+				if (lStartTimes.length > Byte.MAX_VALUE)
+					oOut.writeShort(-lStartTimes.length);
+				else
+					oOut.writeByte(lStartTimes.length);
+				oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from the received time for the first value
+				for (int nIndex = 1; nIndex < lStartTimes.length; nIndex++) // the rest are offset from the previous value
+					oOut.writeInt((int)((lStartTimes[nIndex] - lStartTimes[nIndex - 1]) / 1000 ));
+				oOut.writeInt(0); // no string pool
 
-				long lStart = lRunTime + oRR.getDelay();
-				long lEnd = lStart + oRR.getRange();
-				Path oTileFile = oRR.getFilename(lRunTime, lStart, lEnd, oFf);
-				Files.createDirectories(oTileFile.getParent());
-				try (DataOutputStream oOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(oTileFile))))
+				oOut.writeByte(oRR.getZoom()); // tile zoom level
+				oOut.writeByte(oRR.getTileSize());
+				oOut.writeInt(oTiles.size());
+				for (MetroTile oTile : oTiles) // finish writing tile metadata
 				{
-					oOut.writeByte(1); // version
-					oOut.writeInt(nBB[0]); // bounds min x
-					oOut.writeInt(nBB[1]); // bounds min y
-					oOut.writeInt(nBB[2]); // bounds max x
-					oOut.writeInt(nBB[3]); // bounds max y
-					oOut.writeInt(oRR.getObsTypeId()); // obsversation type
-					oOut.writeByte(Util.combineNybbles(0, oRR.getValueType())); // obs flag = 0 (upper nybble) value type (lower nybble)
-					oOut.writeByte(Obs.POINT); // geo type
-					oOut.writeByte(0); // id format: -1=variable, 0=null, 16=uuid, 32=32-bytes
-					int nObjAndTimes = Id.SEGMENT;
-					nObjAndTimes <<= 4;
-					oOut.writeByte(nObjAndTimes); // associate with obj and timestamp flag, first nybble is Id.SEGMENT the lower bytes are all zero since times for obs are found in header
-					oOut.writeLong(lRunTime);
-					oOut.writeInt((int)((lEnd - lRunTime) / 1000)); // end time offset from received time
-					if (oRR.getObsTypeId() == ObsType.RESRN || oRR.getObsTypeId() == ObsType.RESSN)
-					{
-						oOut.writeByte(1); // 1 start time
-						oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from received time
-					}
-					else
-					{
-						if (lStartTimes.length > Byte.MAX_VALUE)
-							oOut.writeShort(-lStartTimes.length);
-						else
-							oOut.writeByte(lStartTimes.length);
-						oOut.writeInt((int)((lStart - lRunTime) / 1000)); // start time offset from the received time for the first value
-						for (int nIndex = 1; nIndex < lStartTimes.length; nIndex++) // the rest are offset from the previous value
-							oOut.writeInt((int)((lStartTimes[nIndex] - lStartTimes[nIndex - 1]) / 1000 ));
-					}
-					oOut.writeInt(0); // no string pool
+					oOut.writeShort(oTile.m_nX);
+					oOut.writeShort(oTile.m_nY);
+					oOut.writeInt(oTile.m_yData.length);
+				}
 
-					oOut.writeByte(oRR.getZoom()); // tile zoom level
-					oOut.writeByte(oRR.getTileSize());
-					oOut.writeInt(oTiles.size());
-					for (MetroTile oTile : oTiles) // finish writing tile metadata
-					{
-						oOut.writeShort(oTile.m_nX);
-						oOut.writeShort(oTile.m_nY);
-						oOut.writeInt(oTile.m_yDatas[nRRIndex].length);
-					}
-
-					for (MetroTile oTile : oTiles)
-					{
-						oOut.write(oTile.m_yDatas[nRRIndex]);
-					}
+				for (MetroTile oTile : oTiles)
+				{
+					oOut.write(oTile.m_yData);
 				}
 			}
 			m_oLogger.info(String.format("Finished METRo for %s. %d runs out of %d total. %d failed.", new SimpleDateFormat("yyyy-MM-dd HH:mm").format(lRunTime), m_nRuns.get(), m_nTotal.get(), m_nFailed.get()));
@@ -534,7 +548,7 @@ public class Metro extends BaseBlock
 	
 	public static int getObservationCount(int nForecastHours)
 	{
-		int nTwoMin = 30;
+		int nTwoMin = 55;
 		int nTwentyCount = Math.min(11, nForecastHours - 3);
 		int nTwentyMin = nTwentyCount * 3;
 		int nHour = nForecastHours - 14;
@@ -616,7 +630,7 @@ public class Metro extends BaseBlock
 		int[] nTile = new int[2];
 		ArrayList<MetroTile> oTiles = new ArrayList();
 		MetroTile oSearch = new MetroTile();
-		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByContrib(Integer.valueOf("metro", 36));
+		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByContribSource(Integer.valueOf("metro", 36), m_nSourceId);
 		Introsort.usort(oRRs, ResourceRecord.COMP_BY_OBSTYPE_CONTRIB);
 		int nZoom = oRRs.get(0).getZoom();
 		for (Network oNetwork : oNetworks)
@@ -648,6 +662,11 @@ public class Metro extends BaseBlock
 					oMTile.m_nWaysBb[2] = oWay.m_nMaxLon;
 				if (oWay.m_nMaxLat > oMTile.m_nWaysBb[3])
 					oMTile.m_nWaysBb[3] = oWay.m_nMaxLat;
+				
+				oMTile.m_nWaysBb[0] -= 1000;
+				oMTile.m_nWaysBb[1] -= 1000;
+				oMTile.m_nWaysBb[2] += 1000;
+				oMTile.m_nWaysBb[3] += 1000;
 			}
 		}
 
@@ -709,7 +728,7 @@ public class Metro extends BaseBlock
 	 * Represents a map tile with locations inside of it that will be inputs
 	 * to the METRo model
 	 */
-	class MetroTile implements Comparable<MetroTile>, Callable<Object>
+	class MetroTile implements Comparable<MetroTile>, Callable<MetroTile>
 	{
 		/**
 		 * Locations inside of the tile
@@ -745,7 +764,7 @@ public class Metro extends BaseBlock
 		 */
 		ArrayList<RoadcastData> m_oResult = new ArrayList();
 
-		byte[][] m_yDatas;
+		byte[] m_yData;
 		private MetroObsSet m_oAllObs;
 		
 		/**
@@ -799,7 +818,7 @@ public class Metro extends BaseBlock
 		 * the output already computed for that category.
 		 */
 		@Override
-		public Object call()
+		public MetroTile call()
 		{
 			try
 			{
@@ -807,7 +826,7 @@ public class Metro extends BaseBlock
 				RoadcastData[] oRoadcasts = new RoadcastData[m_oLocations.get(m_oLocations.size() - 1).m_nCategory + 1];
 //				StringBuilder[] oLogs = new StringBuilder[oRoadcasts.length];
 //				double[] dPoint = new double[2];
-//				new Mercator().lonLatMdpt(m_nX, m_nY, m_nZoom, dPoint);
+//				new Mercator().lonLatMdpt(m_nX, m_nY, m_oRRs.get(0).getZoom(), dPoint);
 //				SimpleDateFormat oSdf = new SimpleDateFormat("yyyyMMdd");
 //				oSdf.setTimeZone(Directory.m_oUTC);
 //				WayNetworks oWays = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
@@ -816,13 +835,13 @@ public class Metro extends BaseBlock
 //				if (m_sLogTrigger != null && !m_sLogTrigger.isEmpty() && Files.exists(Paths.get(m_sLogTrigger)) &&  m_sLogFf != null && !m_sLogFf.isEmpty())
 //				{
 //					oFf = new FilenameFormatter(m_sLogFf);
-//					Files.createDirectories(Paths.get(oFf.format(lFileTime, 0, 0, "")).getParent(), FileUtil.DIRPERS);
+//					Files.createDirectories(Paths.get(oFf.format(m_lRunTime, 0, 0, "")).getParent(), FileUtil.DIRPERS);
 //				}
 
 				int nPPT = (int)Math.pow(2, m_oRRs.get(0).getTileSize()) - 1;
 				Mercator oM = new Mercator(nPPT);
-				int nTol = (int)Math.round(oM.RES[m_oRRs.get(0).getZoom()] * 50); // meters per pixel * 100 / 2
-				MetroObsSet oMOS = new MetroObsSet(m_nObsHours, m_nForecastHours);
+				int nTol = (int)Math.round(oM.RES[m_oRRs.get(0).getZoom()] * 100); // meters per pixel * 100 
+				MetroObsSet oMOS = new MetroObsSet(m_nObsHours, m_nForecastHours, m_nSourceId);
 				oMOS.fillObsSet(m_oAllObs, m_nWaysBb);
 				boolean bLogFail = true;
 				for (MetroLocation oLoc : m_oLocations)
@@ -861,36 +880,39 @@ public class Metro extends BaseBlock
 //						OsmWay oWay = oWays.getWay(100, oLoc.m_nLon, oLoc.m_nLat);
 //						if (oWay == null)
 //							continue;
-//						Path oPath = Paths.get(oFf.format(lFileTime, 0, 0, oWay.m_oId.toString()));
-//						if (oWay.m_oId.toString().compareTo("04ed2c91f441bc31a3e5ebead1543759") == 0)
+//						if (oLogs[oLoc.m_nCategory].length() == 0)
+//							continue;
+//						Path oPath = Paths.get(oFf.format(m_lRunTime, 0, 0, oWay.m_oId.toString()));
+//						try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.APPENDOPTS), "UTF-8")))
 //						{
-//							try (BufferedWriter oOut = new BufferedWriter(Channels.newWriter(Files.newByteChannel(oPath, FileUtil.APPENDOPTS), "UTF-8")))
-//							{
-//								oOut.append(oLogs[oLoc.m_nCategory]);
-//							}
+//							oOut.append(oLogs[oLoc.m_nCategory]);
 //						}
 //						
 //					}
 				}
 				
 				double[] dPixels = new double[2];
-				m_yDatas = new byte[7][];
-				ByteArrayOutputStream[] oRawStreams = new ByteArrayOutputStream[]{new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192), new ByteArrayOutputStream(8192)};
-				DataOutputStream[] oRawDataStreams = new DataOutputStream[]{new DataOutputStream(oRawStreams[0]), new DataOutputStream(oRawStreams[1]), new DataOutputStream(oRawStreams[2]), new DataOutputStream(oRawStreams[3]), new DataOutputStream(oRawStreams[4]), new DataOutputStream(oRawStreams[5]), new DataOutputStream(oRawStreams[6])};
+				ByteArrayOutputStream oRawStream = new ByteArrayOutputStream(8192);
+				DataOutputStream oRawDataStream = new DataOutputStream(oRawStream);
 				int nObsCount = getObservationCount(m_nForecastHours);
 				int nZoom = m_oRRs.get(0).getZoom();
 				for (RoadcastData oRD : m_oResult)
 				{
-					ArrayList<float[]> oOutputData = new ArrayList(oRD.m_oDataArrays.size());
-					for (float[] fData : oRD.m_oDataArrays.values())
-						oOutputData.add(fData);
-
 					oM.lonLatToTilePixels(GeoUtil.fromIntDeg(oRD.m_nLon), GeoUtil.fromIntDeg(oRD.m_nLat), m_nX, m_nY, nZoom, dPixels);
-					for (int nDataIndex = 0; nDataIndex < m_yDatas.length; nDataIndex++)
+					for (Entry<Integer, float[]> oEntry : oRD.m_oDataArrays.entrySet())
 					{
-						float[] fData = oOutputData.get(nDataIndex);
-						ResourceRecord oRR = m_oRRs.get(nDataIndex);
-						DataOutputStream oRawDataStream = oRawDataStreams[nDataIndex];
+						float[] fData = oEntry.getValue();
+						int nObstype = oEntry.getKey();
+						oRawDataStream.writeInt(nObstype);
+						ResourceRecord oRR = null;
+						for (ResourceRecord oTempRR : m_oRRs)
+						{
+							if (oTempRR.getObsTypeId() == nObstype)
+							{
+								oRR = oTempRR;
+								break;
+							}
+						}
 						oRawDataStream.writeShort((int)dPixels[0]);
 						oRawDataStream.writeShort((int)dPixels[1]);
 						for (int nTimeIndex = 0; nTimeIndex < nObsCount; nTimeIndex++)
@@ -900,34 +922,13 @@ public class Metro extends BaseBlock
 						}
 					}
 				}
-				for (int nDataIndex = 0; nDataIndex < m_yDatas.length; nDataIndex++)
-				{
-					m_yDatas[nDataIndex] = XzBuffer.compress(oRawStreams[nDataIndex].toByteArray());
-				}
+				m_yData = XzBuffer.compress(oRawStream.toByteArray());
 			}
 			catch (Exception oEx)
 			{
 				m_oLogger.error(oEx, oEx);
 			}
-			return null;
-		}
-	}
-	
-	
-	private class MetroExecutor implements Runnable
-	{
-		private boolean m_bRunning = false;
-		
-		@Override
-		public void run()
-		{
-			synchronized (MetroExecutor.this)
-			{
-				if (m_bRunning)
-					return;
-			}
-			
-			
+			return this;
 		}
 	}
 }
