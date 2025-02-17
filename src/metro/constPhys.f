@@ -57,6 +57,7 @@
       INTEGER Nl, n
       REAL DT
       INTEGER DTMAX
+
       COMMON/CTSPHY/  CPD, CPV, RGASD, RGASV, TRPL, TCDK, RAUW,
      *                EPS1, EPS2, DELTA, CAPPA, TGL, CONSOL,
      *                GRAV, RAYT, STEFAN, PI, OMEGA,
@@ -127,5 +128,5 @@
       if( .not. bSilent) then
          WRITE(*,*) "FIN SETCONSTPHYS"
       end if
-
+      flush(6)
       END SUBROUTINE SETCONSTPHYS
