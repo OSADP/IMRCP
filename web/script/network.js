@@ -129,6 +129,7 @@ function confirmTrainingNetwork()
 	{
 		'url': 'api/generatenetwork/train',
 		'method': 'POST',
+		'dataType': 'json',
 		'data': {'networkid': g_sCurNetwork, 'token': sessionStorage.token}
 	}).done(function() 
 	{
@@ -136,9 +137,9 @@ function confirmTrainingNetwork()
 		g_oMap.getCanvas().style.cursor = g_sCursor;
 		instructions(g_oInstructions['select'], 'Network successfully queued to train');;
 		switchToMain();
-	}).fail(function() 
+	}).fail(function(jqXHR) 
 	{
-		$('#instructions-error').html('Failed to queue network to train.');
+		$('#instructions-error').html(JSON.parse(jqXHR.responseText).msg);
 		g_oMap.getCanvas().style.cursor = g_sCursor;
 	});
 }

@@ -353,6 +353,20 @@
 			{"id":"3_EVT100000", "metadata":{"imrcp-range":"Other"}, "source-layer":"3_EVT100000", "paint":{"fill-color":"#000"}}
 		]
 	},
+	"IMRCP Weather Alerts":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/102:107/3/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"3_EVT102", "metadata":{"imrcp-range":"Medium Winter Precip", "obstype":"EVT"}, "source-layer":"3_EVT102", "paint":{"fill-color":"#0100d9", "fill-antialias":false, "fill-opacity":0.5}},
+			{"id":"3_EVT103", "metadata":{"imrcp-range":"Heavy Winter Precip"}, "source-layer":"3_EVT103", "paint":{"fill-color":"#000089"}},
+			{"id":"3_EVT105", "metadata":{"imrcp-range":"Medium Precip"}, "source-layer":"3_EVT105", "paint":{"fill-color":"#008800"}},
+			{"id":"3_EVT106", "metadata":{"imrcp-range":"Heavy Precip"}, "source-layer":"3_EVT106", "paint":{"fill-color":"#015d0f"}},
+			{"id":"3_EVT107", "metadata":{"imrcp-range":"Low Visibility"}, "source-layer":"3_EVT107", "paint":{"fill-color":"#747575"}}
+		]
+	},
 	"Tropical Storm Cone":
 	{
 		"group":"Area",
@@ -366,6 +380,16 @@
 			{"id":"3_TRSCNE1072", "metadata":{"imrcp-range":"Tropical Storm"}, "source-layer":"3_TRSCNE1072", "paint":{"fill-color":"#ffff00"}},
 			{"id":"3_TRSCNE642", "metadata":{"imrcp-range":"Hurricane"}, "source-layer":"3_TRSCNE642", "paint":{"fill-color":"#d60000"}},
 			{"id":"3_TRSCNE809", "metadata":{"imrcp-range":"Major Hurricane"}, "source-layer":"3_TRSCNE809", "paint":{"fill-color":"#9c52c6"}}
+		]
+	},
+	"Inundation":
+	{
+		"group":"Area",
+		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/stg/3/{z}/{x}/{y}"], "maxzoom":16},
+		"type":"fill",
+		"layers":
+		[
+			{"id":"3_STG3", "metadata":{"imrcp-range":"Flood","obstype":"STG"}, "source-layer":"3_STG3", "paint":{"fill-antialias":false, "fill-opacity":0.5, "fill-color":"#1a1aff", "fill-outline-color": "#000000"}}
 		]
 	},
 	"Flood Sensors":
@@ -398,21 +422,6 @@
 			{"id":"CV", "metadata":{"imrcp-range":"CV Data", "obstype":"VARIES"}, "source-layer":"CV", "paint":{"icon-color":["case", ["boolean", ["feature-state", "hover"], false], "#666666", ["case", ["boolean", ["get", "onlyspeed"], true], "#000", "#f0c"]], "icon-halo-color": "#000"}, "layout":{"icon-image":"detector-sdf", "text-allow-overlap":true, "icon-allow-overlap":true}}
 		]
 	},
-	"#Traffic Alerts":
-	{
-		"group":"Points",
-		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/301:304,306,307/1/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
-		"type":"symbol",
-		"layers":
-		[
-			{"id":"1_EVT301", "metadata":{"imrcp-range":"Incident","obstype":"EVT"}, "source-layer":"1_EVT301", "layout":{"icon-image":"incident", "text-allow-overlap":true, "icon-allow-overlap":true}},
-			{"id":"1_EVT302", "metadata":{"imrcp-range":"Workzone"}, "source-layer":"1_EVT302", "layout":{"icon-image":"workzone"}},
-			{"id":"1_EVT303", "metadata":{"imrcp-range":"Slow Taffic"}, "source-layer":"1_EVT303", "layout":{"icon-image":"slow-traffic"}},
-			{"id":"1_EVT304", "metadata":{"imrcp-range":"Very Slow Traffic"}, "source-layer":"1_EVT304", "layout":{"icon-image":"very-slow-traffic"}},
-			{"id":"1_EVT306", "metadata":{"imrcp-range":"Lengthy Queue"}, "source-layer":"1_EVT306", "layout":{"icon-image":"lengthy-queue"}},
-			{"id":"1_EVT307", "metadata":{"imrcp-range":"Congestion"}, "source-layer":"1_EVT307", "layout":{"icon-image":"unusual-congestion"}}
-		]
-	},
 	"Traffic Alerts":
 	{
 		"group":"Points",
@@ -424,21 +433,6 @@
 			{"id":"1_EVT302", "metadata":{"imrcp-range":"Workzone"}, "source-layer":"1_EVT302", "layout":{"icon-image":"workzone"}}
 		]
 	},
-	"#Road Condition Alerts":
-	{
-		"group":"Points",
-		"source":{"type":"vector", "tiles":["https://<fully-qualified-domain-name>/api/mvt/evt/107,201:204,305/1/{z}/{x}/{y}"], "maxzoom":16, "minzoom":6},
-		"type":"symbol",
-		"layers":
-		[
-			{"id":"1_EVT107", "metadata":{"imrcp-range":"Low Visibility","obstype":"EVT"}, "source-layer":"1_EVT107", "layout":{"icon-image":"low-visibility"}},
-			{"id":"1_EVT201", "metadata":{"imrcp-range":"Dew on Roadway"}, "source-layer":"1_EVT201", "layout":{"icon-image":"dew-on-roadway"}},
-			{"id":"1_EVT202", "metadata":{"imrcp-range":"Frost on Roadway"}, "source-layer":"1_EVT202", "layout":{"icon-image":"frost-on-roadway"}},
-			{"id":"1_EVT203", "metadata":{"imrcp-range":"Blowing Snow"}, "source-layer":"1_EVT203", "layout":{"icon-image":"blowing-snow"}},
-			{"id":"1_EVT204", "metadata":{"imrcp-range":"Ice on Roadway"}, "source-layer":"1_EVT204", "layout":{"icon-image":"ice-on-bridge"}},
-			{"id":"1_EVT305", "metadata":{"imrcp-range":"Flooded Roadway"}, "source-layer":"1_EVT305", "layout":{"icon-image":"flooded-road"}}
-		]
-	},
 	"Road Condition Alerts":
 	{
 		"group":"Points",
@@ -446,7 +440,7 @@
 		"type":"symbol",
 		"layers":
 		[
-			{"id":"1_EVT107", "metadata":{"imrcp-range":"Low Visibility","obstype":"EVT"}, "source-layer":"1_EVT107", "layout":{"icon-image":"low-visibility"}},
+			
 			{"id":"1_EVT204", "metadata":{"imrcp-range":"Ice on Roadway"}, "source-layer":"1_EVT204", "layout":{"icon-image":"ice-on-bridge"}},
 			{"id":"1_EVT305", "metadata":{"imrcp-range":"Flooded Roadway"}, "source-layer":"1_EVT305", "layout":{"icon-image":"flooded-road"}}
 		]
@@ -458,10 +452,7 @@
 		"type":"symbol",
 		"layers":
 		[
-			{"id":"1_EVT102", "metadata":{"imrcp-range":"Medium Winter Precip", "obstype":"EVT"}, "source-layer":"1_EVT102", "layout":{"icon-image":"medium-winter-precip"}},
-			{"id":"1_EVT103", "metadata":{"imrcp-range":"Heavy Winter Precip"}, "source-layer":"1_EVT103", "layout":{"icon-image":"heavy-winter-precip"}},
-			{"id":"1_EVT105", "metadata":{"imrcp-range":"Medium Precip"}, "source-layer":"1_EVT105", "layout":{"icon-image":"medium-precip"}},
-			{"id":"1_EVT106", "metadata":{"imrcp-range":"Heavy Precip"}, "source-layer":"1_EVT106", "layout":{"icon-image":"heavy-precip"}},
+
 			{"id":"1_EVT108", "metadata":{"imrcp-range":"Flood Stage Action"}, "source-layer":"1_EVT108", "layout":{"icon-image":"stage-action"}},
 			{"id":"1_EVT109", "metadata":{"imrcp-range":"Flood Stage Flood"}, "source-layer":"1_EVT109", "layout":{"icon-image":"stage-flood"}}
 		]

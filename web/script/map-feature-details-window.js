@@ -85,11 +85,22 @@ class FeatureDetailsWindow
     dialogTitleDiv.find('.ui-dialog-titlebar-close').click(closeDialog);
 	$('#obs-loading').show();
 	$('#obs-timeout,#obs-error,#obs-no-data,#obs-detail').hide();
-    
-    const featureType = sources.get(feature.source).type;
     const startTime = this.selectedTimeStart();
-    const featureHandler = featureTypeHandlers.get(featureType);
-    const bounds = featureHandler.getFeatureBounds(feature, clickLatLng, mbMap);
+    
+	let featureType;
+	let featureHandler;
+	let bounds;
+	if (feature === null)
+	{
+		featureType = 'fill';
+	}
+	else
+	{
+		featureType = sources.get(feature.source).type;
+	}
+	featureHandler = featureTypeHandlers.get(featureType);
+	bounds = featureHandler.getFeatureBounds(feature, clickLatLng, mbMap);
+
 	
 	
     const urlBoundarySubPath =

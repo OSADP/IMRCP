@@ -31,7 +31,7 @@
 				<init-param>
 						<description>REQUIRED: path for the configuration file</description>
 						<param-name>config-dir</param-name>
-						<param-value>/opt/imrcp-test/webapps/IMRCP/config</param-value>
+						<param-value>/opt/imrcp05.10/webapps/IMRCP/config</param-value>
 				</init-param>
 
 				<load-on-startup>1</load-on-startup>
@@ -56,13 +56,13 @@
 				<init-param>
 						<description>REQUIRED: path to user credential file</description>
 						<param-name>pwdfile</param-name>
-						<param-value>/opt/imrcp-test/webapps/IMRCP/user.csv</param-value>
+						<param-value>/opt/imrcp05.10/webapps/IMRCP/user.csv</param-value>
 				 </init-param>
 
 				<init-param>
 						<description>REQUIRED: path for the users directory</description>
 						<param-name>userdir</param-name>
-						<param-value>/opt/imrcp-test/webapps/IMRCP/users</param-value>
+						<param-value>/opt/imrcp05.10/webapps/IMRCP/users</param-value>
 				 </init-param>
 
 				<load-on-startup>0</load-on-startup>

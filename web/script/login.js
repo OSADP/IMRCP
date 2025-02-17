@@ -46,7 +46,10 @@ function loginRep(oData, oStatus, oJqXHR)
 		sessionStorage.token = oData.token; // store session token
 		sessionStorage.groups = oData.groups;
 		document.cookie = 'token=' + oData.token + ';path=/';
-		document.location = "map.html";
+		if (oData.page !== undefined)
+			document.location = oData.page;
+		else
+			document.location = "map.html";
 	}
 }
 

@@ -17,6 +17,7 @@ let PUBLISHING = 0b100;
 let PUBLISHED = 0b1000;
 let ERROR = 0b10000;
 let TRAINING = 0b100000;
+let g_oHovers = [];
 
 function getNetworksAjax()
 {
@@ -273,7 +274,13 @@ function getLayerObject(sSrc, nType)
 	}
 	else if (nType === 1) // line
 	{
-		return {'id': sSrc, 'type': 'line', 'source': sSrc, 'paint': {'line-width': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'line-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'line-opacity': ['case', ['feature-state', 'hidden'], 0, ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}, 'layout':{'line-cap':'round', 'line-join':'round'}};
+		
+		return {'id': sSrc, 'type': 'line', 'source': sSrc, 'paint': {'line-width': [
+			"let", "extra", 
+			["case", ["boolean", ["feature-state", "hover"], false], 2, 0],
+			["+", ["var", "extra"], ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]]]
+		], 'line-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'line-opacity': ['case', ['feature-state', 'hidden'], 0, ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}, 'layout':{'line-cap':'round', 'line-join':'round'}};
+		//return {'id': sSrc, 'type': 'line', 'source': sSrc, 'paint': {'line-width': ['case', ['has', 'width'], ['get', 'width'], ['get', 'width', ['literal', g_oDefaults]]], 'line-color': ['case', ['has', 'color'], ['get', 'color'], ['get', 'color', ['literal', g_oDefaults]]], 'line-opacity': ['case', ['feature-state', 'hidden'], 0, ['has', 'opacity'], ['get', 'opacity'], ['get', 'opacity', ['literal', g_oDefaults]]]}, 'layout':{'line-cap':'round', 'line-join':'round'}};
 	}
 	else if (nType === 2) // poly
 	{
@@ -628,6 +635,7 @@ function timeoutPageoverlay(nMillis = 1500)
 	window.setTimeout(function()
 	{
 		$('#pageoverlay p').html('');
+		$('#pageoverlay').removeClass('wait');
 		$('#pageoverlay').hide();
 	}, nMillis);
 }
@@ -636,7 +644,7 @@ function timeoutPageoverlay(nMillis = 1500)
 function showPageoverlay(sContents)
 {
 	$('#pageoverlay p').html(sContents);
-	$('#pageoverlay').css({'opacity': 0.5, 'font-size': 'x-large'}).show();
+	$('#pageoverlay').addClass('wait').css({'opacity': 0.5, 'font-size': 'x-large'}).show();
 }
 
 
@@ -649,6 +657,11 @@ function updatePopupPos(oEvent)
 function labelGeojson(oEvent)
 {
 	let oFeatures = g_oMap.queryRenderedFeatures(pointToPaddedBounds(oEvent.point), {'layers': g_aQueryLayers});
+	for (let oHover of g_oHovers)
+	{
+		g_oMap.setFeatureState(oHover, {"hover": false});
+	}
+	g_oHovers = [];
 	if (oFeatures.length === 0)
 	{
 		g_oPopup.remove();
@@ -659,6 +672,8 @@ function labelGeojson(oEvent)
 	let oSources = {};
 	for (let oFeature of oFeatures.values())
 	{
+		g_oHovers.push(oFeature);
+		g_oMap.setFeatureState(oFeature,{"hover": true});
 		if (oFeature.properties.label !== undefined)
 		{
 			let oSet = oSources[oFeature.source];
@@ -784,7 +799,12 @@ function createMenu()
 	let sThisPage = document.location.pathname.substring(1);
 	let oMenu = $("#navbar");
 	let sGroup = sessionStorage.groups;
-	let sStartUserHtml = `<li><a href="map.html"><i class="fa fa-globe"></i>&nbsp;&nbsp;View Map</a></li>`;
+	let sStartUserHtml =  `<li class="w3-dropdown-hover w3-fhwa-navy"><a href="#">View&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
+								<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
+										<a href="dashboard.html"><i class="fa fa-exclamation-triangle"></i>&nbsp;&nbsp;Dashboard</a>
+										<a href="map.html"><i class="fa fa-globe"></i>&nbsp;&nbsp;Map</a>
+								</div>
+						</li>`;
 	sStartUserHtml +=  `<li class="w3-dropdown-hover"><a href="#">Scenarios&nbsp;&nbsp;<i class="fa fa-caret-down"></i></a>
 							<div style="z-index:1002;" class="w3-dropdown-content w3-bar-block w3-card-4">
 								<a href="scenarios.html"><i class="fa fa-book"></i>&nbsp;&nbsp;Create Scenario</a>
@@ -817,7 +837,7 @@ function createMenu()
 	if (sGroup.indexOf('imrcp-admin') >= 0)
 		sHtml += sAdminHtml;
 	sHtml += sEndUserHtml;
-	oMenu.html(sHtml.replace(sThisPage, '#'));;
+	oMenu.html(sHtml.replace(`"${sThisPage}"`, '"#"'));
 }
 
 

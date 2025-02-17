@@ -678,7 +678,6 @@ table.network-table td:nth-child(2)
 	top: 0;
 	left: 0;
 	position: fixed;
-	cursor: wait;
 	background-color: black;
 }
 
@@ -860,8 +859,56 @@ table.network-table td:nth-child(2)
 
 #dlgObsDetail .ui-accordion .ui-accordion-content
 {
-	padding-left:1.7em
+	padding-left:1.7em;
 }
 
+.divStack, .divStackLayer
+{
+	height: 450px;
+}
+
+.dashboardtooltip
+{
+    position:relative;
+}
+
+.dashboardtooltip:hover
+{
+	text-decoration:none;
+	z-index:1001;
+	position:relative;
+}
+
+.dashboardtooltip:after
+{
+	content: attr(tip);
+	position:absolute;
+	bottom:0px;
+	left:30px;
+	display:none;
+}
+
+.dashboardtooltip:hover:after
+{
+	display:block;
+}
+
+.dashboardtooltip:hover:before
+{
+	display:block;
+}
+
+.dashboardtooltip-content,.dashboardtooltip:after  
+{
+	font-size: 15px;
+	font-style:normal;
+	line-height:1.2em;
+	width:110px;
+	padding:5px 10px;
+	border-radius:6px;
+	color: #000!important;
+	background-color: #fdf5e6!important;
+	box-shadow: 3px 3px 4px rgba(0,0,0, .65);
+}
 
 

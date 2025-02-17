@@ -269,6 +269,7 @@ function geoSuccess(oData, sStatus, oJqXHR)
 function startScenario()
 {
 	$('#dlgGroupList').dialog('open');
+	$('#checkboxCommitMetadata').prop('checked', false);
 	switchState(VIEWGROUPS, VIEWGROUPS);
 }
 
@@ -530,7 +531,12 @@ function buildGroupListDialog()
 	oDialog.siblings().children('.ui-dialog-titlebar-close').remove();
 	let sHtml = `<div class="flexbox marginbottom12"><div class="flex3"><input id="scenarioName" type="text" placeholder="Enter name of scenario"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="saveScenario" style="width:120px; white-space:nowrap">Save</button></div></div>
-				<div class="flexbox marginbottom12" style="direction: rtl;"><div class="flex1 flexbox"><div class="flex1" style="white-space:nowrap"><label for="checkboxShare" class="flex1" style="margin-right:10px;">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div></div></div>
+				<div class="flexbox marginbottom12" style="direction: rtl;">
+					<div class="flex1 flexbox">
+						<div class="flex1" style="white-space:nowrap"><label for="checkboxCommitMetadata" class="flex1" style="margin-right:10px;">Commit Metadata</label><input id="checkboxCommitMetadata" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div>
+						<div class="flex2" style="white-space:nowrap"><label for="checkboxShare" class="flex1" style="margin-right:10px;">Share</label><input id="checkboxShare" type="checkbox" class="flex1" style="width:auto; margin-left:5px;"></div>
+					</div>
+				</div>
 				<div class="flexbox marginbottom12"><div class="flex3"><input id="groupname" type="text" placeholder="Enter name of new group"/></div>
 				<div class="flex1 flexbox"><button class="ui-button ui-corner-all flex1" id="btnNewGroup" style="width:120px; white-space:nowrap">Add Group</button></div></div>
 				<ul id="grouplist" style="overflow-x:visible;"></ul>`;
@@ -900,7 +906,7 @@ function switchState(nNewState, nFallback = ERRORSTATE)
 				
 				if (g_bSaveInstructions)
 				{
-					sHtml += '<br><br>Enter a scenario name and left-click "Save" to save progress as a template';
+					sHtml += '<br><br>Enter a scenario name and left-click "Save" to save progress as a template. If "Commit Metadata" is checked, metadata changes will be permanent for the network';
 				}
 				if (g_bRunInstructions)
 				{
@@ -1255,6 +1261,7 @@ function loadScenario()
 			g_oMap.fitBounds([[nMinLon, nMinLat], [nMaxLon, nMaxLat]], {'padding': 50});
 	}
 	$('#saveScenario').prop('disabled', true).addClass('ui-button-disabled ui-state-disabled');
+	$('#checkboxCommitMetadata').prop('checked', false);
 	g_bSaveInstructions = false;
 	g_nSelectedScenario = -1;
 	$('#dlgLoad').dialog('close');
@@ -1377,25 +1384,34 @@ function saveMetadata()
 	let oScenario = g_oScenarios[nIndex];
 	let oData = {'token': sessionStorage.token, 'wayid': sWayId, 'lanes': sLanes, 'spdlimit': sSpdLimit};
 	if (oScenario !== undefined)
+	{
 		oData['name'] = oScenario.name;
-	showPageoverlay(`Saving metadata...`);
-	$.ajax(
+		showPageoverlay(`Saving metadata...`);
+		$.ajax(
+		{
+			'url': 'api/scenarios/metadata',
+			'method': 'POST',
+			'dataType': 'json',
+			'data': oData
+		}).done(function()
+		{
+			showPageoverlay(`Successfully saved metadata...`);
+			if (g_oMetadata === undefined)
+				g_oMetadata = {};
+			g_oMetadata[sWayId] = [sLanes, sSpdLimit];
+		}).always(function(oRes)
+		{
+			$('#dlgUserMetadata').dialog('close');
+			timeoutPageoverlay();
+		});
+	}
+	else
 	{
-		'url': 'api/scenarios/metadata',
-		'method': 'POST',
-		'dataType': 'json',
-		'data': oData
-	}).done(function()
-	{
-		showPageoverlay(`Successfully saved metadata...`);
 		if (g_oMetadata === undefined)
 			g_oMetadata = {};
 		g_oMetadata[sWayId] = [sLanes, sSpdLimit];
-	}).always(function(oRes)
-	{
 		$('#dlgUserMetadata').dialog('close');
-		timeoutPageoverlay();
-	});
+	}
 }
 
 function deleteTemplate()
@@ -1549,6 +1565,7 @@ function saveScenario(bOverwrite)
 	if (validate())
 	{
 		let oScenario = {'name': $('#scenarioName').val(), 'run': false, 'groups': [], 'network': g_sLoadedNetwork, 'share': $('#checkboxShare').prop('checked')};
+		let bCommit = $('#checkboxCommitMetadata').prop('checked');
 		if (g_oMetadata !== undefined)
 			oScenario.metadata = g_oMetadata;
 		
@@ -1577,8 +1594,25 @@ function saveScenario(bOverwrite)
 				return;
 			}
 		}
+		if (bCommit && g_oMetadata !== undefined)
+		{
+			let oSrc = g_oMap.getSource('geo-lines');
+			let oFeatures = oSrc._data.features;
+			
+			for (let [sId, aMeta] of Object.entries(g_oMetadata))
+			{
+				let nIndex = g_oImrcpIds[sId];
+				let oFeature = oFeatures[nIndex];
+				if (oFeature === undefined)
+					continue;
+				
+				oFeature.properties.lanecount = aMeta[0];
+				oFeature.properties.spdlimit = aMeta[1];
+			}
+			oSrc.setData(oSrc._data);
+		}
 		oScenario.isshared = bIsShared;
-		let oData = {'token': sessionStorage.token, 'scenario': oScenario};
+		let oData = {'token': sessionStorage.token, 'scenario': oScenario, 'commit': bCommit};
 		for (let oGroup of g_aGroups)
 		{
 			if (oGroup)

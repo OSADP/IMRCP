@@ -21,7 +21,8 @@
         layers: $('.obstype-pane-list input[type="checkbox"]:checked').map((idx,el) => $(el).val()).get(),
 		lonlat: $('#chkLonLat').prop('checked'),
         refresh: $('#selAutoRefresh').val(),
-		opacity: $('#selOpacity').val()
+		opacity: $('#selOpacity').val(),
+		page: $('#selPage').val()
       };
       
       var saveRequest = $.ajax('api/settings/saveMapSettings', {

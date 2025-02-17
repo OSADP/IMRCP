@@ -80,21 +80,21 @@ let g_oVectorSrcs =
 	{
 		'name': 'pccat',
 		'label': 'Precip Rate and Type',
-		'source': {'type':'vector', 'tiles':['https://imrcp.data-env.com/api/mvt/pccat/{z}/{x}/{y}'], 'maxzoom':16},
+		'source': {'type':'vector', 'tiles':[window.location.toString().substring(0, window.location.toString().lastIndexOf('/')) + '/api/mvt/pccat/3/{z}/{x}/{y}'], 'maxzoom':16},
 		'layers': 
 		[
-			{'id':'PCCAT1', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Light', 'obstype':'PCCAT'}, 'source-layer':'PCCAT1', 'paint':{'fill-color':'#80ff80', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT2', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Moderate'}, 'source-layer':'PCCAT2', 'paint':{'fill-color':'#00af20', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT3', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Heavy'}, 'source-layer':'PCCAT3', 'paint':{'fill-color':'#00561e', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT4', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Light'}, 'source-layer':'PCCAT4', 'paint':{'fill-color':'#d9b3ff', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT5', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Moderate'}, 'source-layer':'PCCAT5', 'paint':{'fill-color':'#8b4baf', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT6', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Heavy'}, 'source-layer':'PCCAT6', 'paint':{'fill-color':'#4a0070', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT7', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Light'}, 'source-layer':'PCCAT7', 'paint':{'fill-color':'#80ffff', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT8', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Moderate'}, 'source-layer':'PCCAT8', 'paint':{'fill-color':'#1a1aff', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT9', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Heavy'}, 'source-layer':'PCCAT9', 'paint':{'fill-color':'#006', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT10', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Light'}, 'source-layer':'PCCAT10', 'paint':{'fill-color':'#ffc2f1', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT11', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Moderate'}, 'source-layer':'PCCAT11', 'paint':{'fill-color':'#ff4bf6', 'fill-antialias':false, 'fill-opacity':0.4}},
-			{'id':'PCCAT12', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Heavy'}, 'source-layer':'PCCAT12', 'paint':{'fill-color':'#830d56', 'fill-antialias':false, 'fill-opacity':0.4}}
+			{'id':'3_PCCAT1', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Light', 'obstype':'PCCAT'}, 'source-layer':'3_PCCAT1', 'paint':{'fill-color':'#80ff80', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT2', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Moderate'}, 'source-layer':'3_PCCAT2', 'paint':{'fill-color':'#00af20', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT3', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Rain - Heavy'}, 'source-layer':'3_PCCAT3', 'paint':{'fill-color':'#00561e', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT4', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Light'}, 'source-layer':'3_PCCAT4', 'paint':{'fill-color':'#d9b3ff', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT5', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Moderate'}, 'source-layer':'3_PCCAT5', 'paint':{'fill-color':'#8b4baf', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT6', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Frz Rain - Heavy'}, 'source-layer':'3_PCCAT6', 'paint':{'fill-color':'#4a0070', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT7', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Light'}, 'source-layer':'3_PCCAT7', 'paint':{'fill-color':'#80ffff', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT8', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Moderate'}, 'source-layer':'3_PCCAT8', 'paint':{'fill-color':'#1a1aff', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT9', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Snow - Heavy'}, 'source-layer':'3_PCCAT9', 'paint':{'fill-color':'#006', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT10', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Light'}, 'source-layer':'3_PCCAT10', 'paint':{'fill-color':'#ffc2f1', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT11', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Moderate'}, 'source-layer':'3_PCCAT11', 'paint':{'fill-color':'#ff4bf6', 'fill-antialias':false, 'fill-opacity':0.4}},
+			{'id':'3_PCCAT12', 'source':'pccat', 'type':'fill', 'metadata':{'imrcp-range':'Ice Pellets - Heavy'}, 'source-layer':'3_PCCAT12', 'paint':{'fill-color':'#830d56', 'fill-antialias':false, 'fill-opacity':0.4}}
 		]
 	}
 };
@@ -228,7 +228,10 @@ function mapClick(oEvent)
 		sRowHtml += `<td class="obsType">${oSrc.datasrc.toUpperCase()}</td>`;
 		sRowHtml += `<td class="timestamp">${sStart}</td>`;
 		sRowHtml += `<td class="timestamp">${sEnd}</td>`;
-		sRowHtml += `<td class="td-value">${oSrc.valuemap ? oSrc.valuemap[oSrc.features[nFeatureIndex].properties.values[nTimeIndex]] : oSrc.features[nFeatureIndex].properties.values[nTimeIndex].toFixed(1)}</td>`;
+		if (oSrc.features[nFeatureIndex].properties.values === undefined)
+			sRowHtml += `<td class="td-value">-999.0</td>`;
+		else
+			sRowHtml += `<td class="td-value">${oSrc.valuemap ? oSrc.valuemap[oSrc.features[nFeatureIndex].properties.values[nTimeIndex]] : oSrc.features[nFeatureIndex].properties.values[nTimeIndex].toFixed(1)}</td>`;
 		sRowHtml += '</tr>';
 	}
 	$('#datatable tbody').append(sRowHtml);
@@ -589,7 +592,8 @@ function updateColors()
 	{
 		for (let oFeature of oSrc.features.values())
 		{
-			let dVal = oFeature.properties.values[nTimeIndex];
+			let oValues = oFeature.properties.values;
+			let dVal = oValues === undefined ? -999.0 : oFeature.properties.values[nTimeIndex];
 			let sColor = oSrc.ranges[0][1];
 			for (let nIndex = 0; nIndex < oSrc.ranges.length; nIndex++)
 			{

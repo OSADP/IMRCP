@@ -25,8 +25,8 @@ const mapMouseMoveHandler = (sources, spriteDef) =>
 	const hoverablePointLayers = new Set(["Flood Sensors", "Weather Sensors", "Mobile Sensors"]);
 	return ({target:map, point}) => 
 	{
-
-		const features = map.queryRenderedFeatures(pointToPaddedBounds(point)).filter(featureInSources(sources));
+		let oQuery = map.queryRenderedFeatures(pointToPaddedBounds(point));
+		const features = oQuery.filter(featureInSources(sources)).filter((oF)=>oF.layer.type !== 'fill');
 		const currentSelectedFeature = features.length === 0 ? null : features[0];
 		if (currentSelectedFeature)
 			$(map.getCanvas()).addClass("clickable");
@@ -87,7 +87,7 @@ const buildSourceMap = (sourceData, spriteDef) =>
 		const legendElements = [];
 
 		const fullLayerDefinitions = [];
-		const defaultLayer = layers[0];
+		const defaultLayer = layers[0];		
 		for (let layer of layers)
 		{
 			
@@ -105,6 +105,9 @@ const buildSourceMap = (sourceData, spriteDef) =>
 					const img = layer.layout['icon-image'];
 					if (img)
 						legendElements.push({label, style: img});
+					break;
+				case 'raster':
+					legendElements.push({'label': label, 'color': '#006fc6', 'opacity': 1.0});
 					break;
 			}
 
@@ -421,6 +424,8 @@ async function initialize()
 
 		if (features.length > 0)
 			mapDialog.showFeatureDetails(features[0], lngLat, map);
+		else
+			mapDialog.showFeatureDetails(null, lngLat, map);
 	};
 
 	map.on('click', mapClickHandler);
@@ -489,9 +494,11 @@ async function initialize()
 				{
 					oLegendEl.opacity = dOpacity;
 				}
-
+				
 				for (let oLayer of source.layers.values())
 				{
+					if (oLayer.paint === undefined)
+						continue;
 					oLayer.paint['fill-opacity'] = dOpacity;
 					if (map.getLayer(oLayer.id) !== undefined)
 						map.setPaintProperty(oLayer.id, 'fill-opacity', dOpacity);
@@ -624,6 +631,8 @@ async function initialize()
 	
 	$('#selOpacity').val(settings.opacity);
 	$('#selOpacity').trigger('change');
+	if (settings.page !== undefined)
+		$('#selPage').val(settings.page);
 
 	const notificationsDialog = $('#divNotificationDialog').notificationDialog(
 	{
