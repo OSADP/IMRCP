@@ -41,12 +41,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.DataOutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import vector_tile.VectorTile;
 
@@ -240,7 +243,7 @@ public class TileServlet extends SecureBaseBlock
 		{
 			if (nRequestType == RNP && nZ >= 6)
 				return HttpServletResponse.SC_OK;
-			doArea(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, oResponse, oSession, sUri, sTimeCookies);
+			doArea(nZ, nX, nY, lTimestamp, lRefTime, nRequestType, sUriParts[sUriParts.length - 5], oResponse, oSession, sUri, sTimeCookies);
 		}
 		else
 		{
@@ -362,7 +365,7 @@ public class TileServlet extends SecureBaseBlock
 			{
 				Introsort.usort(oData, Obs.g_oCompObsByContrib);
 				oRR = Directory.getResource(oData.get(0).m_nContribId, nRequestType);
-				nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
+				nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 100); // meters per pixel * 100 
 			}
 			for (Obs oObs : oData)
 			{
@@ -373,7 +376,7 @@ public class TileServlet extends SecureBaseBlock
 						if (oObs.m_nContribId != oRR.getContribId())
 						{
 							oRR = Directory.getResource(oObs.m_nContribId, nRequestType);
-							nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 50); // meters per pixel * 100 / 2
+							nSnapTol = (int)Math.round(oM.RES[oRR.getZoom()] * 100); // meters per pixel * 100 
 						}
 						if (oObs.m_yGeoType == Obs.POINT || oObs.m_yGeoType == Obs.LINESTRING)
 						{
@@ -692,19 +695,7 @@ public class TileServlet extends SecureBaseBlock
 				ArrayList<Double> oAlertValues = new ArrayList();
 				if (nRequestType == ObsType.EVT)
 				{
-					String[] sRanges = sRangeString.split(","); // range strings are comma separated
-					for (String sRange : sRanges)
-					{
-						String[] sEndPoints = sRange.split(":"); // each comma separated range is colon separated. ,min:max, or a single value
-						int nStart = Integer.parseInt(sEndPoints[0]);
-						int nEnd;
-						if (sEndPoints.length == 1)
-							nEnd = nStart;
-						else
-							nEnd = Integer.parseInt(sEndPoints[1]);
-						for (int i = nStart; i <= nEnd; i++) // add all the values in the range to the list
-							oAlertValues.add((double)i);
-					}
+					getAlertFilter(sRangeString.split(","), oAlertValues);
 				}
 				Collections.sort(oObsList, Obs.g_oCompObsByValue);
 
@@ -861,8 +852,8 @@ public class TileServlet extends SecureBaseBlock
 										{
 											VectorTile.Tile.Feature.Builder oFB = oFeature.toBuilder();
 											
-											VectorTile.Tile.Value oLonValue = oLayerBuilder.getValues(oFB.getTags(5));
-											VectorTile.Tile.Value oLatValue = oLayerBuilder.getValues(oFB.getTags(7));
+											VectorTile.Tile.Value oLonValue = oLayer.getValues(oFB.getTags(5));
+											VectorTile.Tile.Value oLatValue = oLayer.getValues(oFB.getTags(7));
 											
 											oLayerBuilder.addValues(oLonValue);
 											oLayerBuilder.addValues(oLatValue);
@@ -904,17 +895,9 @@ public class TileServlet extends SecureBaseBlock
 	 * @param oResponse object that contains the response the servlet sends to the client
 	 * @throws IOException
 	 */
-	protected void doArea(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, HttpServletResponse oResponse, Session oSession, String sRequest, StringBuilder sTimeCookies)
+	protected void doArea(int nZ, int nX, int nY, long lTimestamp, long lRefTime, int nRequestType, String sRangeString, HttpServletResponse oResponse, Session oSession, String sRequest, StringBuilder sTimeCookies)
 	   throws IOException
 	{
-		StringBuilder sDebug = null;
-		String[] sColors = new String[]{"black", "blue", "red", "green", "pink", "yellow"};
-		int nColor = 0;
-//		if (nZ == 13 && nX == 2431 && nY == 3000)
-//		{
-//			sDebug = new StringBuilder();
-//			sDebug.append("{\"type\":\"FeatureCollection\",\"features\":[");
-//		}
 		int[] nContribAndSource = new int[2];
 	
 		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nRequestType);
@@ -933,7 +916,13 @@ public class TileServlet extends SecureBaseBlock
 		
 		ObsList oData = new ObsList(1);
 		String sUnits = "";
-		if (nRequestType != RNP)
+		ArrayList<Double> oAlertValues = new ArrayList();
+		if (nRequestType == ObsType.EVT)
+		{
+			getAlertFilter(sRangeString.split(","), oAlertValues);
+			oData = OBSVIEW.getData(nRequestType, lTimestamp, lTimestamp + 60000, nLat1, nLat2, nLon1, nLon2, lRefTime);
+		}
+		else if (nRequestType != RNP)
 		{
 			sUnits = ObsType.getUnits(nRequestType);
 			for (ResourceRecord oTemp : oRRs)
@@ -988,20 +977,28 @@ public class TileServlet extends SecureBaseBlock
 			}
 		}
 		
-		ObsList oObsList = new ObsList();
 		RangeRules oRules = ObsType.getRangeRules(nRequestType, sUnits);
 		Units oUnits = Units.getInstance();
-		
+		HashMap<Double, ObsList> oObsBuckets = new HashMap();
+
 		for (Obs oObs : oData)
 		{
-			if (oObs.m_yGeoType != Obs.POLYGON && oObs.m_yGeoType != Obs.MULTIPOLYGON)
+			if (oObs.m_yGeoType != Obs.POLYGON && oObs.m_yGeoType != Obs.MULTIPOLYGON && Collections.binarySearch(oAlertValues, oObs.m_dValue) < 0)
 				continue;
 			double dVal = oRules.groupValue(oUnits.convert(ObsType.getUnits(oObs.m_nObsTypeId, true), oRules.m_sUnits, oObs.m_dValue));
 			if (oRules.shouldDelete(dVal))
 				continue;
 			
 			oObs.m_dValue = dVal;
-			oObsList.add(oObs);
+			ObsList oList;
+			if (!oObsBuckets.containsKey(dVal))
+			{
+				oList = new ObsList();
+				oObsBuckets.put(dVal, oList);
+			}
+			else
+				oList = oObsBuckets.get(dVal);
+			oList.add(oObs);
 		}
 		if (oRR != null && oRR.getContribId() == Integer.valueOf("nhc", 36))
 		{
@@ -1012,58 +1009,39 @@ public class TileServlet extends SecureBaseBlock
 					nReturn = Long.compare(o2.m_lTimeRecv, o1.m_lTimeRecv);
 				return nReturn;
 			};
-			Introsort.usort(oObsList, oNhcComp);
 			HashMap<String, String> oBestStorms = NHC.getCurrentStorms(lTimestamp, lTimestamp + 60000, lRefTime);
-			ObsList oTempList = new ObsList(oObsList.size());
-			for (Obs oObs : oObsList)
+			HashMap<Double, ObsList> oTempMap = new HashMap(oObsBuckets.size());
+			for (Map.Entry<Double, ObsList> oEntry : oObsBuckets.entrySet())
 			{
-				if (oBestStorms.get(oObs.m_sStrings[0]).compareTo(oObs.m_sStrings[1]) == 0)
-					oTempList.add(oObs);
+				ObsList oTempList = new ObsList(oEntry.getValue().size());
+				for (Obs oObs : oEntry.getValue())
+				{
+					if (oBestStorms.get(oObs.m_sStrings[0]).compareTo(oObs.m_sStrings[1]) == 0)
+						oTempList.add(oObs);
+				}
+				oTempMap.put(oEntry.getKey(), oTempList);
 			}
-			oObsList = oTempList;
-
+			oObsBuckets = oTempMap;
 		}
-		Introsort.usort(oObsList, Obs.g_oCompObsByValue);
-		
-		VectorTile.Tile.Builder oTileBuilder = VectorTile.Tile.newBuilder();
-		VectorTile.Tile.Layer.Builder oLayerBuilder = VectorTile.Tile.Layer.newBuilder();
-		VectorTile.Tile.Feature.Builder oFeatureBuilder = VectorTile.Tile.Feature.newBuilder();
-		
-		int nExtent = Mercator.getExtent(nZ);
-		double dPrevVal;
-		int[] nCur = new int[2]; // reusable arrays for feature methods
-		int[] nPoints = new int[65];
-		int nIndex = oObsList.size();
 		
 		int nClipDelta = (1 << (23 - nZ)) * 8;
-//		int nClipDelta = 0;
 		
+		HashMap<Double, ArrayList<int[]>> oClipBuckets = new HashMap(oObsBuckets.size());
 		int[] nTilePoly = GeoUtil.getBoundingPolygon(nLon1 - nClipDelta, nLat1 - nClipDelta, nLon2 + nClipDelta, nLat2 + nClipDelta);
-//		if (sDebug != null)
-//			System.out.println(java.util.Arrays.toString(nTilePoly));
-//		GeoUtil.polygonGeoJson(sDebug, nTilePoly, sColors[nColor++ % sColors.length], 0.4);
-
-		long lTilePolyRef = 0; 
-//		boolean bClip = nZ > oRR.getZoom();
-		boolean bClip = true;
-		if (bClip)
-			lTilePolyRef = GeoUtil.makePolygon(nTilePoly);
+		long lTilePolyRef = GeoUtil.makePolygon(nTilePoly); 			
 		try
 		{
-			while (nIndex-- > 0) // layer write order doesn't matter
+			for (Map.Entry<Double, ObsList> oEntry : oObsBuckets.entrySet())
 			{
-				Obs oObs = oObsList.get(nIndex);
-				dPrevVal = oObs.m_dValue;
-				if (bClip)
+				ArrayList<int[]> oClipped = new ArrayList(oEntry.getValue().size());
+				for (Obs oObs : oEntry.getValue())
 				{
-					GeoUtil.polygonGeoJson(sDebug, oObs.m_oGeoArray, sColors[nColor++ % sColors.length], 0.4);
-					if (oObs.m_oGeoArray[3] < nTilePoly[3] || oObs.m_oGeoArray[5] > nTilePoly[5] ||
-						oObs.m_oGeoArray[4] < nTilePoly[4] || oObs.m_oGeoArray[6] > nTilePoly[6]) // only clip if polygon is outside of tile bounds
+					int[] nPoly = oObs.m_oGeoArray;
+					if (nPoly[3] < nTilePoly[3] || nPoly[5] > nTilePoly[5] ||
+						nPoly[4] < nTilePoly[4] || nPoly[6] > nTilePoly[6]) // only clip if polygon is outside of tile bounds
 					{
-//						if (sDebug != null)
-//							System.out.println(java.util.Arrays.toString(oObs.m_oGeoArray));
-						
-						long lObsPoly = GeoUtil.makePolygon(oObs.m_oGeoArray);
+
+						long lObsPoly = GeoUtil.makePolygon(nPoly);
 						long[] lClipRef = new long[]{0L, lTilePolyRef, lObsPoly};
 						int nResults = GeoUtil.clipPolygon(lClipRef);
 						try
@@ -1072,8 +1050,7 @@ public class TileServlet extends SecureBaseBlock
 							{
 								try
 								{
-									int[] oPoly = GeoUtil.popResult(lClipRef[0]);
-									TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oPoly, nPoints);
+									oClipped.add(GeoUtil.popResult(lClipRef[0]));
 								}
 								catch (Exception oEx)
 								{
@@ -1088,96 +1065,120 @@ public class TileServlet extends SecureBaseBlock
 					}
 					else
 					{
-						TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
+						oClipped.add(nPoly);
 					}
 				}
-				else
-				{
-					TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oObs.m_oGeoArray, nPoints);
-				}
-
-				if (nIndex == 0 || oObsList.get(nIndex - 1).m_dValue != dPrevVal)
-				{ // write layer at end of list or when group value will change
-					oFeatureBuilder.setType(VectorTile.Tile.GeomType.POLYGON);
-					oLayerBuilder.clear();
-					oLayerBuilder.setVersion(2);
-					int nMultiplier = 1;
-					if (m_oLayerMultipliers.containsKey(nRequestType))
-						nMultiplier = m_oLayerMultipliers.get(nRequestType);
-					oLayerBuilder.setName(String.format("3_%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), dPrevVal * nMultiplier));
-					oLayerBuilder.setExtent(nExtent);
-					oLayerBuilder.addFeatures(oFeatureBuilder.build());
-					oTileBuilder.addLayers(oLayerBuilder.build());
-					oFeatureBuilder.clear();
-					oLayerBuilder.clear();
-					nCur[0] = nCur[1] = 0;
-				}
+				oClipBuckets.put(oEntry.getKey(), oClipped);
 			}
 		}
 		finally
 		{
-			if (bClip)
-				GeoUtil.freePolygon(lTilePolyRef);
+			GeoUtil.freePolygon(lTilePolyRef);
 		}
 		
-		if (sDebug != null)
-		{
-			if (sDebug.indexOf("\"Feature\"") >= 0)
-				sDebug.setLength(sDebug.length() - 1);
-			sDebug.append("]}");
-			System.out.append(sDebug).append('\n');
-		}
-		
-//		if (nContrib.length == 1)
+//		HashMap<Double, ArrayList<int[]>> oPolyBuckets = new HashMap(oObsBuckets.size());
+//		
+//		for (Map.Entry<Double, ArrayList<int[]>> oEntry : oClipBuckets.entrySet())
 //		{
-//			AHPSWrapper oAhpsFile = (AHPSWrapper)((FileCache)Directory.getInstance().lookup("AHPSFcstStore")).getFile(lTimestamp, lRefTime); // check for inundation polygons
-//			if (oAhpsFile != null)
+//			ArrayList<int[]> oList = oEntry.getValue();
+//			ArrayList<int[]> oPolys = new ArrayList(oList.size());
+//			for (int nOuter = 0; nOuter < oList.size(); nOuter++)
 //			{
-//				for (ArrayList<int[]> oRings :oAhpsFile.m_oPolygons)
+//				int[] oCur = oList.get(nOuter);
+//				if (oCur[0] == 0)
+//					continue; // skip already unioned polygons
+//				for (int nInner = nOuter + 1; nInner < oList.size(); nInner++)
 //				{
-//					oTilePath = new Path2D.Double(); // create clipping boundary
-//					oTilePath.moveTo(dBounds[0], dBounds[3]);
-//					oTilePath.lineTo(dBounds[2], dBounds[3]);
-//					oTilePath.lineTo(dBounds[2], dBounds[1]);
-//					oTilePath.lineTo(dBounds[0], dBounds[1]);
-//					oTilePath.closePath();
-//					oTile = new Area(oTilePath);
-//
-//					int[] nExt = oRings.get(0);
-//					if (!GeoUtil.boundingBoxesIntersect(nLon1, nLat1, nLon2, nLat2, nExt[2], nExt[3], nExt[4], nExt[5]))
+//					int[] oCmp = oList.get(nInner);
+//					if (oCmp[0] == 0) // skip already unioned polygons
 //						continue;
-//					Path2D.Double oPolygonPath = new Path2D.Double();
-//					for (int nRingIndex = 0; nRingIndex < oRings.size(); nRingIndex++) // create an Area object used to clip the associated polygon with the requested map tile
+//					long lCurPoly = 0L;
+//					long lCmpPoly = 0L;
+//					if (GeoUtil.quickIsSamePolygon(oCur, oCmp))
 //					{
-//						int[] oRing = oRings.get(nRingIndex);
-//						oPolygonPath.moveTo(Mercator.lonToMeters(GeoUtil.fromIntDeg(oRing[6])), Mercator.latToMeters(GeoUtil.fromIntDeg(oRing[7])));
-//						Iterator<int[]> oIt = Arrays.iterator(oRing, new int[2], 8, 2);
-//						while (oIt.hasNext())
-//						{
-//							int[] nRingPt = oIt.next();
-//							oPolygonPath.lineTo(Mercator.lonToMeters(GeoUtil.fromIntDeg(nRingPt[0])), Mercator.latToMeters(GeoUtil.fromIntDeg(nRingPt[1])));
-//						}
-//						oPolygonPath.closePath();
+//						oCmp[0] = 0;
+//						continue;
 //					}
+//					if (GeoUtil.isInsideRingAndHoles(oCur, Obs.POLYGON, oCmp))
+//					{
+//						try
+//						{
+//							lCurPoly = GeoUtil.makePolygon(oCur);
+//							lCmpPoly = GeoUtil.makePolygon(oCmp);
+//							long[] lUnionRef = new long[]{0L, lCurPoly, lCmpPoly};
+//							int nResults = GeoUtil.unionPolygon(lUnionRef);
+//							if (nResults == 1) // union occured
+//							{
+//								oCur[0] = 0;
+//								oCur = GeoUtil.popResult(lUnionRef[0]);
+//								oCmp[0] = 0;
+//								nInner = nOuter; // reset loop
+//							}
+//							else
+//							{
+//								while (nResults-- > 0) // union did not occur
+//								{
+//									try
+//									{
+//										GeoUtil.popResult(lUnionRef[0]); // free resources
+//									}
+//									catch (Exception oEx)
+//									{
+//										m_oLogger.error(oEx, oEx);
+//									}
+//								}
+//							}
 //
-//					Area oPolygon = new Area(oPolygonPath);
-//					oTile.intersect(oPolygon);
-//					if (!oTile.isEmpty())
-//						TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, oTile, nPoints);
+//						}
+//						finally
+//						{
+//							if (lCurPoly != 0L)
+//								GeoUtil.freePolygon(lCurPoly);
+//							if (lCmpPoly != 0L)
+//								GeoUtil.freePolygon(lCmpPoly);
+//						}
+//						
+//					}
 //				}
-//
-//				if (oFeatureBuilder.getGeometryCount() > 0)
-//				{
-//					oFeatureBuilder.setType(VectorTile.Tile.GeomType.POLYGON);
-//					oLayerBuilder.clear();
-//					oLayerBuilder.setVersion(2);
-//					oLayerBuilder.setName("EVT100000");
-//					oLayerBuilder.setExtent(nExtent);
-//					oLayerBuilder.addFeatures(oFeatureBuilder.build());
-//					oTileBuilder.addLayers(oLayerBuilder.build());
-//				}
+//				oPolys.add(oCur);
 //			}
+//			oPolyBuckets.put(oEntry.getKey(), oPolys);
 //		}
+		
+		
+		VectorTile.Tile.Builder oTileBuilder = VectorTile.Tile.newBuilder();
+		VectorTile.Tile.Layer.Builder oLayerBuilder = VectorTile.Tile.Layer.newBuilder();
+		VectorTile.Tile.Feature.Builder oFeatureBuilder = VectorTile.Tile.Feature.newBuilder();
+		
+		int nExtent = Mercator.getExtent(nZ);
+
+		int[] nCur = new int[2]; // reusable arrays for feature methods
+		int[] nPoints = new int[65];
+		
+
+		for (Map.Entry<Double, ArrayList<int[]>> oEntry : oClipBuckets.entrySet())
+		{
+			for (int[] nPoly : oEntry.getValue())
+				TileUtil.addPolygon(oFeatureBuilder, nCur, dBounds, nExtent, nPoly, nPoints);
+
+			nCur[0] = nCur[1] = 0;
+			if (oFeatureBuilder.getGeometryCount() == 0)
+				continue;
+			oFeatureBuilder.setType(VectorTile.Tile.GeomType.POLYGON);
+			oLayerBuilder.clear();
+			oLayerBuilder.setVersion(2);
+			int nMultiplier = 1;
+			if (m_oLayerMultipliers.containsKey(nRequestType))
+				nMultiplier = m_oLayerMultipliers.get(nRequestType);
+			oLayerBuilder.setName(String.format("3_%s%1.0f", Integer.toString(nRequestType, 36).toUpperCase(), oEntry.getKey() * nMultiplier));
+			oLayerBuilder.setExtent(nExtent);
+			oLayerBuilder.addFeatures(oFeatureBuilder.build());
+			oTileBuilder.addLayers(oLayerBuilder.build());
+			oFeatureBuilder.clear();
+			oLayerBuilder.clear();
+
+		}
+
 
 		if (oSession != null && nRequestType != RNP) // do not forward request if this is already a forwarded request, don't forward road network boundary request since the geometries are cached
 			forwardRequest(sRequest, nRequestType, Obs.POLYGON, nLon1, nLat1, nLon2, nLat2, oTileBuilder, sTimeCookies);
@@ -1243,6 +1244,23 @@ public class TileServlet extends SecureBaseBlock
 		return dPoints; // no intersections
 	}
 		
+	
+	static void getAlertFilter(String[] sRanges, ArrayList<Double> oAlertValues)
+	{
+		for (String sRange : sRanges)
+		{
+			String[] sEndPoints = sRange.split(":"); // each comma separated range is colon separated. ,min:max, or a single value
+			int nStart = Integer.parseInt(sEndPoints[0]);
+			int nEnd;
+			if (sEndPoints.length == 1)
+				nEnd = nStart;
+			else
+				nEnd = Integer.parseInt(sEndPoints[1]);
+			for (int i = nStart; i <= nEnd; i++) // add all the values in the range to the list
+				oAlertValues.add((double)i);
+		}
+		Collections.sort(oAlertValues);
+	}
 	
 	/**
 	 * Adds the given x and y coordinate to the growable array (see {@link imrcp.system.Arrays}.

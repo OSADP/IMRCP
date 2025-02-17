@@ -102,19 +102,21 @@ public class AreaLayerServlet extends LayerServlet
 		StringBuilder sDetail = new StringBuilder();
 		boolean bAddCapDetail = false;
 		Iterator<int[]> oIt = Arrays.iterator(nObsToQuery, new int[1], 1, 1);
+		TileObsView oOV = (TileObsView)Directory.getInstance().lookup("ObsView");
 		while(oIt.hasNext()) // for each observation type, use ObsView to query the data stores
 		{
 			int nObstype = oIt.next()[0];
 			TreeMap<ObsInfo, Obs> oObsMap = new TreeMap(ObsInfo.g_oCOMP);
-			ObsList oData = ((TileObsView)Directory.getInstance().lookup("ObsView")).getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef());
-			for (Obs oNewObs : oData)
-			{
-				ObsInfo oInfo = new ObsInfo(nObstype, oNewObs.m_nContribId); // store observations by observation type and contributor id
-				Obs oCurrentObs = oObsMap.get(oInfo);
-				if (oCurrentObs == null || (oNewObs.m_lTimeRecv > oCurrentObs.m_lTimeRecv)) // use the most recent observation
-					oObsMap.put(oInfo, oNewObs);
-			}
-			oObsList.addAll(oObsMap.values());
+			ObsList oData = oOV.getData(nObstype, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oRequestBounds.getSouth(), oRequestBounds.getNorth(), oRequestBounds.getWest(), oRequestBounds.getEast(), oObsRequest.getRequestTimestampRef());
+			oObsList.addAll(oData);
+//			for (Obs oNewObs : oData)
+//			{
+//				ObsInfo oInfo = new ObsInfo(nObstype, oNewObs.m_nContribId); // store observations by observation type and contributor id
+//				Obs oCurrentObs = oObsMap.get(oInfo);
+//				if (oCurrentObs == null || (oNewObs.m_lTimeRecv > oCurrentObs.m_lTimeRecv)) // use the most recent observation
+//					oObsMap.put(oInfo, oNewObs);
+//			}
+//			oObsList.addAll(oObsMap.values());
 		}
 
 		Collections.sort(oObsList, g_oObsDetailComp);

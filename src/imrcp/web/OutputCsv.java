@@ -34,7 +34,7 @@ public class OutputCsv extends OutputFormat
 	/**
 	 * CSV header
 	 */
-	protected String m_sHeader = "Source,ObsType,ObstimeStart,ObstimeEnd,Latitude,Longitude,Units,Observation (Numeric),Observation (Text),Detail";
+	protected String m_sHeader = "Source,ObsType,ObstimeStart,ObstimeEnd,ObstimeReceived,Latitude,Longitude,Units,Observation (Numeric),Observation (Text),Detail";
 
 	
 	/**
@@ -93,6 +93,8 @@ public class OutputCsv extends OutputFormat
 				oWriter.print(m_oDateFormat.format(oSubObs.m_lObsTime1));
 				oWriter.print(",");
 				oWriter.print(m_oDateFormat.format(oSubObs.m_lObsTime2));
+				oWriter.print(",");
+				oWriter.print(m_oDateFormat.format(oSubObs.m_lTimeRecv));
 				oWriter.print(",");
 				oWriter.print(GeoUtil.fromIntDeg(oSubObs.m_oGeoArray[1]));
 				oWriter.print(",");

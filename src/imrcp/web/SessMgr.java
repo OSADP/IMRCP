@@ -31,6 +31,8 @@ import java.io.BufferedReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /**
  * This singleton class manages the system Users and their Sessions using the
@@ -188,6 +190,11 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 		INSTANCE = this;
 	}
 
+	
+	public String getUserDir()
+	{
+		return m_sUserDir;
+	}
 	
 	/**
 	 * Manages all of the requests sent dealing with user authentication and
@@ -619,6 +626,23 @@ public class SessMgr extends HttpServlet implements Comparator<Session>
 					oUser.m_oProfile = new UserProfile();
 				}
 			}
+			
+			Path oSettingsFile = Paths.get(String.format("%s%s/settings.json", m_sUserDir, oUser.m_sName));
+			JSONObject oSettings = new JSONObject();
+			if (Files.exists(oSettingsFile))
+			{
+				try (BufferedReader oIn = Files.newBufferedReader(oSettingsFile, StandardCharsets.UTF_8))
+				{
+					oSettings = new JSONObject(new JSONTokener(oIn));
+				}
+				catch (IOException oEx)
+				{
+					oSettings = new JSONObject();
+				}
+			}
+			
+			if (oSettings.has("page"))
+				sBuf.append("\"page\":\"").append(oSettings.getString("page")).append("\",");
 			
 			sBuf.append("\"token\":\"").append(oUser.m_sToken).append("\",");
 			sBuf.append("\"groups\":\"").append(oUser.m_sGroup).append("\",");

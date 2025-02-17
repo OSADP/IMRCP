@@ -6,9 +6,7 @@
 package imrcp.web;
 
 import imrcp.system.CsvReader;
-import imrcp.system.Text;
 import java.io.IOException;
-import java.util.ArrayList;
 
 /**
  * Object that contains information about system components the user is allowed 
@@ -21,12 +19,6 @@ public class UserProfile
 	 * The Network ids the User has permission to access
 	 */
 	public String[] m_sNetworks;
-
-	
-	/**
-	 * The dashboard graphs the User has permission to access
-	 */
-	public ArrayList<String> m_oGraphs;
     
 	
 	/**
@@ -35,7 +27,6 @@ public class UserProfile
 	public UserProfile()
 	{
 		m_sNetworks = new String[0];
-		m_oGraphs = new ArrayList(4);
 	}
 	
 	
@@ -51,14 +42,5 @@ public class UserProfile
 		m_sNetworks = new String[nCols]; // number of columns is the number of networks
 		for (int nIndex = 0; nIndex < nCols; nIndex++)
 			m_sNetworks[nIndex] = oIn.parseString(nIndex); // read each network
-		
-		nCols = oIn.readLine(); // read the second line
-		m_oGraphs = new ArrayList(nCols); // number of columns is the number of graphs
-		for (int nIndex = 0; nIndex < nCols; nIndex++)
-		{
-			String sTemp = oIn.parseString(nIndex);
-			if (!Text.isEmpty(sTemp)) // read each graph if the String is not empty
-				m_oGraphs.add(sTemp);
-		}
     }
 }

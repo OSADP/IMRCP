@@ -6,9 +6,7 @@
 package imrcp.web;
 
 import imrcp.system.dbf.DbfResultSet;
-import imrcp.system.shp.Header;
-import imrcp.system.shp.Polyline;
-import imrcp.system.shp.PolyshapeIterator;
+import imrcp.system.shp.ShpReader;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -20,6 +18,7 @@ import java.util.zip.ZipFile;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.BufferedInputStream;
 import org.json.JSONObject;
 
 /**
@@ -310,38 +309,37 @@ public class USCenPlaceLookup extends SecureBaseBlock
 			{
 				if (!oFile.getName().contains(sContains))
 					continue;
-				try (ZipFile oZf = new ZipFile(oFile))
-				{
+				try (ZipFile oZf = new ZipFile(oFile);
 					DbfResultSet oDbf = new DbfResultSet(new DataInputStream(oZf.getInputStream(oZf.getEntry(oFile.getName().replace(".zip", ".dbf")))));
-					DataInputStream oShp = new DataInputStream(oZf.getInputStream(oZf.getEntry(oFile.getName().replace(".zip", ".shp"))));
-					new Header(oShp); // read through shp header
-					PolyshapeIterator oIter = null;
+					ShpReader oShp = new ShpReader(new BufferedInputStream(oZf.getInputStream(oZf.getEntry(oFile.getName().replace(".zip", ".shp"))))))
+				{
+					ArrayList<int[]> oRings = new ArrayList();
 					while (oDbf.next())
 					{
-						Polyline oLine = new Polyline(oShp, true);
-						oIter = oLine.iterator(oIter);
+						oRings.clear();
+						oShp.readPolygon(oRings);
 						if (oDbf.getInt("GEOID") != oPlace.m_nGeoId)
 							continue;
-						
-						while (oIter.nextPart()) // each part is a ring of the polygon
-						{
-							sGeoJson.append("["); // array containing the coordinates making up this ring
-							oIter.nextPoint();
-							int nPrevX = oIter.getX();
-							int nPrevY = oIter.getY();
-							sGeoJson.append("[").append(nPrevX).append(",").append(nPrevY).append("]"); // array containing a single point's coordinates
-							while (oIter.nextPoint())
-							{
-								int nX = oIter.getX();
-								int nY = oIter.getY();
-								sGeoJson.append(",[").append(nX - nPrevX).append(",").append(nY - nPrevY).append("]");
-								nPrevX = nX;
-								nPrevY = nY;
-							}
-							sGeoJson.append("],");
-						}
-						sGeoJson.setLength(sGeoJson.length() - 1); // remove trailing comma
-						sGeoJson.append("]");
+
+//						while (oIter.nextPart()) // each part is a ring of the polygon
+//						{
+//							sGeoJson.append("["); // array containing the coordinates making up this ring
+//							oIter.nextPoint();
+//							int nPrevX = oIter.getX();
+//							int nPrevY = oIter.getY();
+//							sGeoJson.append("[").append(nPrevX).append(",").append(nPrevY).append("]"); // array containing a single point's coordinates
+//							while (oIter.nextPoint())
+//							{
+//								int nX = oIter.getX();
+//								int nY = oIter.getY();
+//								sGeoJson.append(",[").append(nX - nPrevX).append(",").append(nY - nPrevY).append("]");
+//								nPrevX = nX;
+//								nPrevY = nY;
+//							}
+//							sGeoJson.append("],");
+//						}
+//						sGeoJson.setLength(sGeoJson.length() - 1); // remove trailing comma
+//						sGeoJson.append("]");
 					}
 				}
 			}

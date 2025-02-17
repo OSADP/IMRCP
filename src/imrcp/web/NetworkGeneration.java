@@ -6,7 +6,7 @@
 package imrcp.web;
 
 import com.github.aelstad.keccakj.fips202.Shake256;
-import imrcp.forecast.mlp.MLPHurricaneTraining;
+import imrcp.forecast.mlp.MLPHurricane;
 import imrcp.system.FileUtil;
 import imrcp.geosrv.GeoUtil;
 import imrcp.geosrv.Network;
@@ -18,15 +18,12 @@ import imrcp.geosrv.osm.OsmWay;
 import imrcp.geosrv.WayNetworks;
 import imrcp.store.Obs;
 import imrcp.system.dbf.DbfResultSet;
-import imrcp.system.shp.Header;
-import imrcp.system.shp.Polyline;
-import imrcp.system.shp.PolyshapeIterator;
-import imrcp.system.Arrays;
 import imrcp.system.Directory;
 import imrcp.system.Id;
 import imrcp.system.Introsort;
 import imrcp.system.Scheduling;
 import imrcp.system.StringPool;
+import imrcp.system.shp.ShpReader;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
@@ -34,7 +31,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,11 +46,9 @@ import java.util.Map.Entry;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.TimeZone;
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -71,8 +65,7 @@ public class NetworkGeneration extends SecureBaseBlock
 	private static String g_sStateShp;
 	
 	private static String g_sUSBorderShp;
-
-	private String m_sMLPTrainingDir;
+	
 	/**
 	 * Queue used to process network creation requests
 	 */
@@ -164,10 +157,6 @@ public class NetworkGeneration extends SecureBaseBlock
 		super.reset(oBlockConfig);
 		g_sStateShp = oBlockConfig.getString("statefile");
 		g_sUSBorderShp = oBlockConfig.getString("usborder");
-		m_sMLPTrainingDir = oBlockConfig.getString("mlptraining");
-		if (!m_sMLPTrainingDir.endsWith("/"))
-			m_sMLPTrainingDir += "/";
-		m_sMLPTrainingDir = m_sArchPath + m_sMLPTrainingDir;
 		m_nOffset = oBlockConfig.optInt("offset", 0);
 		m_nPeriod = oBlockConfig.optInt("period", 1800);
 		m_sOsmDownload = oBlockConfig.optString("osm", "http://download.geofabrik.de/north-america/us/%s-latest.osm.bz2");
@@ -227,56 +216,28 @@ public class NetworkGeneration extends SecureBaseBlock
 				}
 				if (sFile == null)
 				{
-					DbfResultSet oDbf = new DbfResultSet(g_sStateShp.replace(".shp", ".dbf"));
-					DataInputStream oShp = new DataInputStream(new FileInputStream(g_sStateShp));
-					Header oHeader = new Header(oShp);
-					PolyshapeIterator oIter = null;
-					ArrayList<int[]> oOuters = new ArrayList();
-					ArrayList<int[]> oHoles = new ArrayList();
-					while (oDbf.next()) // find states the network intersects
+					try (DbfResultSet oDbf = new DbfResultSet(g_sStateShp.replace(".shp", ".dbf"));
+						 ShpReader oShp = new ShpReader(new BufferedInputStream(Files.newInputStream(Paths.get(g_sStateShp)))))
 					{
-						String sState = oDbf.getString("NAME");
-						oOuters.clear();
-						oHoles.clear();
-						Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
-						oIter = oPoly.iterator(oIter);
+						while (oDbf.next()) // find states the network intersects
+						{
+							ArrayList<int[]> oPolygons = new ArrayList();
+							String sState = oDbf.getString("NAME");
+							oShp.readPolygon(oPolygons);
 
-						while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
-						{
-							int[] nPolygon = Arrays.newIntArray();
-							nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
-							int nPointIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
-							int nBbIndex = nPolygon[0];
-							nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
-							while (oIter.nextPoint())
+							boolean bInside = false;
+							int nRingIndex = 0;
+							while (!bInside && nRingIndex < oPolygons.size())
 							{
-								nPolygon[nPointIndex] += 1; // increment point count
-								nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
+								int[] nStateGeo = oPolygons.get(nRingIndex++);
+								bInside = GeoUtil.isPointInsideRingAndHoles(nStateGeo, nLon, nLat);
 							}
-							if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
+							if (bInside)
 							{
-								nPolygon[nPointIndex] -= 1;
-								nPolygon[0] -= 2;
+								sFile = m_sOsmDir + sState.toLowerCase().replaceAll(" ", "-") + "-latest.bin";
+								m_oCachedStates.put(sFile, oPolygons);
+								break;
 							}
-							if (GeoUtil.isClockwise(nPolygon, 2))
-								oOuters.add(nPolygon);
-							else
-								oHoles.add(nPolygon);
-						}
-						GeoUtil.getPolygons(oOuters, oHoles);
-						boolean bInside = false;
-						int nRingIndex = 0;
-						while (!bInside && nRingIndex < oOuters.size())
-						{
-							int[] nStateGeo = oOuters.get(nRingIndex++);
-							bInside = GeoUtil.isPointInsideRingAndHoles(nStateGeo, nLon, nLat);
-						}
-						if (bInside)
-						{
-							sFile = m_sOsmDir + sState.toLowerCase().replaceAll(" ", "-") + "-latest.bin";
-							m_oCachedStates.put(sFile, oOuters);
-							break;
 						}
 					}
 				}
@@ -516,45 +477,15 @@ public class NetworkGeneration extends SecureBaseBlock
 			ArrayList<String> oStates = new ArrayList();
 			int[] nNetworkGeo = oNetwork.getGeometry();
 			try (DbfResultSet oDbf = new DbfResultSet(g_sStateShp.replace(".shp", ".dbf"));
-				DataInputStream oShp = new DataInputStream(new FileInputStream(g_sStateShp)))
+				ShpReader oShp = new ShpReader(new BufferedInputStream(Files.newInputStream(Paths.get(g_sStateShp)))))
 			{
-				Header oHeader = new Header(oShp);
-				PolyshapeIterator oIter = null;
-				ArrayList<int[]> oOuters = new ArrayList();
-				ArrayList<int[]> oHoles = new ArrayList();
-				
+
+				ArrayList<int[]> oOuters = new ArrayList();				
 				while (oDbf.next()) // find states the network intersects
 				{
 					String sState = oDbf.getString("NAME");
 					oOuters.clear();
-					oHoles.clear();
-					Polyline oPoly = new Polyline(oShp, true); // there is a polygon defined in the .shp (Polyline object reads both polylines and polygons
-					oIter = oPoly.iterator(oIter);
-
-					while (oIter.nextPart()) // can have multiple rings so make sure to read each part of the polygon
-					{
-						int[] nPolygon = Arrays.newIntArray();
-						nPolygon = Arrays.add(nPolygon, 1); // each array will represent 1 ring
-						int nPointIndex = nPolygon[0];
-						nPolygon = Arrays.add(nPolygon, 0); // starts with zero points
-						int nBbIndex = nPolygon[0];
-						nPolygon = Arrays.add(nPolygon, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
-						while (oIter.nextPoint())
-						{
-							nPolygon[nPointIndex] += 1; // increment point count
-							nPolygon = Arrays.addAndUpdate(nPolygon, oIter.getX(), oIter.getY(), nBbIndex);
-						}
-						if (nPolygon[nPolygon[0] - 2] == nPolygon[nPointIndex + 5] && nPolygon[nPolygon[0] - 1] == nPolygon[nPointIndex + 6]) // if the polygon is closed (it should be), remove the last point
-						{
-							nPolygon[nPointIndex] -= 1;
-							nPolygon[0] -= 2;
-						}
-						if (GeoUtil.isClockwise(nPolygon, 2))
-							oOuters.add(nPolygon);
-						else
-							oHoles.add(nPolygon);
-					}
-					GeoUtil.getPolygons(oOuters, oHoles);
+					oShp.readPolygon(oOuters);
 					int nRingIndex = 0;
 
 					while (nRingIndex < oOuters.size())
@@ -844,7 +775,8 @@ public class NetworkGeneration extends SecureBaseBlock
 			}
 			
 			Introsort.usort(oList.m_oOriginalWays, Id.COMPARATOR);
-			new OsmBinParser().parseFile(sGeoFile, oNodes, oList.m_oWays, oPool);
+			Network oNetwork = oWays.getNetwork(sNetworkId);
+			oList.m_oWays.addAll(oNetwork.m_oNetworkWays);
 			sLineBuf.append('[');
 			for (OsmWay oWay : oList.m_oWays)
 			{
@@ -970,10 +902,21 @@ public class NetworkGeneration extends SecureBaseBlock
 	public int doTrain(HttpServletRequest oReq, HttpServletResponse oRes, Session oSession, ClientConfig oClient)
 		throws IOException, ServletException
 	{
+		MLPHurricane oBlock = (MLPHurricane)Directory.getInstance().lookup("MLPHurricane");
+		oRes.setContentType("application/json");
+		if (oBlock.isTraining())
+		{
+			oRes.setStatus(HttpServletResponse.SC_FORBIDDEN);
+			try (PrintWriter oOut = oRes.getWriter())
+			{
+				oOut.append("{\"msg\":\"Cannot train multiple networks at once\"}");
+			}
+			
+			return HttpServletResponse.SC_FORBIDDEN;
+		}
 		String sNetworkId = oReq.getParameter("networkid");
 		SimpleDateFormat oSdf = new SimpleDateFormat("yyyy-MM-dd");
 		oSdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-		oRes.setContentType("application/json");
 		WayNetworks oWayNetworks = (WayNetworks)Directory.getInstance().lookup("WayNetworks");
 		Network oNetwork = oWayNetworks.getNetwork(sNetworkId);
 		if (!oNetwork.isStatus(Network.TRAINING))
@@ -981,7 +924,7 @@ public class NetworkGeneration extends SecureBaseBlock
 			oNetwork.addStatus(Network.TRAINING);
 			JSONObject oStatus = oWayNetworks.getHurricaneModelStatus(oNetwork);
 			oWayNetworks.writeHurricaneModelStatus(oNetwork, oStatus.getString("model"), WayNetworks.HURMODEL_TRAINING);
-			Scheduling.getInstance().execute(() -> MLPHurricaneTraining.train(oNetwork, m_sMLPTrainingDir + oNetwork.m_sNetworkId + "/"));
+			Scheduling.getInstance().execute(() -> oBlock.train(oNetwork));
 		}
 		
 		try (PrintWriter oOut = oRes.getWriter())

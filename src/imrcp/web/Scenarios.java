@@ -12,7 +12,6 @@ import imrcp.geosrv.WayNetworks;
 import imrcp.geosrv.WayNetworks.WayMetadata;
 import imrcp.forecast.mdss.MetroProcess;
 import imrcp.forecast.mlp.MLP;
-import imrcp.forecast.mlp.MLPCommons;
 import imrcp.system.CsvReader;
 import imrcp.system.Directory;
 import imrcp.system.FileUtil;
@@ -212,8 +211,12 @@ public class Scenarios extends SecureBaseBlock
 					oPreds.put(oId, dPred);
 				}
 			}
+			for (Path oFile : Files.walk(oOneshotOutput.getParent(), FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).collect(Collectors.toList())) // delete all associated files
+			{
+				Files.delete(oFile);
+			}
 		}
-		MLPCommons.extendPredictions(oPreds, oSegments, oWays, m_dExtendDistTol, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+		MLP.extendPredictions(oPreds, oSegments, oWays, m_dExtendDistTol, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
 		JSONArray oGeoJsonFeatures;
 		
 		try (BufferedReader oIn = Files.newBufferedReader(oProcessedFile, StandardCharsets.UTF_8))
@@ -270,6 +273,7 @@ public class Scenarios extends SecureBaseBlock
 		JSONObject oResponse = new JSONObject();
 		oRes.setContentType("application/json");
 		String sJson = oReq.getParameter("scenario"); // get String that is the json definition of scenario
+		boolean bCommitMetadata = Boolean.parseBoolean(oReq.getParameter("commit"));
 		if (sJson == null)
 		{
 			oResponse.put("status", "Save Failed");
@@ -302,6 +306,10 @@ public class Scenarios extends SecureBaseBlock
 		oJson.put("user", sUser);
 		oJson.put("run", false); // flag to indicate it is a template
 		Scenario oScenario = new Scenario(oJson);
+		if (bCommitMetadata && !oScenario.m_oUserDefinedMetadata.isEmpty())
+		{
+			((WayNetworks)Directory.getInstance().lookup("WayNetworks")).commitMetadata(oScenario);
+		}
 		Path oPath = Paths.get(m_sBaseDir + String.format(m_sConfigFf, oScenario.m_sId));
 		
 		Files.createDirectories(oPath.getParent(), FileUtil.DIRPERS);
@@ -723,7 +731,7 @@ public class Scenarios extends SecureBaseBlock
 					{
 						m_oLogger.debug("Starting mlp for: " + oScenario.m_sId);
 						MLP oMLP = (MLP)Directory.getInstance().lookup("MLP");
-						bWriteProcessed = oMLP.executeOneshot(oScenario, m_sBaseDir);
+						bWriteProcessed = oMLP.queueOneshot(oScenario, m_sBaseDir);
 						m_oLogger.debug("Finished queuing mlp for: " + oScenario.m_sId);
 					}
 

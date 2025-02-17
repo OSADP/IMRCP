@@ -12,7 +12,6 @@ import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Iterator;
@@ -429,7 +428,7 @@ public abstract class TileUtil
 		int nStart = 1;
 		int nBound = (int)(nPointBuffer[0]);
 		int nInc = 2;
-
+		
 		oFeatureBuilder.addGeometry(command(MOVETO, 1)); // move to the first point
 		int i = nStart;
 		int nPosX = nPointBuffer[i];

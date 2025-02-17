@@ -274,7 +274,7 @@ public class Subscriptions extends SecureBaseBlock
 									continue;
 								
 								oObs.m_dValue = dConverted;
-								if (oObs.m_yGeoType == Obs.POINT && oObs.isMobile())
+								if (oObs.m_yGeoType == Obs.POINT)
 								{
 									OsmWay oSnap = oWays.getWay(m_nQueryTol, oObs.m_oGeoArray[1], oObs.m_oGeoArray[2]);
 									if (oSnap == null || oSnap.m_oId.compareTo(oWay.m_oId) != 0) // ignore mobile obs that do not snap to an included roadway segment

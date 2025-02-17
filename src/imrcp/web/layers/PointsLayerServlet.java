@@ -40,8 +40,15 @@ public class PointsLayerServlet extends LayerServlet
 		StringBuilder sDetail = new StringBuilder();
 		// query ObsView for stores configured to provide All observation types
 		ObsList oData = ((TileObsView)Directory.getInstance().lookup("ObsView")).getData(ObsType.VARIES, oObsRequest.getRequestTimestampStart(), oObsRequest.getRequestTimestampEnd(), oSearchBounds.getSouth(), oSearchBounds.getNorth(), oSearchBounds.getWest(), oSearchBounds.getEast(), oObsRequest.getRequestTimestampRef());
-		Introsort.usort(oData, Obs.g_oCompObsByObjTypeRecv);
 		int nIndex = oData.size();
+		while (nIndex-- > 0)
+		{
+			Obs oObs = oData.get(nIndex);
+			if (oObs.m_yGeoType != Obs.POINT && oObs.m_yGeoType != Obs.MULTIPOINT)
+				oData.remove(nIndex);
+		}
+		Introsort.usort(oData, Obs.g_oCompObsByObjTypeRecv);
+		nIndex = oData.size();
 		while (nIndex-- > 1)
 		{
 			Obs o1 = oData.get(nIndex);
@@ -51,13 +58,10 @@ public class PointsLayerServlet extends LayerServlet
 		}
 		for (Obs oObs : oData)
 		{
-			if (oObs.m_yGeoType == Obs.POINT || oObs.m_yGeoType == Obs.MULTIPOINT)
-			{
-				serializeObsRecord(oOutputGenerator, oNumberFormatter, oObs);
-				String sPresString = oObs.getPresentationString();
-				if (sPresString.length() > 0 && sDetail.indexOf(sPresString) < 0)
-					sDetail.append(sPresString).append("<br>");
-			}
+			serializeObsRecord(oOutputGenerator, oNumberFormatter, oObs);
+			String sPresString = oObs.getPresentationString();
+			if (sPresString.length() > 0 && sDetail.indexOf(sPresString) < 0)
+				sDetail.append(sPresString).append("<br>");
 		}
 		
 		if (sDetail.length() > "<br>".length())
