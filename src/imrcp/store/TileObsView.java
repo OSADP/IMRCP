@@ -16,8 +16,7 @@ import imrcp.system.Introsort;
 import imrcp.system.ObsType;
 import imrcp.system.OneTimeReentrantLock;
 import imrcp.system.ResourceRecord;
-import imrcp.system.TileFileReader;
-import imrcp.system.TileFileWriter;
+import imrcp.collect.TileFileWriter;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -126,6 +125,24 @@ public class TileObsView extends BaseBlock
 		return getData(nType, lStartTime, lEndTime, nStartLat, nEndLat, nStartLon, nEndLon, lRefTime, Id.NULLID, nContrib);
 	}
 	
+	
+	public ObsList getPreferedData(int nObstype, int[] nBb, long lStartQuery, long lEndQuery, long lRef)
+	{
+		ArrayList<ResourceRecord> oRRs = Directory.getResourcesByObsType(nObstype);
+		Introsort.usort(oRRs, ResourceRecord.COMP_BY_PREF);
+		int[] nContribAndSource = new int[2];
+		for (ResourceRecord oTemp : oRRs)
+		{
+			nContribAndSource[0] = oTemp.getContribId();
+			nContribAndSource[1] = oTemp.getSourceId();
+			ObsList oData = getData(nObstype, lStartQuery, lEndQuery,
+			 nBb[1], nBb[3], nBb[0], nBb[2], lRef, nContribAndSource);
+			if (oData.m_bHasData || !oData.isEmpty())
+				return oData;
+		}
+		
+		return new ObsList();
+	}
 	
 	public ObsList getData(int nObsTypeId, long lStartTime, long lEndTime,
 	   int nStartLat, int nEndLat, int nStartLon, int nEndLon, long lRefTime, Id oObjId, int[] nContribAndSources)
@@ -245,7 +262,7 @@ public class TileObsView extends BaseBlock
 						}
 						catch (IOException oEx)
 						{
-							m_oLogger.error(oEx, oEx);
+							//m_oLogger.error(oEx, oEx);
 						}
 					}
 				}

@@ -10,7 +10,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 
 /**
  * Class used to represent a generic Observation
@@ -262,7 +261,7 @@ public class Obs
 	 * @param lClearedTime time the obs expires in milliseconds since Epoch, if 
 	 * the obs is not expired use {@link java.lang.Long#MIN_VALUE}
 	 */
-	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int[] oGeo, byte yGeoType, double dValue, short tConf, long lClearedTime, String... sStrings)
+	public Obs(int nObsTypeId, int nContribId, Id oObjId, long lObsTime1, long lObsTime2, long lTimeRecv, int[] oGeo, byte yGeoType, double dValue, long lClearedTime, String... sStrings)
 	{
 		this(nObsTypeId, nContribId, oObjId, lObsTime1, lObsTime2, lTimeRecv, oGeo, yGeoType, dValue, sStrings);
 		m_lClearedTime = lClearedTime;
@@ -293,7 +292,7 @@ public class Obs
 	public boolean temporalMatch(long lStartTime, long lEndTime, long lRefTime)
 	{
 		return (m_lTimeRecv <= lRefTime || m_lTimeRecv > m_lObsTime1) 
-			&& m_lObsTime1 <= lEndTime && m_lObsTime2 > lStartTime  
+			&& m_lObsTime1 < lEndTime && m_lObsTime2 > lStartTime  
 			&& (m_lClearedTime < 0 || m_lClearedTime > lRefTime);
 	}
 	
