@@ -19,12 +19,13 @@ import java.text.SimpleDateFormat;
  */
 public class LinkSpeedPastRecord implements Comparable<LinkSpeedPastRecord>
 {
-	static final String HEADER = "Id,time,Speed,category,lf_loc\n";
-	Id m_oId;
-	long m_lTimestamp;
-	double m_dSpeed;
-	int m_nHurricaneCategory;
-	int m_nLandfallLocation;
+	static final String HEADER = "Id,time,Speed,category,lf_zone\n";
+	public Id m_oId;
+	public long m_lTimestamp;
+	public double m_dSpeed;
+	public int m_nHurricaneCategory;
+	public int m_nLandfallLocation;
+	public byte m_yPref = 0;
 	
 	LinkSpeedPastRecord()
 	{
@@ -32,13 +33,20 @@ public class LinkSpeedPastRecord implements Comparable<LinkSpeedPastRecord>
 	}
 	
 	
-	LinkSpeedPastRecord(Id oId, long lTimestamp, double dSpeed, int nHurCat, int nLfLoc)
+	public LinkSpeedPastRecord(Id oId, long lTimestamp, double dSpeed, int nHurCat, int nLfLoc)
 	{
 		m_oId = oId;
 		m_lTimestamp = lTimestamp;
 		m_dSpeed = dSpeed;
 		m_nHurricaneCategory = nHurCat;
 		m_nLandfallLocation = nLfLoc;
+	}
+	
+	
+	LinkSpeedPastRecord(Id oId, long lTimestamp, double dSpeed, int nHurCat, int nLfLoc, byte yPref)
+	{
+		this(oId, lTimestamp, dSpeed, nHurCat, nLfLoc);
+		m_yPref = yPref;
 	}
 
 	

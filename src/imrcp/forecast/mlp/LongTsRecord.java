@@ -12,14 +12,14 @@ import java.text.SimpleDateFormat;
  *
  * @author Federal Highway Administration
  */
-public class LongTsRecord implements Comparable<LongTsRecord>
+public class LongTsRecord extends SpeedRecord implements Comparable<LongTsRecord>
 {
 	public String m_sId;
 	public int m_nDayOfWeek;
 	public long m_lTimestamp;
-	public double m_dSpeed = Double.NaN;
 	
-	public static final String HEADER = "Id,Timestamp,DayOfWeek,Speed\n";
+	public static final String INPUTHEADER = "Id,Timestamp,DayOfWeek,Speed\n";
+	public static final String OUTPUTHEADER = "Id,timestamplist,speed\n";
 	
 	String format(SimpleDateFormat oSdf)
 	{

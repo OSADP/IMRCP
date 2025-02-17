@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat;
  *
  * @author Federal Highway Administration
  */
-public class RealTimeRecord implements Comparable<RealTimeRecord>
+public class RealTimeRecord extends SpeedRecord implements Comparable<RealTimeRecord>
 {
 	public String m_sId;
 	public int m_nPrecipitation;
@@ -37,7 +37,6 @@ public class RealTimeRecord implements Comparable<RealTimeRecord>
 	public int m_nWorkzoneDownstream;
 	public int m_nSpecialEvents;
 	public double m_dFlow = Double.NaN;
-	public double m_dSpeed = Double.NaN;
 	public double m_dOccupancy = Double.NaN;
 	public long m_lTimestamp;
 	public String m_sRoad;

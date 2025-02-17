@@ -21,7 +21,7 @@ import java.util.GregorianCalendar;
  */
 public class LinkSpeedNextRecord 
 {
-	static final String HEADER = "Id,time,Direction,Lanes,Speed,t_to_lf,lat,lon,name,hour,category,lf_loc,dis_to_lf,spd_mean_past7,spd_std_past7\n";
+	static final String HEADER = "Id,time,Direction,Lanes,Speed,t_to_lf,lat,lon,name,hour,category,lf_zone,dis_to_lf,spd_mean_past7,spd_std_past7\n";
 	
 	long m_lTime;
 	int m_nTimeToLandfall;
@@ -91,7 +91,6 @@ public class LinkSpeedNextRecord
 		m_nLandfallLocation = nLandfallLoc;
 	}
 	
-//	static final String HEADER = "Id,time,Direction,Lanes,Speed,t_to_lf,lat,lon,name,hour,category,lf_loc,dis_to_lf,spd_mean_past7,spd_std_past7\n";
 	void write(BufferedWriter oOut, SimpleDateFormat oSdf)
 		throws IOException
 	{
@@ -105,7 +104,7 @@ public class LinkSpeedNextRecord
 			oOut.append(String.format("%.2f", m_dSpeed)).append(',');
 		oOut.append(Integer.toString(m_nTimeToLandfall)).append(',');
 		oOut.append(String.format("%.7f,%.7f,", GeoUtil.fromIntDeg(m_oWay.m_nMidLat), GeoUtil.fromIntDeg(m_oWay.m_nMidLon)));
-		oOut.append(m_oWay.m_sName).append(',');
+		oOut.append(m_oWay.m_sName.replace(',', '_')).append(',');
 		oOut.append(Integer.toString(m_nHour)).append(',');
 		oOut.append(Integer.toString(m_nHurricaneCategory)).append(',');
 		oOut.append(Integer.toString(m_nLandfallLocation)).append(',');
